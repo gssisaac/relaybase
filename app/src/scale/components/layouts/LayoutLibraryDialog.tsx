@@ -50,7 +50,7 @@ export function LayoutLibraryDialog({
           <DialogHeader>
             <DialogTitle>Layouts</DialogTitle>
             <DialogDescription>
-              HTML email frames. Message copy lives in Templates; campaigns and triggers pick a layout
+              HTML email frames. Message copy lives in Templates; newsletters and triggers pick a layout
               on the Content tab.
             </DialogDescription>
           </DialogHeader>

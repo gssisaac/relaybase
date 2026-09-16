@@ -1,6 +1,6 @@
 export type ParsedContact = { email: string; name: string | null };
 
-/** Shape shared by `AudienceDataSource` and `CampaignDataSource` — both feed this same fetcher. */
+/** Shape shared by `AudienceDataSource` and `NewsletterDataSource` — both feed this same fetcher. */
 export type JsonDataSource = {
   endpointUrl: string;
   credential?: string;

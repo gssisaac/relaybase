@@ -38,7 +38,7 @@ In short:
 | Layer | Owner | Stored data |
 |---|---|---|
 | **Customer Worker** (existing, BYO) | Customer’s Cloudflare account | Actual send/receive mail (R2), domains/DKIM, `RELAYBASE_DB` catalog |
-| **CRM central server** (new) | Relaybase operations | Contacts, pipeline, campaign/sequence definitions, quotes, **quote snapshots / hashes / signatures / append-only audit**, scheduled queue, open/click stats |
+| **CRM central server** (new) | Relaybase operations | Contacts, pipeline, newsletter/sequence definitions, quotes, **quote snapshots / hashes / signatures / append-only audit**, scheduled queue, open/click stats |
 
 The Scale central server does not send mail directly—sending domain reputation, SPF/DKIM, and the actual SMTP path remain the customer Worker’s responsibility. The central server only decides and assembles *what to send, when, and to whom*; actual delivery always **requests** the customer Worker. Signals such as whether someone replied are **queried** from the customer Worker.
 
@@ -73,17 +73,17 @@ Add a new app using the same pattern as existing `hq/console`, `hq/admin`, `hq/w
 | Auth | Reuse session cookies from `console.relaybase.xyz` — cookie domain `.relaybase.xyz` (parent domain), validated with the same `CONSOLE_SESSION_SECRET`. **Do not build a separate signup/login screen.** |
 | Secret storage | Domain-scoped API keys for the customer Worker (plaintext required—Bearer on every request to Worker) stored **encrypted** in `strum-relaybase-scale` (differs from HQ ops “hash only” principle—see §8 risks). **Quote signing keys** (`QUOTE_SIGNING_SECRET` / Ed25519 private key) are a second decryptable secret—same KMS pattern, separate key id, access-logged. |
 | Queue (new) | Cloudflare Queue `crm-tracking-events` — buffer open/click tracking events for batched D1 insert (P0-2) |
-| R2 (new) | Bucket `crm-assets` — images pasted in the campaign editor (P0-6). Separate from the customer Worker’s `relaybase-mailbox` R2. **Do not** store quote snapshots or signatures only in customer R2. |
+| R2 (new) | Bucket `crm-assets` — images pasted in the newsletter editor (P0-6). Separate from the customer Worker’s `relaybase-mailbox` R2. **Do not** store quote snapshots or signatures only in customer R2. |
 
 ### 1.4 Three core flows
 
-**A. Newsletter / campaign send**
-1. User composes campaign in Scale UI (subject/body/target segment) → saved in `strum-relaybase-scale.campaigns`
+**A. Newsletter / newsletter send**
+1. User composes newsletter in Scale UI (subject/body/target segment) → saved in `strum-relaybase-scale.newsletters`
 2. Send time reached (immediate or scheduled) → hq/scale Cron Trigger iterates target Contacts
 3. Render per-recipient HTML, inserting open pixel + click redirect links (`crm.relaybase.xyz/t/...`)
 4. Call customer Worker `POST {workerUrl}/v1/send` with stored domain-scoped key (batched, rate-limited sends per second)
 5. Worker sends and records to its own R2/sendlog as today (unchanged)
-6. hq/scale updates only its `tracking_events` / campaign stats
+6. hq/scale updates only its `tracking_events` / newsletter stats
 
 **B. Reply detection (follow-up reminder / pipeline update)**
 1. hq/scale background job (e.g. every 5 minutes) polls `GET /v1/events?limit=50` per active account with stored API key
@@ -108,7 +108,7 @@ Add a new app using the same pattern as existing `hq/console`, `hq/admin`, `hq/w
 flowchart LR
   UI["main/app UI\n(crm mode)"] -->|"session cookie (.relaybase.xyz)"| CRM["hq/scale\ncrm.relaybase.xyz"]
   Scale -->|"read"| OPS["D1 strum-relaybase-ops\naccounts, account_workers"]
-  Scale -->|"read/write"| CRMDB["D1 strum-relaybase-scale\ncontacts, pipeline, campaigns,\nsequences, quotes, signatures,\naudit, tracking"]
+  Scale -->|"read/write"| CRMDB["D1 strum-relaybase-scale\ncontacts, pipeline, newsletters,\nsequences, quotes, signatures,\naudit, tracking"]
   Scale -->|"POST /v1/send (API key)"| W["Customer Worker\n*.workers.dev"]
   Scale -->|"GET /v1/events (API key)"| W
   W -->|"actual send/receive"| R2["Customer R2 / D1\n(RELAYBASE_DB, mail source)"]
@@ -157,8 +157,8 @@ Proposed routes:
 |---|---|
 | `/scale/contacts` | Contact list (tag/segment filters) |
 | `/scale/pipeline` | Pipeline kanban |
-| `/scale/campaigns` | Newsletter/campaign list (formerly Broadcasts) |
-| `/scale/campaigns/:id` | Campaign compose/send/stats |
+| `/scale/newsletters` | Newsletter/newsletter list (formerly Broadcasts) |
+| `/scale/newsletters/:id` | Newsletter compose/send/stats |
 | `/scale/sequences` | Drip sequence list & edit |
 | `/scale/quotes` | Quote list & compose |
 | `/scale/quotes/:id` | Quote detail/tracking **+ signature evidence** |
@@ -186,7 +186,7 @@ pipeline_cards  { id, contactId(UNIQUE), stage(lead|contacted|quoted|won|lost), 
 activities      { id, contactId, type(note|sent|opened|clicked|replied|quote_sent|quote_approved),
                   payloadJson, occurredAt }
 
-campaigns       { id, accountLinkId, subject, bodyMarkdown, templateId, segmentJson,
+newsletters       { id, accountLinkId, subject, bodyMarkdown, templateId, segmentJson,
                   status(draft|scheduled|sending|sent|failed), scheduledAt?, sentAt?, stats{sent,opened,clicked} }
 
 templates       { id, accountLinkId?(null=built-in, shared across accounts), name, htmlSource, isBuiltin, createdAt }
@@ -225,14 +225,14 @@ quote_audit_events { id, quoteId, seq,        -- append-only, hash-chained; no U
                      actorType(author|signer|system),
                      occurredAt }
 
-scheduled_jobs  { id, accountLinkId, kind(campaign|sequence_step), refId, runAt, status(pending|done|failed) }
+scheduled_jobs  { id, accountLinkId, kind(newsletter|sequence_step), refId, runAt, status(pending|done|failed) }
 
-tracking_events { id, campaignId, contactId, type(open|click), url?, occurredAt }
+tracking_events { id, newsletterId, contactId, type(open|click), url?, occurredAt }
 
 webhooks_inbound{ id, accountLinkId, token, createdAt }  -- inbound webhook for lead capture
 ```
 
-The UNIQUE constraint on `pipeline_cards.contactId` enforces at schema level the P0-4 decision “no multiple deals per Contact in v0.2”. `tracking_events` is high-write volume, so batch insert goes through Cloudflare Queue `crm-tracking-events` (§1.3, P0-2). Separating `campaigns.bodyMarkdown` (content) from `campaigns.templateId → templates.htmlSource` (design) is intentional—see P0-6.
+The UNIQUE constraint on `pipeline_cards.contactId` enforces at schema level the P0-4 decision “no multiple deals per Contact in v0.2”. `tracking_events` is high-write volume, so batch insert goes through Cloudflare Queue `crm-tracking-events` (§1.3, P0-2). Separating `newsletters.bodyMarkdown` (content) from `newsletters.templateId → templates.htmlSource` (design) is intentional—see P0-6.
 
 > **Revised (v0.2-rev1) — Quote integrity.** `respondedAt` / `respondedIp` / `respondedUa` remain as **supporting evidence**. They are not the signature. The signature of record is `quote_signatures.signatureValue` bound to `quotes.contentHash`. `quote_audit_events` is insert-only (application + least-privilege D1 role); a later `verify_checked` row records that an author/auditor re-validated hash + MAC. Application code must refuse `UPDATE`/`DELETE` on signed `quotes` content fields and on all `quote_audit_events` rows.
 
@@ -249,7 +249,7 @@ Priority order follows prior research (light Scale / email automation / quote to
 #### P0-1. Unified contacts (Contacts)
 
 **Purpose**
-The Scale base unit replacing Audience. Pipeline, campaigns, sequences, and quotes all reference Contact—nothing else works without this.
+The Scale base unit replacing Audience. Pipeline, newsletters, sequences, and quotes all reference Contact—nothing else works without this.
 
 - **In v0.2**: `contacts` table (§3), manual add/edit/delete, tag CRUD, search/filter by email/name/tags/status, one-time snapshot import when migrating from legacy Audience data source (Generic JSON)
 - **Out of v0.2**: Company (organization) entity, custom fields, automatic duplicate merge, Audience “external JSON source cron re-sync” itself (reimplementation later—only snapshot at migration; Scale is sole update path afterward)
@@ -291,7 +291,7 @@ The Scale base unit replacing Audience. Pipeline, campaigns, sequences, and quot
 **Purpose**
 Missing in the product today. Visible send performance is required for follow-up reminders and sequence auto-stop to matter.
 
-- **In v0.2**: 1×1 pixel + link redirect in sent HTML (`crm.relaybase.xyz/t/o/:campaignId/:contactId`, `/t/c/...?u=`), campaign-level open/click aggregates, per-Contact last open date
+- **In v0.2**: 1×1 pixel + link redirect in sent HTML (`crm.relaybase.xyz/t/o/:newsletterId/:contactId`, `/t/c/...?u=`), newsletter-level open/click aggregates, per-Contact last open date
 - **Out of v0.2**: Bot/image-prefetch open filtering, device/geo/client analytics, heatmaps
 
 > Insertion point: last step of P0-6 rendering pipeline (markdown→HTML assembly, template insert, CSS inline)—details in P0-6.
@@ -299,18 +299,18 @@ Missing in the product today. Visible send performance is required for follow-up
 **Data · cache**
 - Table: `tracking_events` (§3). High write rate → buffer via **Cloudflare Queue** `crm-tracking-events`, batch insert (avoid D1 write spikes)—added to hq/scale infra §1.3
 - Pixel: immediate 200 + 1×1 GIF regardless of queue; click redirect: immediate 302 (user-perceived latency is top priority)
-- Rollup: `campaigns.stats` (sent/opened/clicked) updated by 5-minute batch job from `tracking_events`—**not real-time**; state clearly in UI
-- Cache: campaign stats via Cloudflare Cache API, 60s TTL (per-campaign key)
+- Rollup: `newsletters.stats` (sent/opened/clicked) updated by 5-minute batch job from `tracking_events`—**not real-time**; state clearly in UI
+- Cache: newsletter stats via Cloudflare Cache API, 60s TTL (per-newsletter key)
 
 **UI**
-- `/scale/campaigns/:id` “Stats” tab — three cards: sent / opens (open rate %) / clicks (click rate %) (charts optional in v0.2)
-- Contact Sheet timeline line: “Opened · {campaign name} · 2026-09-14 10:32”
+- `/scale/newsletters/:id` “Stats” tab — three cards: sent / opens (open rate %) / clicks (click rate %) (charts optional in v0.2)
+- Contact Sheet timeline line: “Opened · {newsletter name} · 2026-09-14 10:32”
 
 **Happy path**
-1. Campaign send completes → recipient client loads images → pixel request hits hq/scale
+1. Newsletter send completes → recipient client loads images → pixel request hits hq/scale
 2. hq/scale returns 1×1 GIF immediately + pushes event to queue
-3. 5-minute batch writes `tracking_events` → `campaigns.stats.opened` increases
-4. Refresh stats tab on `/scale/campaigns/:id` shows updated numbers
+3. 5-minute batch writes `tracking_events` → `newsletters.stats.opened` increases
+4. Refresh stats tab on `/scale/newsletters/:id` shows updated numbers
 
 **Use cases**
 
@@ -319,9 +319,9 @@ Missing in the product today. Visible send performance is required for follow-up
 | UC-1 | Success | Recipient opens mail, loads images | Record open event | (Hidden from recipient—sender stats only) |
 | UC-2 | Success | Recipient clicks body link | Record click, then 302 to original URL | Recipient lands on target page (<100ms perceived delay goal) |
 | UC-3 | Error | Broken target URL from typo when composing | Redirect still attempted | Relaybase does not show custom error page (browser default)—prevent via save-time validation (UC-6) |
-| UC-4 | Error | Same recipient opens same campaign multiple times (incl. client prefetch) | Log all events; stats use **unique Contact count** | “12 opened / 50 sent (24%)”—total open events only in tooltip |
+| UC-4 | Error | Same recipient opens same newsletter multiple times (incl. client prefetch) | Log all events; stats use **unique Contact count** | “12 opened / 50 sent (24%)”—total open events only in tooltip |
 | UC-5 | Error | Client blocks images (Outlook default, etc.) | No open events | Fixed note under stats card: “Open rate is based on image loads and may be lower than reality” |
-| UC-6 | Success | Auto-check body links on campaign save | Detect non-`http(s)://` links | Inline warning (does not block save): “Check link format: {url}” |
+| UC-6 | Success | Auto-check body links on newsletter save | Detect non-`http(s)://` links | Inline warning (does not block save): “Check link format: {url}” |
 | UC-7 | Error | Queue delay/failure | Possible event loss (internal monitoring; no user error) | Stats tab always shows “Last updated: 5 min ago” to imply non-real-time |
 
 #### P0-3. Follow-up reminder
@@ -399,21 +399,21 @@ See lead → closed progress on one screen.
 **Purpose**
 “I want Tue/Thu morning, not now.”
 
-- **In v0.2**: Future send time on campaign; hq/scale Cron polls `scheduled_jobs`, at due time runs flow A; cancel/edit until send
+- **In v0.2**: Future send time on newsletter; hq/scale Cron polls `scheduled_jobs`, at due time runs flow A; cancel/edit until send
 - **Out of v0.2**: Per-recipient timezone send, send-rate (msgs/sec) UI—safe defaults hard-coded
 
 **Data · cache**
-- `campaigns.status=scheduled`, `scheduledAt` / `scheduled_jobs` (§3)—Cron (every minute) picks `runAt <= now() AND status='pending'`
+- `newsletters.status=scheduled`, `scheduledAt` / `scheduled_jobs` (§3)—Cron (every minute) picks `runAt <= now() AND status='pending'`
 - Concurrency: atomic claim via `UPDATE ... WHERE status='pending' RETURNING` to prevent duplicate sends (safe if hq/scale runs multiple instances)
 
 **UI**
-- Campaign compose: dropdown next to Send: “Send now” / “Schedule” → date/time picker
-- Scheduled campaigns: list badge “Scheduled · 9/16 10:00”
+- Newsletter compose: dropdown next to Send: “Send now” / “Schedule” → date/time picker
+- Scheduled newsletters: list badge “Scheduled · 9/16 10:00”
 - Detail: “Cancel schedule” / “Change time” (only before send)
 
 **Happy path**
-1. Finish campaign → “Schedule” → pick future date/time → “Schedule”
-2. `campaigns.status=scheduled`, `scheduled_jobs` row created
+1. Finish newsletter → “Schedule” → pick future date/time → “Schedule”
+2. `newsletters.status=scheduled`, `scheduled_jobs` row created
 3. Due time → Cron claims job → flow A → `sending → sent`
 4. After send, list shows “Sent” badge (no separate notification in v0.2)
 
@@ -423,17 +423,17 @@ See lead → closed progress on one screen.
 |---|---|---|---|---|
 | UC-1 | Success | Schedule future time | Create `scheduled_jobs` | Toast “Scheduled · Tue 9/16 10:00” |
 | UC-2 | Error | Past time selected | Client blocks | Under picker “Choose a time after now” |
-| UC-3 | Success | Cancel before send | Delete job, campaign status=draft | Toast “Schedule canceled” |
+| UC-3 | Success | Cancel before send | Delete job, newsletter status=draft | Toast “Schedule canceled” |
 | UC-4 | Error | Cancel while send just started (race) | Server 409 | “Send already started; cannot cancel” |
 | UC-5 | Error | Zero Contacts at send time (all deleted) | Job runs, 0 sends, immediate sent | Detail banner “No recipients; nothing was sent” |
-| UC-6 | Error | Worker disconnected at send time (invalid key) | `/v1/send` 401 | `campaign.status=failed`, red “Send failed” badge + “Check Worker connection [Reconnect]” |
+| UC-6 | Error | Worker disconnected at send time (invalid key) | `/v1/send` 401 | `newsletter.status=failed`, red “Send failed” badge + “Check Worker connection [Reconnect]” |
 | UC-7 | Error | Partial send failures | Per-recipient success/fail | Stats “48 sent / 2 failed” + download failed list |
 | UC-8 | Success | Change scheduled time | Update `job.runAt` | Toast “Scheduled time updated” |
 
 #### P0-6. Content editor & design templates
 
 **Purpose**
-Separate campaign “content” from “design”. Content changes every send → comfortable WYSIWYG markdown editor; design changes rarely → templates (built-in + file import). Reflects launch feedback (“A decent WYSIWYG editor”) and initial benchmarks.
+Separate newsletter “content” from “design”. Content changes every send → comfortable WYSIWYG markdown editor; design changes rarely → templates (built-in + file import). Reflects launch feedback (“A decent WYSIWYG editor”) and initial benchmarks.
 
 **Implementation (reuse)**
 Do not build from scratch—port the finished markdown WYSIWYG from **Railmark** (`/Users/isaaclee/Projects/pilots/railmark`). Railmark production-hardens a **BlockNote** editor (`@blocknote/core` / `@blocknote/react` / `@blocknote/shadcn`, v0.51.4) (`app/docs/markdown-editor.md`). Initial directions mentioned `../railmark/`; actual path is `pilots/railmark`.
@@ -441,7 +441,7 @@ Do not build from scratch—port the finished markdown WYSIWYG from **Railmark**
 | What to port | Railmark source | Scale changes |
 |---|---|---|
 | Editor component | `app/src/components/content/MarkdownEditor.tsx` | Port as Next.js client component (`"use client"` + `next/dynamic` `{ ssr: false }`—BlockNote/ProseMirror cannot SSR) |
-| Markdown round-trip · autosave flush | `app/src/lib/markdown-editor-flush.ts`, `editor-persistence/*` | Replace local file save with hq/scale `PATCH /scale/campaigns/:id` autosave; keep “don’t write if unchanged” flush logic |
+| Markdown round-trip · autosave flush | `app/src/lib/markdown-editor-flush.ts`, `editor-persistence/*` | Replace local file save with hq/scale `PATCH /scale/newsletters/:id` autosave; keep “don’t write if unchanged” flush logic |
 | Editor CSS (typography, list markers, table grippers) | `app/src/markdown-editor.css` | Port as-is (light/dark done) |
 | Image/file paste | `app/src/lib/page-file-ingest.ts` | Replace local vault with hq/scale upload endpoint → R2 `crm-assets` (§1.3) |
 | Table gripper menu | `app/src/components/content/TableHandleMenu.tsx` | Port as-is |
@@ -449,7 +449,7 @@ Do not build from scratch—port the finished markdown WYSIWYG from **Railmark**
 | Vault/skill routing/`layout.yaml` | — | **Do not port**—Railmark-specific |
 
 **Rendering pipeline** (only at send time; while editing, client approximate preview only):
-1. `campaigns.bodyMarkdown` (BlockNote markdown serialization) → HTML fragment via BlockNote `blocksToHTMLLossy`
+1. `newsletters.bodyMarkdown` (BlockNote markdown serialization) → HTML fragment via BlockNote `blocksToHTMLLossy`
 2. Insert fragment into `templates.htmlSource` `{{content}}` placeholder
 3. `juice` (CSS inliner) inlines `<style>` to `style=""`—email clients don’t trust `<style>` blocks
 4. Insert P0-2 open pixel & click redirects → final send HTML
@@ -459,17 +459,17 @@ Do not build from scratch—port the finished markdown WYSIWYG from **Railmark**
 - **Out of v0.2**: Edit templates in BlockNote (templates always via HTML import), merge-tag UI “chips” (v0.2 uses literal `{{contact.name}}` string replace at send), video/doc attachments (images only), dark-mode preview, Railmark skill-routing AI editing
 
 **Data · cache**
-- `campaigns.bodyMarkdown`, `campaigns.templateId` (§3)
+- `newsletters.bodyMarkdown`, `newsletters.templateId` (§3)
 - `templates` (§3)—three rows with `accountLinkId=null` are built-in (shared, read-only); custom imports scoped by `accountLinkId`
 - R2 `crm-assets` (§1.3)—pasted images, public read URLs
-- Autosave: 3s debounce `PATCH /scale/campaigns/:id { bodyMarkdown }`
+- Autosave: 3s debounce `PATCH /scale/newsletters/:id { bodyMarkdown }`
 
 **UI**
-- `/scale/campaigns/:id` — top-left: template dropdown (3 built-in + account custom + “Import HTML file”) / center: BlockNote (margins/width match selected template) / right: preview (desktop/mobile) + “Send test email”
+- `/scale/newsletters/:id` — top-left: template dropdown (3 built-in + account custom + “Import HTML file”) / center: BlockNote (margins/width match selected template) / right: preview (desktop/mobile) + “Send test email”
 - Template import Dialog: HTML upload + validation for required placeholders (`{{content}}`, unsubscribe link)
 
 **Happy path**
-1. `/scale/campaigns/:id` → pick template (default: first built-in) → compose in BlockNote
+1. `/scale/newsletters/:id` → pick template (default: first built-in) → compose in BlockNote
 2. Autosave every 3s; right preview updates (client approximate—server rebuilds real HTML at send)
 3. “Send test email” → full pipeline to own address
 4. “Send” (or P0-5 schedule) → server runs pipeline → `/v1/send`
@@ -488,7 +488,7 @@ Do not build from scratch—port the finished markdown WYSIWYG from **Railmark**
 | UC-8 | Success | “Send test email” | Run pipeline, `/v1/send` to self | Toast “Test email sent” |
 | UC-9 | Error | Test send, Worker disconnected | `/v1/send` 401 | Toast “Send failed: check Worker connection” |
 | UC-10 | Error | Offline during edit (autosave fails) | Local edit kept | Top “Unsaved · retrying” indicator |
-| UC-11 | Error | Same campaign edited in two tabs | Last autosave wins (no version check) | No conflict warning—document concurrent edit not recommended |
+| UC-11 | Error | Same newsletter edited in two tabs | Last autosave wins (no version check) | No conflict warning—document concurrent edit not recommended |
 | UC-12 | Success | Literal `{{contact.name}}` in body at send | Replace per recipient | Recipient sees real name |
 | UC-13 | Error | Merge typo (`{{contat.name}}`) | No match, no replace | No pre-send validation in v0.2—always recommend UC-8 test email |
 
@@ -637,7 +637,7 @@ Stack leads from landing pages and external forms in Scale automatically.
 Bulk move contacts from other tools; export for backup/analysis.
 
 - **In v0.2**: Contacts only. Import: column mapping UI (email/name/tags) + skip duplicates by email, max 2,000 rows sync. Export: CSV download for current filter
-- **Out of v0.2**: Import deals/quotes/campaigns, async pipeline above 2,000 rows
+- **Out of v0.2**: Import deals/quotes/newsletters, async pipeline above 2,000 rows
 
 **Data · cache**
 - No extra table (direct Contact insert). Sync processing must fit Workers CPU—benchmark 2,000 rows (footnote)
@@ -763,7 +763,7 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
   - **Follow-up (separate track)**: Revisit BYO-centric copy in `main/hq/website/content/resources/why-we-built-relaybase.md`, update `main/PRODUCT.md` “Not a hosted ESP”, pricing/ToS.
 - **Cost structure**: Previously customers paid only their Cloudflare bill (Relaybase marginal cost ~0). Scale central server is Relaybase-hosted—**pricing (e.g. monthly subscription) should be decided before** safe M1 start. This doc does not cover pricing.
 - **API key storage**: HQ ops D1 is hash-only, no plaintext credentials; Scale must hold domain-scoped keys **plaintext (or decryptable)** to send on behalf of users. KMS/Secrets encryption + access logging required. Document exception only on `strum-relaybase-scale`, separate from `hq-ops-d1.md`.
-- **Abuse/rate limits**: First case of central server bulk-sending on behalf of accounts—per-account/per-campaign caps needed from v0.2 beta (similar to Broadcast `BROADCAST_BETA_MAX_RECIPIENTS` 50).
+- **Abuse/rate limits**: First case of central server bulk-sending on behalf of accounts—per-account/per-newsletter caps needed from v0.2 beta (similar to Broadcast `BROADCAST_BETA_MAX_RECIPIENTS` 50).
 - **Sync failures only**: Treat synchronous `/v1/send` failures as bounces; async bounce event parsing out of v0.2—may affect open/click accuracy awareness.
 
 ### E-signature / Quote evidence (added v0.2-rev1)
@@ -788,7 +788,7 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
 
 - Pricing/billing model
 - Exact Drizzle types/migration SQL for `hq/scale`
-- Pixel-perfect Contacts/Pipeline/Campaigns UI design
+- Pixel-perfect Contacts/Pipeline/Newsletters UI design
 - Email template editor implementation (rich-text library choice, etc.)
 - Legal opinion on enforceability of Quote approval in any jurisdiction; ToS/DPA retention-vs-erasure wording
 - QES / QTSP / SignWell integration design (P2-2 backlog only)

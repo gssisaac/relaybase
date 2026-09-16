@@ -14,8 +14,8 @@ import { ScheduleItemPopover } from "@/scale/components/ScheduleItemPopover";
 import { ScheduleMonthCalendar } from "@/scale/components/ScheduleMonthCalendar";
 import { useScalePaths } from "@/scale/lib/paths";
 import {
-  mergeCampaignSnapshots,
-  upcomingCampaignScheduleItems,
+  mergeNewsletterSnapshots,
+  upcomingNewsletterScheduleItems,
   type ScheduleItem,
 } from "@/scale/lib/schedule-items";
 import { scaleApi } from "@/lib/scale/api";
@@ -31,7 +31,7 @@ function countUpcomingWithinDays(items: ScheduleItem[], from: Date, days: number
 }
 
 export function ScheduleView() {
-  const { campaigns } = useScalePaths();
+  const { newsletters } = useScalePaths();
   const { timeZone, setTimeZone, deviceTimeZone } = usePersistedScheduleTimeZone();
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,12 +51,12 @@ export function ScheduleView() {
     if (force) setRefreshing(true);
     else setLoading(true);
     try {
-      const [{ campaigns: list }, overview] = await Promise.all([
-        scaleApi.listCampaigns(),
+      const [{ newsletters: list }, overview] = await Promise.all([
+        scaleApi.listNewsletters(),
         scaleApi.getInProgressOverview(),
       ]);
-      const merged = mergeCampaignSnapshots(list, overview.scheduled);
-      setItems(upcomingCampaignScheduleItems(merged));
+      const merged = mergeNewsletterSnapshots(list, overview.scheduled);
+      setItems(upcomingNewsletterScheduleItems(merged));
     } catch {
       toast.error("Could not load schedule — is hq/scale running on port 32831?");
     } finally {
@@ -114,7 +114,7 @@ export function ScheduleView() {
                   : `${upcomingIn7Days} in the next 7 days`}
               </CardDescription>
             </div>
-            <Link href={campaigns} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            <Link href={newsletters} className={buttonVariants({ variant: "ghost", size: "sm" })}>
               Broadcasts
             </Link>
           </CardHeader>
@@ -128,11 +128,11 @@ export function ScheduleView() {
                   <div className="space-y-1">
                     <p className="text-sm font-medium">Nothing scheduled yet</p>
                     <p className="text-xs text-muted-foreground">
-                      Schedule a campaign from Publish when you are ready to send.
+                      Schedule a newsletter from Publish when you are ready to send.
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" nativeButton={false} render={<Link href={campaigns} />}>
-                    Open campaigns
+                  <Button variant="outline" size="sm" nativeButton={false} render={<Link href={newsletters} />}>
+                    Open newsletters
                   </Button>
                 </div>
               ) : (

@@ -25,12 +25,12 @@ import {
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
 } from "@/scale/lib/compliance-identity";
-import { CampaignComposeForm } from "@/scale/pages/campaigns/CampaignComposeForm";
+import { NewsletterComposeForm } from "@/scale/pages/newsletters/NewsletterComposeForm";
 import { useTriggerDetail } from "@/scale/pages/triggers/TriggerDetailContext";
 import { scaleApi, type ScaleAccountCompliance } from "@/lib/scale/api";
 import {
-  useCampaignEditorPersistence,
-  type CampaignPersistBridge,
+  useNewsletterEditorPersistence,
+  type NewsletterPersistBridge,
 } from "@/lib/markdown-editor";
 import { SAVE_STATUS } from "@/lib/markdown-editor/persistence/constants";
 import type { SaveStatus } from "@/lib/markdown-editor/persistence/types";
@@ -75,7 +75,7 @@ export function TriggerContentView() {
 
   const editable = trigger?.listStatus !== "archived";
 
-  const bridge = useMemo<CampaignPersistBridge>(
+  const bridge = useMemo<NewsletterPersistBridge>(
     () => ({
       getDraft: () => ({ subject, bodyMarkdown, templateId }),
       setBodyMarkdown: (body) => setBodyMarkdown(body),
@@ -95,8 +95,8 @@ export function TriggerContentView() {
     ],
   );
 
-  const { editorRef, ingestBody, checkpoint, saveStatus } = useCampaignEditorPersistence({
-    campaignId: triggerId,
+  const { editorRef, ingestBody, checkpoint, saveStatus } = useNewsletterEditorPersistence({
+    newsletterId: triggerId,
     beaconPath: `triggers/${triggerId}`,
     editable: Boolean(editable),
     bridge,
@@ -290,8 +290,8 @@ export function TriggerContentView() {
           ) : null}
         </div>
       ) : null}
-      <CampaignComposeForm
-        campaignId={triggerId}
+      <NewsletterComposeForm
+        newsletterId={triggerId}
         assetOwner="trigger"
         editorRef={editorRef}
         templates={templates}

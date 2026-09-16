@@ -12,7 +12,7 @@ import {
   rememberApiKey,
 } from "@/lib/desktop/vault/api-key-vault";
 
-const SCALE_SEND_KEY_LABEL = "Scale Campaign";
+const SCALE_SEND_KEY_LABEL = "Scale Newsletter";
 
 type WorkerKeyRow = {
   id: string;
@@ -24,7 +24,7 @@ type WorkerKeyRow = {
 
 /**
  * Ensure hq/scale has a domain-scoped Worker API key before dispatch.
- * Issues or reuses a key labeled "Scale Campaign" and PATCHes account-link.
+ * Issues or reuses a key labeled "Scale Newsletter" and PATCHes account-link.
  */
 export async function syncScaleSendCredentials(input: {
   apiBase: string;
@@ -32,7 +32,7 @@ export async function syncScaleSendCredentials(input: {
 }): Promise<void> {
   const workerUrl = resolveEmailApiBase();
   if (!workerUrl) {
-    throw new Error("Worker is not connected. Finish setup to send campaigns.");
+    throw new Error("Worker is not connected. Finish setup to send newsletters.");
   }
 
   const domain = input.sendingDomain.trim().toLowerCase();

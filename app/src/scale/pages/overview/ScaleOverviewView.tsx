@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
-import { CF_EMAIL_SENDING_LIMITS_URL } from "@/scale/components/campaigns/CampaignCloudflareSendingLimitsCard";
+import { NewsletterStatusBadge } from "@/scale/components/newsletters/NewsletterStatusBadge";
+import { CF_EMAIL_SENDING_LIMITS_URL } from "@/scale/components/newsletters/NewsletterCloudflareSendingLimitsCard";
 import { scaleApi, type ScaleOverview } from "@/lib/scale/api";
-import { campaignDetailHref, useScalePaths } from "@/scale/lib/paths";
+import { newsletterDetailHref, useScalePaths } from "@/scale/lib/paths";
 import { cn } from "@/lib/utils";
 
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
@@ -38,7 +38,7 @@ const overviewInsetItemClassName =
 const overviewInsetHighlightClassName = "rounded-xl bg-secondary px-3 py-2.5 dark:bg-accent";
 
 export function ScaleOverviewView() {
-  const { schedule, templates, triggers, campaigns, subscribers } = useScalePaths();
+  const { schedule, templates, triggers, newsletters, subscribers } = useScalePaths();
   const [data, setData] = useState<ScaleOverview | null>(null);
   const [templateCount, setTemplateCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,8 +80,8 @@ export function ScaleOverviewView() {
             <Link href={templates} className={buttonVariants({ variant: "outline", size: "sm" })}>
               Templates
             </Link>
-            <Link href={`${campaigns}?new=1`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              New campaign
+            <Link href={`${newsletters}?new=1`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              New newsletter
             </Link>
             <Button
               variant="outline"
@@ -98,7 +98,7 @@ export function ScaleOverviewView() {
         <div className="min-w-0 space-y-1">
           <h1 className="truncate text-lg font-semibold tracking-tight">Overview</h1>
           <p className="text-sm text-muted-foreground">
-            Schedule, triggers, campaigns, and subscribers at a glance.
+            Schedule, triggers, newsletters, and subscribers at a glance.
           </p>
         </div>
       </DesktopTitleBar>
@@ -112,7 +112,7 @@ export function ScaleOverviewView() {
             <>
               <ScaleOverviewTopSection
                 data={data}
-                paths={{ schedule, templates, triggers, campaigns, subscribers, templateCount }}
+                paths={{ schedule, templates, triggers, newsletters, subscribers, templateCount }}
               />
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -146,7 +146,7 @@ export function ScaleOverviewView() {
                         {data.schedule.upcomingList.map((row) => (
                           <li key={row.id}>
                             <Link
-                              href={campaignDetailHref(row.id, "publish", row.status)}
+                              href={newsletterDetailHref(row.id, "publish", row.status)}
                               className={cn(
                                 overviewInsetItemClassName,
                                 "flex items-center justify-between gap-2 text-sm",
@@ -154,7 +154,7 @@ export function ScaleOverviewView() {
                             >
                               <span className="min-w-0 truncate font-medium">{row.name}</span>
                               <div className="flex shrink-0 items-center gap-2">
-                                <CampaignStatusBadge status={row.status} />
+                                <NewsletterStatusBadge status={row.status} />
                                 <span className="text-xs text-muted-foreground">{formatWhen(row.scheduledAt)}</span>
                               </div>
                             </Link>
@@ -168,13 +168,13 @@ export function ScaleOverviewView() {
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
-                      <CardTitle className="text-base">Recent campaigns</CardTitle>
+                      <CardTitle className="text-base">Recent newsletters</CardTitle>
                       <CardDescription>
-                        {data.campaigns.draftCount} drafts · {data.campaigns.inProgressCount} in progress
+                        {data.newsletters.draftCount} drafts · {data.newsletters.inProgressCount} in progress
                       </CardDescription>
                     </div>
-                    <Link href={campaigns} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      All campaigns
+                    <Link href={newsletters} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      All newsletters
                     </Link>
                   </CardHeader>
                   <CardContent>
@@ -183,7 +183,7 @@ export function ScaleOverviewView() {
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">Sent today (Scale)</span>
                           <span className="tabular-nums font-medium">
-                            {data.campaigns.cloudflareQuota.usedToday}
+                            {data.newsletters.cloudflareQuota.usedToday}
                           </span>
                         </div>
                         <p className="text-[11px] leading-snug text-muted-foreground">
@@ -198,14 +198,14 @@ export function ScaleOverviewView() {
                           </a>
                         </p>
                       </div>
-                      {data.campaigns.recentSent.length === 0 ? (
+                      {data.newsletters.recentSent.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No completed sends yet.</p>
                       ) : (
                         <ul className="space-y-2">
-                          {data.campaigns.recentSent.map((row) => (
+                          {data.newsletters.recentSent.map((row) => (
                             <li key={row.id}>
                               <Link
-                                href={campaignDetailHref(row.id, "stats", "sent")}
+                                href={newsletterDetailHref(row.id, "stats", "sent")}
                                 className={cn(overviewInsetItemClassName, "block")}
                               >
                                 <div className="flex items-center justify-between gap-2">

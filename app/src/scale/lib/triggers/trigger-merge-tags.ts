@@ -1,9 +1,9 @@
-import type { PreviewRecipient } from "@/scale/lib/campaigns/campaign-merge-tags";
+import type { PreviewRecipient } from "@/scale/lib/newsletters/newsletter-merge-tags";
 import {
-  applyCampaignMergeTags,
+  applyNewsletterMergeTags,
   BROADCAST_MERGE_TAGS,
   type ApplyBroadcastMergeTagsOptions,
-} from "@/scale/lib/campaigns/campaign-merge-tags";
+} from "@/scale/lib/newsletters/newsletter-merge-tags";
 import type { TriggerSource } from "@/lib/scale/api";
 
 export type ComposeMergeTag = {
@@ -198,7 +198,7 @@ export function applyTriggerPreviewMergeTags(
     triggerPayload?: Record<string, string>;
   },
 ): string {
-  const withContact = applyCampaignMergeTags(text, recipient, options);
+  const withContact = applyNewsletterMergeTags(text, recipient, options);
   const payload = {
     ...SAMPLE_TRIGGER_PAYLOAD,
     ...(options?.trigger ? sampleTriggerPreviewValues(options.trigger) : {}),

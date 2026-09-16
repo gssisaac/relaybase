@@ -13,23 +13,23 @@ function headers(api = false): Headers {
 describe("shouldProxyRequestToScale", () => {
   it("proxies public unsubscribe", () => {
     assert.equal(
-      shouldProxyRequestToScale("/scale/unsubscribe/campaign_x/tok_y", "GET", headers()),
+      shouldProxyRequestToScale("/scale/unsubscribe/newsletter_x/tok_y", "GET", headers()),
       true,
     );
   });
 
-  it("serves campaign UI without API header", () => {
-    assert.equal(shouldProxyRequestToScale("/scale/campaigns", "GET", headers()), false);
+  it("serves newsletter UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/newsletters", "GET", headers()), false);
     assert.equal(
-      shouldProxyRequestToScale("/scale/campaigns/in-progress", "GET", headers()),
+      shouldProxyRequestToScale("/scale/newsletters/in-progress", "GET", headers()),
       false,
     );
   });
 
-  it("proxies campaign API list with Scale API header", () => {
-    assert.equal(shouldProxyRequestToScale("/scale/campaigns", "GET", headers(true)), true);
+  it("proxies newsletter API list with Scale API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/newsletters", "GET", headers(true)), true);
     assert.equal(
-      shouldProxyRequestToScale("/scale/campaigns/in-progress", "GET", headers(true)),
+      shouldProxyRequestToScale("/scale/newsletters/in-progress", "GET", headers(true)),
       true,
     );
   });
@@ -42,9 +42,9 @@ describe("shouldProxyRequestToScale", () => {
     assert.equal(shouldProxyRequestToScale("/scale/overview", "GET", headers(true)), true);
   });
 
-  it("proxies campaign detail JSON", () => {
+  it("proxies newsletter detail JSON", () => {
     assert.equal(
-      shouldProxyRequestToScale("/scale/campaigns/campaign_abc", "GET", headers(true)),
+      shouldProxyRequestToScale("/scale/newsletters/newsletter_abc", "GET", headers(true)),
       true,
     );
   });

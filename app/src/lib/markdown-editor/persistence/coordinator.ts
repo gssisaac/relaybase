@@ -29,7 +29,7 @@ import {
   dequeueSave,
   recordFailedAttempt,
 } from "./save-outbox";
-import { tryCampaignBeaconSave } from "./beacon-save";
+import { tryNewsletterBeaconSave } from "./beacon-save";
 import type {
   CheckpointReason,
   CheckpointResult,
@@ -246,7 +246,7 @@ export function createEditorPersistenceCoordinator(
     if (reason === "beforeunload" || reason === "pagehide" || reason === "unload") {
       if (!isEmptyClobber(ctx, content)) {
         const beaconPath = ctx.beaconPath ?? ctx.path;
-        if (beaconPath) tryCampaignBeaconSave(beaconPath, content);
+        if (beaconPath) tryNewsletterBeaconSave(beaconPath, content);
       }
     }
   }

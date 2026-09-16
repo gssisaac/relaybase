@@ -111,7 +111,7 @@ export function TemplatesListView() {
                 <DialogHeader>
                   <DialogTitle>New message template</DialogTitle>
                   <DialogDescription>
-                    Reusable subject and body for campaigns and triggers.
+                    Reusable subject and body for newsletters and triggers.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2">
@@ -149,7 +149,7 @@ export function TemplatesListView() {
         <div className="min-w-0 space-y-1">
           <h1 className="truncate text-lg font-semibold tracking-tight">Templates</h1>
           <p className="text-sm text-muted-foreground">
-            Message content linked from campaigns and triggers. HTML frames live under Layouts.
+            Message content linked from newsletters and triggers. HTML frames live under Layouts.
           </p>
         </div>
       </DesktopTitleBar>
@@ -171,7 +171,7 @@ export function TemplatesListView() {
               title={rows.length === 0 ? "No templates yet" : "No matching templates"}
               description={
                 rows.length === 0
-                  ? "Create a template, then link it when composing a campaign or trigger."
+                  ? "Create a template, then link it when composing a newsletter or trigger."
                   : `Nothing matches "${search}".`
               }
               action={

@@ -55,7 +55,7 @@ export function normalizeEntryPath(path: string): string {
   }
 
   if (pathname === "/scale/broadcasts" || pathname.startsWith("/scale/broadcasts/")) {
-    pathname = pathname.replace(/^\/scale\/broadcasts(?=\/|$)/, "/scale/campaigns");
+    pathname = pathname.replace(/^\/scale\/broadcasts(?=\/|$)/, "/scale/newsletters");
   }
   if (pathname === "/scale/automations" || pathname.startsWith("/scale/automations/")) {
     pathname = pathname.replace(/^\/scale\/automations(?=\/|$)/, "/scale/triggers");
@@ -195,28 +195,28 @@ export function normalizeEntryPath(path: string): string {
   }
 
   if (pathname === "/broadcasts/new") {
-    return "/scale/campaigns?new=1";
+    return "/scale/newsletters?new=1";
   }
-  const scaleCampaignSection = pathname.match(/^\/scale\/campaigns\/(sent|in-progress)\/?$/);
-  if (scaleCampaignSection) {
-    return `/scale/campaigns?view=${scaleCampaignSection[1]}`;
+  const scaleNewsletterSection = pathname.match(/^\/scale\/newsletters\/(sent|in-progress)\/?$/);
+  if (scaleNewsletterSection) {
+    return `/scale/newsletters?view=${scaleNewsletterSection[1]}`;
   }
 
-  const scaleCampaignMatch = pathname.match(
-    /^\/scale\/campaigns\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  const scaleNewsletterMatch = pathname.match(
+    /^\/scale\/newsletters\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
-  if (scaleCampaignMatch) {
-    const segment = scaleCampaignMatch[1]!;
+  if (scaleNewsletterMatch) {
+    const segment = scaleNewsletterMatch[1]!;
     if (segment !== "sent" && segment !== "in-progress" && segment !== "edit") {
-      let campaignId = segment;
+      let newsletterId = segment;
       try {
-        campaignId = decodeURIComponent(campaignId);
+        newsletterId = decodeURIComponent(newsletterId);
       } catch {
         /* keep raw */
       }
       const next = new URLSearchParams();
-      next.set("id", campaignId);
-      const tabSeg = scaleCampaignMatch[2];
+      next.set("id", newsletterId);
+      const tabSeg = scaleNewsletterMatch[2];
       if (tabSeg === "audience" || tabSeg === "recipients") {
         next.set("tab", "recipients");
       } else if (
@@ -227,7 +227,7 @@ export function normalizeEntryPath(path: string): string {
       ) {
         next.set("tab", tabSeg);
       }
-      return `/scale/campaigns?${next.toString()}`;
+      return `/scale/newsletters?${next.toString()}`;
     }
   }
 
@@ -276,49 +276,49 @@ export function normalizeEntryPath(path: string): string {
 
   const scaleBroadcastSection = pathname.match(/^\/scale\/broadcasts\/(sent|in-progress)\/?$/);
   if (scaleBroadcastSection) {
-    return `/scale/campaigns?view=${scaleBroadcastSection[1]}`;
+    return `/scale/newsletters?view=${scaleBroadcastSection[1]}`;
   }
   const legacyCrmBroadcastSection = pathname.match(/^\/crm\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyCrmBroadcastSection) {
-    return `/scale/campaigns?view=${legacyCrmBroadcastSection[1]}`;
+    return `/scale/newsletters?view=${legacyCrmBroadcastSection[1]}`;
   }
   const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyBroadcastSection) {
-    return `/scale/campaigns?view=${legacyBroadcastSection[1]}`;
+    return `/scale/newsletters?view=${legacyBroadcastSection[1]}`;
   }
   const broadcastMatch = pathname.match(
     /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
   );
   if (broadcastMatch) {
-    let campaignId = broadcastMatch[1]!;
+    let newsletterId = broadcastMatch[1]!;
     try {
-      campaignId = decodeURIComponent(campaignId);
+      newsletterId = decodeURIComponent(newsletterId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", campaignId);
+    next.set("id", newsletterId);
     const tabSeg = broadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
     } else if (tabSeg === "content" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "stats" : tabSeg);
     }
-    return `/scale/campaigns?${next.toString()}`;
+    return `/scale/newsletters?${next.toString()}`;
   }
 
   const scaleBroadcastMatch = pathname.match(
     /^\/scale\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
   if (scaleBroadcastMatch) {
-    let campaignId = scaleBroadcastMatch[1]!;
+    let newsletterId = scaleBroadcastMatch[1]!;
     try {
-      campaignId = decodeURIComponent(campaignId);
+      newsletterId = decodeURIComponent(newsletterId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", campaignId);
+    next.set("id", newsletterId);
     const tabSeg = scaleBroadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
@@ -330,21 +330,21 @@ export function normalizeEntryPath(path: string): string {
     ) {
       next.set("tab", tabSeg);
     }
-    return `/scale/campaigns?${next.toString()}`;
+    return `/scale/newsletters?${next.toString()}`;
   }
 
   const legacyCrmBroadcastMatch = pathname.match(
     /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
   if (legacyCrmBroadcastMatch) {
-    let campaignId = legacyCrmBroadcastMatch[1]!;
+    let newsletterId = legacyCrmBroadcastMatch[1]!;
     try {
-      campaignId = decodeURIComponent(campaignId);
+      newsletterId = decodeURIComponent(newsletterId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", campaignId);
+    next.set("id", newsletterId);
     const tabSeg = legacyCrmBroadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
@@ -356,7 +356,7 @@ export function normalizeEntryPath(path: string): string {
     ) {
       next.set("tab", tabSeg);
     }
-    return `/scale/campaigns?${next.toString()}`;
+    return `/scale/newsletters?${next.toString()}`;
   }
 
   const scaleAutomationEditMatch = pathname.match(
@@ -435,12 +435,12 @@ export function normalizeEntryPath(path: string): string {
     return qs ? `/scale/triggers?${qs}` : "/scale/triggers";
   }
 
-  const legacyCrmCampaignMatch = pathname.match(
-    /^\/crm\/campaigns(?:\/([^/]+))?(?:\/(content|publish|progress|overview))?\/?$/,
+  const legacyCrmNewsletterMatch = pathname.match(
+    /^\/crm\/newsletters(?:\/([^/]+))?(?:\/(content|publish|progress|overview))?\/?$/,
   );
-  if (legacyCrmCampaignMatch) {
+  if (legacyCrmNewsletterMatch) {
     const next = new URLSearchParams();
-    const legacyId = legacyCrmCampaignMatch[1];
+    const legacyId = legacyCrmNewsletterMatch[1];
     if (legacyId) {
       try {
         next.set("id", decodeURIComponent(legacyId));
@@ -448,11 +448,11 @@ export function normalizeEntryPath(path: string): string {
         next.set("id", legacyId);
       }
     }
-    const tabSeg = legacyCrmCampaignMatch[2];
+    const tabSeg = legacyCrmNewsletterMatch[2];
     if (tabSeg === "content" || tabSeg === "publish" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "publish" : tabSeg);
     }
-    return `/scale/campaigns?${next.toString()}`;
+    return `/scale/newsletters?${next.toString()}`;
   }
 
   // Settings: /settings/{tab} are real nested routes now. Collapse

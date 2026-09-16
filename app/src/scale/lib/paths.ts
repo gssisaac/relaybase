@@ -11,11 +11,11 @@ import {
   Zap,
 } from "lucide-react";
 
-import type { TriggerStatus, CampaignStatus } from "@/lib/scale/api";
+import type { TriggerStatus, NewsletterStatus } from "@/lib/scale/api";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 
-export type CampaignsSection = "list" | "sent" | "in-progress";
+export type NewslettersSection = "list" | "sent" | "in-progress";
 
 /** Scale UI route for subscriber groups (list + detail query routes). */
 export const SCALE_SUBSCRIBERS_PATH = "/scale/subscribers";
@@ -23,9 +23,9 @@ export const SCALE_SUBSCRIBERS_PATH = "/scale/subscribers";
 export function useScalePaths() {
   const base = "/scale";
   const subscribers = SCALE_SUBSCRIBERS_PATH;
-  const campaigns = "/scale/campaigns";
-  const campaignsSent = "/scale/campaigns/sent";
-  const campaignsInProgress = "/scale/campaigns/in-progress";
+  const newsletters = "/scale/newsletters";
+  const newslettersSent = "/scale/newsletters/sent";
+  const newslettersInProgress = "/scale/newsletters/in-progress";
   const templates = "/scale/templates";
   const layouts = "/scale/layouts";
   const triggers = "/scale/triggers";
@@ -37,7 +37,7 @@ export function useScalePaths() {
     { href: templates, label: "Templates", icon: LayoutTemplate },
     { href: layouts, label: "Layouts", icon: Layers },
     { href: triggers, label: "Triggers", icon: Zap },
-    { href: campaigns, label: "Campaigns", icon: Mail },
+    { href: newsletters, label: "Newsletters", icon: Mail },
     { href: schedule, label: "Schedule", icon: CalendarDays },
     { href: subscribers, label: "Subscribers", icon: Users },
   ];
@@ -45,9 +45,9 @@ export function useScalePaths() {
   return {
     base,
     subscribers,
-    campaigns,
-    campaignsSent,
-    campaignsInProgress,
+    newsletters,
+    newslettersSent,
+    newslettersInProgress,
     templates,
     layouts,
     triggers,
@@ -57,19 +57,19 @@ export function useScalePaths() {
   };
 }
 
-export function campaignsSectionHref(section: CampaignsSection = "list"): string {
-  if (section === "sent") return "/scale/campaigns/sent";
-  if (section === "in-progress") return "/scale/campaigns/in-progress";
-  return "/scale/campaigns";
+export function newslettersSectionHref(section: NewslettersSection = "list"): string {
+  if (section === "sent") return "/scale/newsletters/sent";
+  if (section === "in-progress") return "/scale/newsletters/in-progress";
+  return "/scale/newsletters";
 }
 
-export function campaignsSectionFromLocation(
+export function newslettersSectionFromLocation(
   pathname: string,
   searchParams: { get: (name: string) => string | null },
-): CampaignsSection {
+): NewslettersSection {
   const view = searchParams.get("view")?.trim().toLowerCase();
-  if (view === "sent" || /\/campaigns\/sent\/?$/.test(pathname)) return "sent";
-  if (view === "in-progress" || /\/campaigns\/in-progress\/?$/.test(pathname)) {
+  if (view === "sent" || /\/newsletters\/sent\/?$/.test(pathname)) return "sent";
+  if (view === "in-progress" || /\/newsletters\/in-progress\/?$/.test(pathname)) {
     return "in-progress";
   }
   return "list";
@@ -96,41 +96,41 @@ export function audienceDetailFromSearch(searchParams: {
   return { groupId, tab };
 }
 
-/** Campaign detail tabs — content, publish, recipients, stats, settings. */
-export type CampaignDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
+/** Newsletter detail tabs — content, publish, recipients, stats, settings. */
+export type NewsletterDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
 
-function campaignDetailTabQueryParam(
-  tab: CampaignDetailTab,
-  status: CampaignStatus | undefined,
-): CampaignDetailTab | null {
+function newsletterDetailTabQueryParam(
+  tab: NewsletterDetailTab,
+  status: NewsletterStatus | undefined,
+): NewsletterDetailTab | null {
   if (!status || status === "draft") {
     return tab === "content" ? null : tab;
   }
   return tab === "stats" ? null : tab;
 }
 
-export function campaignDetailHref(
+export function newsletterDetailHref(
   id: string,
-  tab: CampaignDetailTab = "content",
-  status?: CampaignStatus,
+  tab: NewsletterDetailTab = "content",
+  status?: NewsletterStatus,
 ): string {
   const params = new URLSearchParams();
   params.set("id", id.trim());
-  const tabParam = campaignDetailTabQueryParam(tab, status);
+  const tabParam = newsletterDetailTabQueryParam(tab, status);
   if (tabParam) params.set("tab", tabParam);
-  return `/scale/campaigns?${params.toString()}`;
+  return `/scale/newsletters?${params.toString()}`;
 }
 
-export function campaignDetailFromSearch(searchParams: {
+export function newsletterDetailFromSearch(searchParams: {
   get: (name: string) => string | null;
-}): { campaignId: string; tab: CampaignDetailTab | null } | null {
-  const campaignId = searchParams.get("id")?.trim() ?? "";
-  if (!campaignId) return null;
+}): { newsletterId: string; tab: NewsletterDetailTab | null } | null {
+  const newsletterId = searchParams.get("id")?.trim() ?? "";
+  if (!newsletterId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
   if (!raw) {
-    return { campaignId, tab: null };
+    return { newsletterId, tab: null };
   }
-  let tab: CampaignDetailTab = "content";
+  let tab: NewsletterDetailTab = "content";
   if (raw === "publish" || raw === "recipients" || raw === "stats" || raw === "settings") {
     tab = raw;
   } else if (raw === "content") {
@@ -138,7 +138,7 @@ export function campaignDetailFromSearch(searchParams: {
   } else if (raw === "audience") {
     tab = "recipients";
   }
-  return { campaignId, tab };
+  return { newsletterId, tab };
 }
 
 export const TRIGGER_DETAIL_TABS = ["preview", "trigger", "stats", "settings"] as const;

@@ -1,19 +1,19 @@
-import type { Campaign } from "@/lib/scale/api";
+import type { Newsletter } from "@/lib/scale/api";
 import { dateKeyInTimeZone } from "./schedule-timezone";
 
-export type ScheduleItemKind = "campaign";
+export type ScheduleItemKind = "newsletter";
 
 export type ScheduleItem = {
   id: string;
   kind: ScheduleItemKind;
-  campaignId: string;
+  newsletterId: string;
   title: string;
   subject: string;
   audienceLabel: string | null;
   recipientCount: number;
   at: Date;
   atIso: string;
-  status: Campaign["status"];
+  status: Newsletter["status"];
 };
 
 export function dateKeyLocal(d: Date): string {
@@ -27,34 +27,34 @@ export function isSameLocalDay(a: Date, b: Date): boolean {
   return dateKeyLocal(a) === dateKeyLocal(b);
 }
 
-/** Merge campaign lists (later entries win) for API + overview responses. */
-export function mergeCampaignSnapshots(...lists: Campaign[][]): Campaign[] {
-  const byId = new Map<string, Campaign>();
+/** Merge newsletter lists (later entries win) for API + overview responses. */
+export function mergeNewsletterSnapshots(...lists: Newsletter[][]): Newsletter[] {
+  const byId = new Map<string, Newsletter>();
   for (const list of lists) {
     for (const row of list) byId.set(row.id, row);
   }
   return [...byId.values()];
 }
 
-/** Upcoming scheduled campaigns, oldest first. */
-export function upcomingCampaignScheduleItems(
-  campaigns: Campaign[],
+/** Upcoming scheduled newsletters, oldest first. */
+export function upcomingNewsletterScheduleItems(
+  newsletters: Newsletter[],
   now: Date = new Date(),
 ): ScheduleItem[] {
   const nowMs = now.getTime();
   const items: ScheduleItem[] = [];
 
-  for (const b of campaigns) {
+  for (const b of newsletters) {
     if (b.listStatus === "archived") continue;
     if (b.status !== "scheduled" || !b.scheduledAt) continue;
     const at = new Date(b.scheduledAt);
     if (Number.isNaN(at.getTime()) || at.getTime() < nowMs) continue;
 
     items.push({
-      id: `campaign:${b.id}`,
-      kind: "campaign",
-      campaignId: b.id,
-      title: b.name.trim() || "Untitled campaign",
+      id: `newsletter:${b.id}`,
+      kind: "newsletter",
+      newsletterId: b.id,
+      title: b.name.trim() || "Untitled newsletter",
       subject: b.subject.trim() || "(No subject)",
       audienceLabel: b.audienceGroupName,
       recipientCount: b.audienceContactCount ?? b.audienceActiveCount,

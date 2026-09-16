@@ -30,7 +30,7 @@ import {
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleComplianceIdentity } from "@/lib/scale/api";
 
-type EditorMode = "account-default" | "campaign";
+type EditorMode = "account-default" | "newsletter";
 
 export function ComplianceIdentityEditor({
   mode,
@@ -42,7 +42,7 @@ export function ComplianceIdentityEditor({
   description,
 }: {
   mode: EditorMode;
-  /** For campaign mode, null/ACCOUNT_DEFAULT = use account default. */
+  /** For newsletter mode, null/ACCOUNT_DEFAULT = use account default. */
   selectedIdentityId: string | null;
   onSelectedIdentityIdChange: (id: string | null) => void | Promise<void>;
   accountDefaultIdentityId: string | null;
@@ -81,14 +81,14 @@ export function ComplianceIdentityEditor({
   }, [refresh]);
 
   const pickerValue = useMemo(() => {
-    if (mode === "campaign") {
+    if (mode === "newsletter") {
       return selectedIdentityId ?? ACCOUNT_DEFAULT_COMPLIANCE_VALUE;
     }
     return selectedIdentityId ?? accountDefaultIdentityId ?? "";
   }, [mode, selectedIdentityId, accountDefaultIdentityId]);
 
   const editingId = useMemo(() => {
-    if (mode === "campaign") {
+    if (mode === "newsletter") {
       if (selectedIdentityId) return selectedIdentityId;
       return accountDefaultIdentityId;
     }
@@ -99,7 +99,7 @@ export function ComplianceIdentityEditor({
 
   const pickerItems = useMemo(() => {
     const rows = identities.map((row) => ({ value: row.id, label: row.name }));
-    if (mode === "campaign") {
+    if (mode === "newsletter") {
       const defaultName = identities.find((i) => i.id === accountDefaultIdentityId)?.name;
       rows.unshift({
         value: ACCOUNT_DEFAULT_COMPLIANCE_VALUE,
@@ -123,7 +123,7 @@ export function ComplianceIdentityEditor({
       setAddOpen(true);
       return;
     }
-    if (mode === "campaign") {
+    if (mode === "newsletter") {
       const next = value === ACCOUNT_DEFAULT_COMPLIANCE_VALUE ? null : value;
       await onSelectedIdentityIdChange(next);
       return;
@@ -169,7 +169,7 @@ export function ComplianceIdentityEditor({
       setIdentities((prev) => [...prev, identity]);
       setAddOpen(false);
       setNewName("");
-      await onSelectedIdentityIdChange(mode === "campaign" ? identity.id : identity.id);
+      await onSelectedIdentityIdChange(mode === "newsletter" ? identity.id : identity.id);
       if (mode === "account-default") {
         await scaleApi.updateAccountLink({ defaultComplianceIdentityId: identity.id });
       }
@@ -190,7 +190,7 @@ export function ComplianceIdentityEditor({
 
       <div className="space-y-1.5">
         <Label htmlFor="compliance-identity-picker">
-          {mode === "campaign" ? "Footer sender for this campaign" : "Default compliance sender"}
+          {mode === "newsletter" ? "Footer sender for this newsletter" : "Default compliance sender"}
         </Label>
         <Select
           items={pickerItems}
@@ -201,7 +201,7 @@ export function ComplianceIdentityEditor({
             <SelectValue placeholder={loading ? "Loading…" : "Select sender"} />
           </SelectTrigger>
           <SelectContent>
-            {mode === "campaign" ? (
+            {mode === "newsletter" ? (
               <SelectItem value={ACCOUNT_DEFAULT_COMPLIANCE_VALUE}>
                 Account default
                 {accountDefaultIdentityId
@@ -278,7 +278,7 @@ export function ComplianceIdentityEditor({
             {savedFlash ? <span className="text-xs text-emerald-600">✓ Saved</span> : null}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Changes apply everywhere this sender is selected — including other campaigns and
+            Changes apply everywhere this sender is selected — including other newsletters and
             Settings.
           </p>
         </>
@@ -293,7 +293,7 @@ export function ComplianceIdentityEditor({
           <DialogHeader>
             <DialogTitle>Add compliance sender</DialogTitle>
             <DialogDescription>
-              Reusable footer details. You can select this sender on any campaign.
+              Reusable footer details. You can select this sender on any newsletter.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

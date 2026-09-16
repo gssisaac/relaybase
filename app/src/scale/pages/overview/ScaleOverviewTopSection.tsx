@@ -17,7 +17,7 @@ type ScaleOverviewPaths = {
   schedule: string;
   templates: string;
   triggers: string;
-  campaigns: string;
+  newsletters: string;
   subscribers: string;
   templateCount: number;
 };
@@ -49,9 +49,9 @@ export function ScaleOverviewTopSection({
           hint={`${data.triggers.triggers24h} triggers in the last 24h`}
         />
         <OverviewKpiCard
-          href={paths.campaigns}
+          href={paths.newsletters}
           icon={Mail}
-          label="Campaigns"
+          label="Newsletters"
           value={formatOverviewCompact(summary.monthlySentVolume)}
           hint={`${summary.avgOpenRate}% open · ${summary.avgClickRate}% click (all time)`}
         />
@@ -89,7 +89,7 @@ export function ScaleOverviewTopSection({
         <Card size="sm">
           <CardHeader className="gap-0.5 pb-1">
             <CardTitle className="text-sm">Engagement rates</CardTitle>
-            <CardDescription className="text-xs">All sent campaigns</CardDescription>
+            <CardDescription className="text-xs">All sent newsletters</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <ScaleOverviewEngagementChart data={data.charts.engagementRates} />

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import { campaignAssetKey } from "../lib/assets/key";
+import { newsletterAssetKey } from "../lib/assets/key";
 import { patchMessageTemplate } from "../lib/messages/message-template";
 import { serializeMessageTemplate } from "../lib/messages/serialize-template";
 import { newId } from "../lib/shared/ids";
@@ -52,7 +52,7 @@ scaleMessageTemplates.post("/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = campaignAssetKey(templateId, filename);
+  const key = newsletterAssetKey(templateId, filename);
   const storedFilename = key.slice(templateId.length + 1);
   store.update((draft) => {
     draft.templateAssets = draft.templateAssets.filter((a) => a.key !== key);

@@ -5,7 +5,7 @@ import { Hono } from "hono";
 
 import { store } from "../db/store";
 import { DEFAULT_BRAND_LOGO_FILENAME } from "../lib/templates/brand-logo";
-import { campaignAssetKey } from "../lib/assets/key";
+import { newsletterAssetKey } from "../lib/assets/key";
 import { SCALE_PUBLIC_BASE_URL } from "../lib/shared/scale-url";
 import { newId } from "../lib/shared/ids";
 
@@ -25,10 +25,10 @@ scaleAssets.get("/brand/relaybase-icon.png", (c) => {
   });
 });
 
-// POST /scale/campaigns/:id/assets { filename, mimeType, contentBase64 }
-scaleAssets.post("/campaigns/:id/assets", async (c) => {
-  const campaignId = c.req.param("id");
-  const broadcast = store.read().campaigns.find((row) => row.id === campaignId);
+// POST /scale/newsletters/:id/assets { filename, mimeType, contentBase64 }
+scaleAssets.post("/newsletters/:id/assets", async (c) => {
+  const newsletterId = c.req.param("id");
+  const broadcast = store.read().newsletters.find((row) => row.id === newsletterId);
   if (!broadcast) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -45,14 +45,14 @@ scaleAssets.post("/campaigns/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = campaignAssetKey(campaignId, filename);
-  const storedFilename = key.slice(campaignId.length + 1);
+  const key = newsletterAssetKey(newsletterId, filename);
+  const storedFilename = key.slice(newsletterId.length + 1);
   store.update((draft) => {
-    draft.campaignAssets = draft.campaignAssets.filter((a) => a.key !== key);
-    draft.campaignAssets.push({
+    draft.newsletterAssets = draft.newsletterAssets.filter((a) => a.key !== key);
+    draft.newsletterAssets.push({
       id: newId("asset"),
       key,
-      campaignId,
+      newsletterId,
       filename: storedFilename,
       mimeType,
       contentBase64,
@@ -60,7 +60,7 @@ scaleAssets.post("/campaigns/:id/assets", async (c) => {
     });
   });
 
-  const url = `${SCALE_PUBLIC_BASE_URL}/scale/assets/${encodeURIComponent(campaignId)}/${encodeURIComponent(storedFilename)}`;
+  const url = `${SCALE_PUBLIC_BASE_URL}/scale/assets/${encodeURIComponent(newsletterId)}/${encodeURIComponent(storedFilename)}`;
   return c.json({ url, key });
 });
 
@@ -84,7 +84,7 @@ scaleAssets.post("/triggers/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = campaignAssetKey(triggerId, filename);
+  const key = newsletterAssetKey(triggerId, filename);
   const storedFilename = key.slice(triggerId.length + 1);
   store.update((draft) => {
     draft.triggerAssets = draft.triggerAssets.filter((a) => a.key !== key);
@@ -147,14 +147,14 @@ scaleAssets.get("/assets/template/:templateId/:filename", (c) => {
   });
 });
 
-// GET /scale/assets/:campaignId/:filename
-scaleAssets.get("/assets/:campaignId/:filename", (c) => {
-  const campaignId = c.req.param("campaignId");
-  if (campaignId === "automation" || campaignId === "trigger" || campaignId === "template") {
+// GET /scale/assets/:newsletterId/:filename
+scaleAssets.get("/assets/:newsletterId/:filename", (c) => {
+  const newsletterId = c.req.param("newsletterId");
+  if (newsletterId === "automation" || newsletterId === "trigger" || newsletterId === "template") {
     return c.text("not found", 404);
   }
-  const key = `${campaignId}/${c.req.param("filename")}`;
-  const asset = store.read().campaignAssets.find((a) => a.key === key);
+  const key = `${newsletterId}/${c.req.param("filename")}`;
+  const asset = store.read().newsletterAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {

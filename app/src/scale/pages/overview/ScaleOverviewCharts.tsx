@@ -52,7 +52,7 @@ function MiniLegend({ config, keys }: { config: ChartConfig; keys: string[] }) {
 export function ScaleOverviewSendsChart({ data }: { data: ScaleOverview["charts"]["sendsByWeek"] }) {
   if (data.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">No sent campaigns yet — volume appears after your first send.</p>
+      <p className="text-xs text-muted-foreground">No sent newsletters yet — volume appears after your first send.</p>
     );
   }
 

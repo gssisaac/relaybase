@@ -5,7 +5,7 @@ import { Monitor, Pencil, Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CampaignEmailPreview } from "@/scale/components/campaigns/CampaignEmailPreview";
+import { NewsletterEmailPreview } from "@/scale/components/newsletters/NewsletterEmailPreview";
 import { triggerContentEditHref } from "@/scale/lib/paths";
 import {
   TriggerOutboundSenderPanel,
@@ -75,7 +75,7 @@ export function TriggerPreviewView() {
           <div className="pointer-events-none absolute h-0 w-0 overflow-hidden opacity-0" aria-hidden>
             <MarkdownEditor
               ref={editorRef}
-              campaignId={triggerId}
+              newsletterId={triggerId}
               documentId={triggerId}
               assetOwner="trigger"
               value={bodyMarkdown}
@@ -125,7 +125,7 @@ export function TriggerPreviewView() {
           className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border bg-[#f6f8fc]"
           style={{ colorScheme: "light" }}
         >
-          <CampaignEmailPreview
+          <NewsletterEmailPreview
             subject={previewSubject}
             fromName={previewFromName}
             fromEmail={previewFromEmail}

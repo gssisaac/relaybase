@@ -29,7 +29,7 @@ import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleLayout } from "@/lib/scale/api";
 
 const SAMPLE_BODY_HTML =
-  "<p style='margin:0 0 12px;font-family:sans-serif;font-size:15px;line-height:1.5;color:#334155'>Sample message body — merge tags and markdown render here in campaigns.</p>";
+  "<p style='margin:0 0 12px;font-family:sans-serif;font-size:15px;line-height:1.5;color:#334155'>Sample message body — merge tags and markdown render here in newsletters.</p>";
 
 export function LayoutDetailView({ layoutId }: { layoutId: string }) {
   const router = useRouter();
@@ -198,7 +198,7 @@ export function LayoutDetailView({ layoutId }: { layoutId: string }) {
           <p className="text-xs text-muted-foreground">
             {row.isBuiltin
               ? "Built-in layouts are read-only — saving creates a custom copy you can edit and delete."
-              : "Update the frame HTML. Campaigns and templates reference this layout by id."}
+              : "Update the frame HTML. Newsletters and templates reference this layout by id."}
           </p>
           {isCustom ? (
             <div className="space-y-1.5">

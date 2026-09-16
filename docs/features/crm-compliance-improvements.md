@@ -10,7 +10,7 @@ Related: [`crm-audience-broadcast-model.md`](./crm-audience-broadcast-model.md),
 
 ## Context
 
-The original four-layer spec (`Account → Campaign → Subscriber → Broadcast`) was **intentionally reduced** to a practical model:
+The original four-layer spec (`Account → Newsletter → Subscriber → Broadcast`) was **intentionally reduced** to a practical model:
 
 ```text
 Account → Audience Group (consent scope) → Broadcast → Recipient

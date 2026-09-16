@@ -13,8 +13,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
-import { campaignDetailHref } from "@/scale/lib/paths";
+import { NewsletterStatusBadge } from "@/scale/components/newsletters/NewsletterStatusBadge";
+import { newsletterDetailHref } from "@/scale/lib/paths";
 import type { ScheduleItem } from "@/scale/lib/schedule-items";
 import {
   formatScheduleEventTime,
@@ -37,7 +37,7 @@ function ScheduleItemPopoverContent({
   item: ScheduleItem;
   timeZone: string;
 }) {
-  const href = campaignDetailHref(item.campaignId, "publish", item.status);
+  const href = newsletterDetailHref(item.newsletterId, "publish", item.status);
   const audience = item.audienceLabel ?? "Subscriber group";
 
   return (
@@ -46,7 +46,7 @@ function ScheduleItemPopoverContent({
         <PopoverHeader className="min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2 pr-1">
             <PopoverTitle className="min-w-0 text-base leading-snug">{item.title}</PopoverTitle>
-            <CampaignStatusBadge status={item.status} />
+            <NewsletterStatusBadge status={item.status} />
           </div>
           <PopoverDescription className="line-clamp-3 break-words">{item.subject}</PopoverDescription>
         </PopoverHeader>
@@ -55,7 +55,7 @@ function ScheduleItemPopoverContent({
           size="icon-sm"
           className="shrink-0"
           nativeButton={false}
-          render={<Link href={href} aria-label="Open campaign" />}
+          render={<Link href={href} aria-label="Open newsletter" />}
         >
           <ExternalLink className="size-4" aria-hidden />
         </Button>
@@ -114,7 +114,7 @@ function triggerLabel(
     <>
       <span className="min-w-0 truncate font-medium">{item.title}</span>
       <div className="flex shrink-0 items-center gap-2">
-        <CampaignStatusBadge status={item.status} />
+        <NewsletterStatusBadge status={item.status} />
         <span className="text-xs text-muted-foreground">
           {formatScheduleWhen(item.at, timeZone)}
         </span>

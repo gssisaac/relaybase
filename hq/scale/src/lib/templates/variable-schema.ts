@@ -168,7 +168,7 @@ export function applyTemplateVariablesToHtml(
       }
       if (src) {
         if (context && !/^(https?:|data:|blob:)/i.test(src)) {
-          const resolved = resolveRelativeCampaignAssetUrl(
+          const resolved = resolveRelativeNewsletterAssetUrl(
             context.broadcastId,
             context.scaleBaseUrl,
             src,
@@ -210,18 +210,18 @@ function applyHeaderSlotLogoSizing(html: string): string {
   );
 }
 
-function campaignAssetStem(broadcastId: string): string {
+function newsletterAssetStem(broadcastId: string): string {
   return broadcastId.replace(/^broadcast_/, "").slice(0, 32) || "broadcast";
 }
 
-function resolveRelativeCampaignAssetUrl(
+function resolveRelativeNewsletterAssetUrl(
   broadcastId: string,
   scaleBaseUrl: string,
   href: string,
 ): string | null {
   if (!href || /^(https?:|data:|blob:)/i.test(href)) return null;
   const relative = href.replace(/^\.\//, "");
-  const folder = `.${campaignAssetStem(broadcastId)}`;
+  const folder = `.${newsletterAssetStem(broadcastId)}`;
   if (!relative.startsWith(`${folder}/`)) return null;
   const filename = relative.slice(folder.length + 1);
   if (!filename || filename.includes("..")) return null;

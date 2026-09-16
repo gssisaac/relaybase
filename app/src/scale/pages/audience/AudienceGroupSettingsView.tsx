@@ -286,7 +286,7 @@ export function AudienceGroupSettingsView() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Sending domain from your Worker catalog (same as campaign create). Subscriber
+              Sending domain from your Worker catalog (same as newsletter create). Subscriber
               contact addresses are unrelated.
             </p>
           </div>
@@ -317,7 +317,7 @@ export function AudienceGroupSettingsView() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              From address on the selected domain when sending campaigns to this group.
+              From address on the selected domain when sending newsletters to this group.
               {domainAddresses.length === 0 && groupDomain && !addressesLoading
                 ? " Add a sender on this domain in Console → Accounts."
                 : null}

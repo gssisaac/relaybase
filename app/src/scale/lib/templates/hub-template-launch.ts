@@ -30,7 +30,7 @@ export function patchBodyFromHubTemplate(
   };
 }
 
-export async function createCampaignFromHubTemplate(input: {
+export async function createNewsletterFromHubTemplate(input: {
   name: string;
   domain: string;
   audienceGroupId: string;
@@ -39,13 +39,13 @@ export async function createCampaignFromHubTemplate(input: {
   fromEmail?: string | null;
 }) {
   const workerUrl = resolveEmailApiBase();
-  const created = await scaleApi.createCampaign({
+  const created = await scaleApi.createNewsletter({
     name: input.name.trim(),
     domain: input.domain,
     audienceGroupId: input.audienceGroupId,
     ...(workerUrl ? { workerUrl } : {}),
   });
-  return scaleApi.updateCampaign(created.id, {
+  return scaleApi.updateNewsletter(created.id, {
     ...patchBodyFromHubTemplate(input.hubTemplateId, input.snapshot),
     ...(input.fromEmail?.trim() ? { fromEmail: input.fromEmail.trim() } : {}),
   });

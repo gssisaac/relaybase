@@ -1,5 +1,5 @@
 /**
- * Scale campaign editor persistence (adapted from Railmark editor-persistence).
+ * Scale newsletter editor persistence (adapted from Railmark editor-persistence).
  */
 
 export type ScalePersistRoot = "scale";
@@ -9,12 +9,12 @@ export type Mode = "read" | "edit";
 
 export type EditContext = {
   root: ScalePersistRoot | null;
-  /** Local snapshot/draft storage key — the document identity (e.g. campaign or template id). */
+  /** Local snapshot/draft storage key — the document identity (e.g. newsletter or template id). */
   path: string | null;
   /**
-   * `/scale/campaigns/…` suffix used by the tab-close beacon PATCH — may
+   * `/scale/newsletters/…` suffix used by the tab-close beacon PATCH — may
    * differ from `path` when the document lives under a parent resource
-   * (e.g. a nested workspace path under the campaign id). Falls back to `path`.
+   * (e.g. a nested workspace path under the newsletter id). Falls back to `path`.
    */
   beaconPath?: string | null;
   mode: Mode;

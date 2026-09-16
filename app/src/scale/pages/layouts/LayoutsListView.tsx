@@ -10,7 +10,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { LayoutImportDialog } from "@/scale/components/layouts/LayoutImportDialog";
 import { LayoutWireframe } from "@/scale/components/layouts/LayoutWireframe";
-import { templateThumbnailVariant } from "@/scale/lib/campaigns/campaign-merge-tags";
+import { templateThumbnailVariant } from "@/scale/lib/newsletters/newsletter-merge-tags";
 import { isPlainTextTemplate } from "@/scale/lib/layouts/layout-catalog";
 import { layoutDetailHref } from "@/scale/lib/layout-paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";

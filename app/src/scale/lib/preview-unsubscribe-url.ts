@@ -1,11 +1,11 @@
-import type { PreviewPersonaId } from "@/scale/lib/campaigns/campaign-merge-tags";
+import type { PreviewPersonaId } from "@/scale/lib/newsletters/newsletter-merge-tags";
 import { SCALE_PUBLIC_LINK_ORIGIN } from "@/lib/scale/scale-origin";
-import type { CampaignMember } from "@/lib/scale/api";
+import type { NewsletterMember } from "@/lib/scale/api";
 
 export function buildPreviewUnsubscribeUrl(
-  campaignId: string,
+  newsletterId: string,
   personaId: PreviewPersonaId,
-  members: CampaignMember[],
+  members: NewsletterMember[],
 ): string {
   const base = SCALE_PUBLIC_LINK_ORIGIN.replace(/\/$/, "");
   if (personaId.startsWith("member:")) {
@@ -14,8 +14,8 @@ export function buildPreviewUnsubscribeUrl(
       (m) => m.audienceMemberId === memberId || m.id === memberId,
     );
     if (member?.unsubscribeToken) {
-      return `${base}/scale/unsubscribe/${encodeURIComponent(campaignId)}/${encodeURIComponent(member.unsubscribeToken)}`;
+      return `${base}/scale/unsubscribe/${encodeURIComponent(newsletterId)}/${encodeURIComponent(member.unsubscribeToken)}`;
     }
   }
-  return `${base}/scale/unsubscribe/${encodeURIComponent(campaignId)}/preview`;
+  return `${base}/scale/unsubscribe/${encodeURIComponent(newsletterId)}/preview`;
 }

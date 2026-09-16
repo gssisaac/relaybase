@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Rebuild data/store.json from data/store-origin.json for the Layout / Template / Campaign / Trigger model.
+ * Rebuild data/store.json from data/store-origin.json for the Layout / Template / Newsletter / Trigger model.
  *
  * - Legacy `templates[]` with htmlSource → `layouts[]`
- * - Legacy `broadcasts[]` → `campaigns[]` + per-row `templates[]` (message)
+ * - Legacy `broadcasts[]` → `newsletters[]` + per-row `templates[]` (message)
  * - Legacy `automations[]` → `triggers[]` + message templates
  */
 import fs from "node:fs";
@@ -44,9 +44,9 @@ function messageFromOwner(row, ownerId, defaults = {}) {
   };
 }
 
-function migrateCampaign(row) {
+function migrateNewsletter(row) {
   const message = messageFromOwner(row, row.id, { category: "marketing" });
-  const campaign = {
+  const newsletter = {
     id: row.id,
     accountLinkId: row.accountLinkId ?? "dev",
     name: row.name,
@@ -82,7 +82,7 @@ function migrateCampaign(row) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
-  return { campaign, message };
+  return { newsletter, message };
 }
 
 function migrateTrigger(row) {
@@ -176,11 +176,11 @@ for (const preset of presetTemplates(now)) {
   messagesById.set(preset.id, preset);
 }
 
-const campaigns = [];
-for (const row of origin.broadcasts ?? origin.campaigns ?? []) {
-  const { campaign, message } = migrateCampaign(row);
+const newsletters = [];
+for (const row of origin.broadcasts ?? origin.newsletters ?? []) {
+  const { newsletter, message } = migrateNewsletter(row);
   messagesById.set(message.id, message);
-  campaigns.push(campaign);
+  newsletters.push(newsletter);
 }
 
 const triggers = [];
@@ -192,22 +192,22 @@ for (const row of origin.automations ?? origin.triggers ?? []) {
 
 const recipients = (origin.recipients ?? []).map((r) => ({
   ...r,
-  campaignId: r.campaignId ?? r.broadcastId,
+  newsletterId: r.newsletterId ?? r.broadcastId,
 }));
 
 const suppressions = (origin.accountSuppressions ?? []).map((s) => ({
   ...s,
-  sourceCampaignId: s.sourceCampaignId ?? s.sourceBroadcastId ?? null,
+  sourceNewsletterId: s.sourceNewsletterId ?? s.sourceBroadcastId ?? null,
 }));
 
 const scheduledJobs = (origin.scheduledJobs ?? []).map((j) => ({
   ...j,
-  kind: j.kind === "broadcast" ? "campaign" : j.kind,
+  kind: j.kind === "broadcast" ? "newsletter" : j.kind,
 }));
 
 const trackingEvents = (origin.trackingEvents ?? []).map((e) => ({
   ...e,
-  campaignId: e.campaignId ?? e.broadcastId,
+  newsletterId: e.newsletterId ?? e.broadcastId,
 }));
 
 const out = {
@@ -215,7 +215,7 @@ const out = {
   complianceIdentities: origin.complianceIdentities ?? [],
   layouts: [...layoutById.values()],
   templates: [...messagesById.values()],
-  campaigns,
+  newsletters,
   recipients,
   triggers,
   triggerEvents: origin.triggerEvents ?? [],
@@ -226,7 +226,7 @@ const out = {
   activities: origin.activities ?? [],
   scheduledJobs,
   trackingEvents,
-  campaignAssets: origin.campaignAssets ?? origin.broadcastAssets ?? [],
+  newsletterAssets: origin.newsletterAssets ?? origin.broadcastAssets ?? [],
   triggerAssets: origin.triggerAssets ?? [],
   templateAssets: origin.templateAssets ?? [],
   audienceGroups: origin.audienceGroups ?? [],
@@ -238,7 +238,7 @@ console.log(
     {
       layouts: out.layouts.length,
       messageTemplates: out.templates.length,
-      campaigns: out.campaigns.length,
+      newsletters: out.newsletters.length,
       triggers: out.triggers.length,
       audienceGroups: out.audienceGroups.length,
     },

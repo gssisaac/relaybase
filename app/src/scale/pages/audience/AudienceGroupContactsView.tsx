@@ -324,7 +324,7 @@ export function AudienceGroupContactsView() {
               {unsubConfirm ? (
                 <>
                   <span className="font-medium text-foreground">{unsubConfirm.email}</span> will be
-                  marked unsubscribed for this group. They will be excluded from future campaigns
+                  marked unsubscribed for this group. They will be excluded from future newsletters
                   linked here.
                 </>
               ) : null}

@@ -6,7 +6,7 @@ export function setAudienceContactSendStatus(
   groupId: string,
   audienceMemberId: string,
   sendStatus: Extract<AudienceSendStatus, "active" | "unsubscribed">,
-  opts?: { sourceCampaignId?: string | null },
+  opts?: { sourceNewsletterId?: string | null },
 ): void {
   const now = new Date().toISOString();
   let email: string | null = null;
@@ -30,7 +30,7 @@ export function setAudienceContactSendStatus(
     recordGroupUnsubscribe({
       audienceGroupId: groupId,
       email,
-      sourceCampaignId: opts?.sourceCampaignId ?? null,
+      sourceNewsletterId: opts?.sourceNewsletterId ?? null,
     });
     return;
   }

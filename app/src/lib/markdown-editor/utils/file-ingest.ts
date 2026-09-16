@@ -9,8 +9,8 @@ import {
   pageAssetFilename,
   type PageAssetKind,
 } from "./assets";
-import { normalizeCampaignAssetUrl } from "./asset-url";
-import { uploadCampaignAsset, type CrmContentAssetOwner } from "./campaign-upload";
+import { normalizeNewsletterAssetUrl } from "./asset-url";
+import { uploadNewsletterAsset, type CrmContentAssetOwner } from "./newsletter-upload";
 
 export type IngestedPageFile = {
   markdownUrl: string;
@@ -19,30 +19,30 @@ export type IngestedPageFile = {
   ext: string;
 };
 
-export async function ingestCampaignFile(opts: {
+export async function ingestNewsletterFile(opts: {
   file: File;
-  campaignId: string;
+  newsletterId: string;
   assetOwner?: CrmContentAssetOwner;
   settings?: ImageOptimizationSettings;
 }): Promise<IngestedPageFile> {
   const settings = opts.settings ?? DEFAULT_IMAGE_OPTIMIZATION_SETTINGS;
   const kind = classifyPageFile(opts.file);
   if (kind !== "image") {
-    throw new Error("Only images are supported in campaign editor (v0.2)");
+    throw new Error("Only images are supported in newsletter editor (v0.2)");
   }
 
   const optimized = await optimizeForEmail(opts.file, settings);
   const filename = pageAssetFilename(opts.file.name, optimized.ext);
-  const publicUrl = await uploadCampaignAsset(
-    opts.campaignId,
+  const publicUrl = await uploadNewsletterAsset(
+    opts.newsletterId,
     filename,
     optimized.mimeType,
     await blobToBase64(optimized.file),
-    opts.assetOwner ?? "campaign",
+    opts.assetOwner ?? "newsletter",
   );
 
   return {
-    markdownUrl: normalizeCampaignAssetUrl(publicUrl),
+    markdownUrl: normalizeNewsletterAssetUrl(publicUrl),
     name: humanizeAssetFilename(filename, "image"),
     kind: "image",
     ext: optimized.ext,

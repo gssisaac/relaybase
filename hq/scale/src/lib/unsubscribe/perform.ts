@@ -2,51 +2,51 @@ import { store } from "../../db/store";
 import { findAudienceContactByUnsubscribeToken } from "../audience-groups/resolver";
 import { setAudienceContactSendStatus } from "../audience-groups/send-status";
 
-function findContactForBroadcast(campaignId: string, token: string) {
+function findContactForBroadcast(newsletterId: string, token: string) {
   const data = store.read();
-  const broadcast = data.campaigns.find((b) => b.id === campaignId);
+  const broadcast = data.newsletters.find((b) => b.id === newsletterId);
   if (!broadcast?.audienceGroupId) return { broadcast, contact: undefined };
   const contact = findAudienceContactByUnsubscribeToken(broadcast.audienceGroupId, token);
   return { broadcast, contact };
 }
 
-function recordUnsubscribeOnRecipients(campaignId: string, email: string, now: string) {
+function recordUnsubscribeOnRecipients(newsletterId: string, email: string, now: string) {
   store.update((draft) => {
     let newlyMarked = false;
     for (let i = 0; i < draft.recipients.length; i += 1) {
       const r = draft.recipients[i]!;
-      if (r.campaignId !== campaignId || r.email !== email || r.unsubscribedAt) continue;
+      if (r.newsletterId !== newsletterId || r.email !== email || r.unsubscribedAt) continue;
       draft.recipients[i] = { ...r, unsubscribedAt: now };
       newlyMarked = true;
     }
     if (!newlyMarked) return;
-    const bIdx = draft.campaigns.findIndex((b) => b.id === campaignId);
+    const bIdx = draft.newsletters.findIndex((b) => b.id === newsletterId);
     if (bIdx >= 0) {
-      const stats = draft.campaigns[bIdx]!.stats;
-      draft.campaigns[bIdx] = {
-        ...draft.campaigns[bIdx]!,
+      const stats = draft.newsletters[bIdx]!.stats;
+      draft.newsletters[bIdx] = {
+        ...draft.newsletters[bIdx]!,
         stats: { ...stats, unsubscribed: stats.unsubscribed + 1 },
       };
     }
   });
 }
 
-export function lookupUnsubscribeContact(campaignId: string, token: string) {
-  return findContactForBroadcast(campaignId, token);
+export function lookupUnsubscribeContact(newsletterId: string, token: string) {
+  return findContactForBroadcast(newsletterId, token);
 }
 
 export function performBroadcastUnsubscribe(
-  campaignId: string,
+  newsletterId: string,
   token: string,
 ): { ok: true; email: string; listName: string } | { ok: false } {
-  const { broadcast, contact } = findContactForBroadcast(campaignId, token);
+  const { broadcast, contact } = findContactForBroadcast(newsletterId, token);
   if (!contact || !broadcast) return { ok: false };
 
   const now = new Date().toISOString();
   setAudienceContactSendStatus(broadcast.audienceGroupId, contact.id, "unsubscribed", {
-    sourceCampaignId: campaignId,
+    sourceNewsletterId: newsletterId,
   });
-  recordUnsubscribeOnRecipients(campaignId, contact.email, now);
+  recordUnsubscribeOnRecipients(newsletterId, contact.email, now);
 
   return {
     ok: true,
@@ -55,8 +55,8 @@ export function performBroadcastUnsubscribe(
   };
 }
 
-export function resubscribeBroadcastContact(campaignId: string, token: string): boolean {
-  const { broadcast, contact } = findContactForBroadcast(campaignId, token);
+export function resubscribeBroadcastContact(newsletterId: string, token: string): boolean {
+  const { broadcast, contact } = findContactForBroadcast(newsletterId, token);
   if (!contact || !broadcast) return false;
   setAudienceContactSendStatus(broadcast.audienceGroupId, contact.id, "active");
   return true;

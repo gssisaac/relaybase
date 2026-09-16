@@ -30,16 +30,16 @@ import { scaleApi, ScaleApiError, type TriggerPurpose } from "@/lib/scale/api";
 import { scaleAudienceApi } from "@/lib/scale/audience-api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { AudienceGroupCmdDropdown } from "@/scale/components/AudienceGroupCmdDropdown";
-import { campaignDetailHref, triggerDetailHref } from "@/scale/lib/paths";
+import { newsletterDetailHref, triggerDetailHref } from "@/scale/lib/paths";
 import {
-  createCampaignFromHubTemplate,
+  createNewsletterFromHubTemplate,
   createTriggerFromHubTemplate,
   type HubTemplateSnapshot,
 } from "@/scale/lib/templates/hub-template-launch";
 import { syncScaleSendCredentials } from "@/scale/lib/sync-scale-send-credentials";
 import { useTemplateDetail } from "@/scale/pages/templates/TemplateDetailContext";
 
-type CampaignDialogMode = "draft" | "schedule";
+type NewsletterDialogMode = "draft" | "schedule";
 
 const TRIGGER_PURPOSE_OPTIONS: { value: TriggerPurpose; label: string }[] = [
   { value: "transactional", label: "Transactional" },
@@ -77,13 +77,13 @@ export function TemplateUseActions() {
   const { messageTemplateId, template, persistDraft, getDraft } = useTemplateDetail();
 
   const [testOpen, setTestOpen] = useState(false);
-  const [campaignOpen, setCampaignOpen] = useState(false);
-  const [campaignMode, setCampaignMode] = useState<CampaignDialogMode>("draft");
+  const [newsletterOpen, setNewsletterOpen] = useState(false);
+  const [newsletterMode, setNewsletterMode] = useState<NewsletterDialogMode>("draft");
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [campaignName, setCampaignName] = useState("");
-  const [campaignAudienceId, setCampaignAudienceId] = useState("");
+  const [newsletterName, setNewsletterName] = useState("");
+  const [newsletterAudienceId, setNewsletterAudienceId] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
 
   const [triggerName, setTriggerName] = useState("");
@@ -116,10 +116,10 @@ export function TemplateUseActions() {
       .finally(() => setAudienceLoading(false));
   }, []);
 
-  function resetCampaignForm(mode: CampaignDialogMode) {
-    setCampaignMode(mode);
-    setCampaignName(defaultTitle);
-    setCampaignAudienceId("");
+  function resetNewsletterForm(mode: NewsletterDialogMode) {
+    setNewsletterMode(mode);
+    setNewsletterName(defaultTitle);
+    setNewsletterAudienceId("");
     setScheduleAt("");
     setFormError(null);
   }
@@ -158,19 +158,19 @@ export function TemplateUseActions() {
     }
   }
 
-  async function handleCreateCampaign() {
-    const name = campaignName.trim();
-    const audienceGroupId = campaignAudienceId.trim();
+  async function handleCreateNewsletter() {
+    const name = newsletterName.trim();
+    const audienceGroupId = newsletterAudienceId.trim();
     const domain = resolveGroupDomain(audienceGroups, audienceGroupId);
     if (!name) {
-      setFormError("Campaign name is required");
+      setFormError("Newsletter name is required");
       return;
     }
     if (!audienceGroupId || !domain) {
       setFormError("Select a subscriber group");
       return;
     }
-    if (campaignMode === "schedule") {
+    if (newsletterMode === "schedule") {
       if (!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()) {
         setFormError("Choose a schedule time in the future");
         return;
@@ -183,7 +183,7 @@ export function TemplateUseActions() {
       const snapshot = await ensureTemplateSaved();
       if (!snapshot) return;
 
-      const campaign = await createCampaignFromHubTemplate({
+      const newsletter = await createNewsletterFromHubTemplate({
         name,
         domain,
         audienceGroupId,
@@ -191,25 +191,25 @@ export function TemplateUseActions() {
         snapshot,
       });
 
-      if (campaignMode === "schedule") {
+      if (newsletterMode === "schedule") {
         if (!(await prepareCredentials(domain))) return;
-        const scheduled = await scaleApi.scheduleCampaign(
-          campaign.id,
+        const scheduled = await scaleApi.scheduleNewsletter(
+          newsletter.id,
           new Date(scheduleAt).toISOString(),
         );
         toast.success(
-          `Campaign scheduled for ${new Date(scheduled.scheduledAt ?? scheduleAt).toLocaleString()}`,
+          `Newsletter scheduled for ${new Date(scheduled.scheduledAt ?? scheduleAt).toLocaleString()}`,
         );
-        setCampaignOpen(false);
-        router.push(campaignDetailHref(campaign.id, "publish", scheduled.status));
+        setNewsletterOpen(false);
+        router.push(newsletterDetailHref(newsletter.id, "publish", scheduled.status));
         return;
       }
 
-      toast.success(`Campaign “${campaign.name}” created`);
-      setCampaignOpen(false);
-      router.push(campaignDetailHref(campaign.id, "content"));
+      toast.success(`Newsletter “${newsletter.name}” created`);
+      setNewsletterOpen(false);
+      router.push(newsletterDetailHref(newsletter.id, "content"));
     } catch (err) {
-      setFormError(err instanceof ScaleApiError ? err.message : "Could not create campaign");
+      setFormError(err instanceof ScaleApiError ? err.message : "Could not create newsletter");
     } finally {
       setBusy(false);
     }
@@ -280,7 +280,7 @@ export function TemplateUseActions() {
       if (!snapshot) return;
       if (!(await prepareCredentials(domain))) return;
 
-      const campaign = await createCampaignFromHubTemplate({
+      const newsletter = await createNewsletterFromHubTemplate({
         name: `Test: ${defaultTitle}`.slice(0, 120),
         domain,
         audienceGroupId,
@@ -289,7 +289,7 @@ export function TemplateUseActions() {
         fromEmail: from,
       });
 
-      await scaleApi.testSendCampaign(campaign.id, to);
+      await scaleApi.testSendNewsletter(newsletter.id, to);
       toast.success(`Test email sent to ${to}`);
       setTestOpen(false);
     } catch (err) {
@@ -331,17 +331,17 @@ export function TemplateUseActions() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem
               onClick={() => {
-                resetCampaignForm("draft");
-                setCampaignOpen(true);
+                resetNewsletterForm("draft");
+                setNewsletterOpen(true);
               }}
             >
               <Mail className="size-4" />
-              Create campaign
+              Create newsletter
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
-                resetCampaignForm("schedule");
-                setCampaignOpen(true);
+                resetNewsletterForm("schedule");
+                setNewsletterOpen(true);
               }}
             >
               <Calendar className="size-4" />
@@ -365,8 +365,8 @@ export function TemplateUseActions() {
           <DialogHeader>
             <DialogTitle>Send test email</DialogTitle>
             <DialogDescription>
-              Creates a draft campaign with this template, sends one message, and leaves the draft in
-              Campaigns.
+              Creates a draft newsletter with this template, sends one message, and leaves the draft in
+              Newsletters.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -418,44 +418,44 @@ export function TemplateUseActions() {
       </Dialog>
 
       <Dialog
-        open={campaignOpen}
+        open={newsletterOpen}
         onOpenChange={(open) => {
-          setCampaignOpen(open);
-          if (open) resetCampaignForm(campaignMode);
+          setNewsletterOpen(open);
+          if (open) resetNewsletterForm(newsletterMode);
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {campaignMode === "schedule" ? "Schedule campaign" : "Create campaign"}
+              {newsletterMode === "schedule" ? "Schedule newsletter" : "Create newsletter"}
             </DialogTitle>
             <DialogDescription>
-              {campaignMode === "schedule"
-                ? "New campaign from this template, scheduled to send to the linked audience."
-                : "New draft campaign with this template’s subject and body."}
+              {newsletterMode === "schedule"
+                ? "New newsletter from this template, scheduled to send to the linked audience."
+                : "New draft newsletter with this template’s subject and body."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-campaign-name">Name</Label>
+              <Label htmlFor="template-newsletter-name">Name</Label>
               <Input
-                id="template-campaign-name"
-                value={campaignName}
-                onChange={(e) => setCampaignName(e.target.value)}
+                id="template-newsletter-name"
+                value={newsletterName}
+                onChange={(e) => setNewsletterName(e.target.value)}
                 placeholder={examplePlaceholder("March newsletter")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-campaign-audience">Subscriber group</Label>
+              <Label htmlFor="template-newsletter-audience">Subscriber group</Label>
               <AudienceGroupCmdDropdown
-                triggerId="template-campaign-audience"
+                triggerId="template-newsletter-audience"
                 groups={audienceGroups}
                 loading={audienceLoading}
-                value={campaignAudienceId || null}
-                onValueChange={(id) => setCampaignAudienceId(id ?? "")}
+                value={newsletterAudienceId || null}
+                onValueChange={(id) => setNewsletterAudienceId(id ?? "")}
               />
             </div>
-            {campaignMode === "schedule" ? (
+            {newsletterMode === "schedule" ? (
               <div className="space-y-1.5">
                 <Label htmlFor="template-schedule-at">Send at</Label>
                 <Input
@@ -469,15 +469,15 @@ export function TemplateUseActions() {
             {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => setCampaignOpen(false)}>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => setNewsletterOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" disabled={busy} onClick={() => void handleCreateCampaign()}>
+            <Button size="sm" disabled={busy} onClick={() => void handleCreateNewsletter()}>
               {busy
                 ? "Working…"
-                : campaignMode === "schedule"
-                  ? "Schedule campaign"
-                  : "Create campaign"}
+                : newsletterMode === "schedule"
+                  ? "Schedule newsletter"
+                  : "Create newsletter"}
             </Button>
           </DialogFooter>
         </DialogContent>

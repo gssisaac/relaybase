@@ -6,18 +6,18 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  applyCampaignMergeTags,
+  applyNewsletterMergeTags,
   previewPersonaOptions,
   resolvePreviewRecipient,
   type PreviewPersonaId,
-} from "@/scale/lib/campaigns/campaign-merge-tags";
+} from "@/scale/lib/newsletters/newsletter-merge-tags";
 import {
   applyTemplateVariablesToHtml,
   resolveTemplateVariableDefaults,
 } from "@/scale/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/scale/lib/layouts/layout-standard-footer";
 import { isPlainTextTemplate } from "@/scale/lib/layouts/layout-catalog";
-import { CampaignComposeForm } from "@/scale/pages/campaigns/CampaignComposeForm";
+import { NewsletterComposeForm } from "@/scale/pages/newsletters/NewsletterComposeForm";
 import { useTemplateDetail } from "@/scale/pages/templates/TemplateDetailContext";
 import {
   complianceFromIdentity,
@@ -26,8 +26,8 @@ import {
 } from "@/scale/lib/compliance-identity";
 import { scaleApi, type ScaleAccountCompliance } from "@/lib/scale/api";
 import {
-  useCampaignEditorPersistence,
-  type CampaignPersistBridge,
+  useNewsletterEditorPersistence,
+  type NewsletterPersistBridge,
 } from "@/lib/markdown-editor";
 import { SAVE_STATUS } from "@/lib/markdown-editor/persistence/constants";
 import type { SaveStatus } from "@/lib/markdown-editor/persistence/types";
@@ -73,7 +73,7 @@ export function TemplateContentView() {
 
   const editable = Boolean(template);
 
-  const bridge = useMemo<CampaignPersistBridge>(
+  const bridge = useMemo<NewsletterPersistBridge>(
     () => ({
       getDraft: () => ({ subject, bodyMarkdown, templateId, templateVariables }),
       setBodyMarkdown: (body) => setBodyMarkdown(body),
@@ -86,8 +86,8 @@ export function TemplateContentView() {
     [subject, bodyMarkdown, templateId, templateVariables, getLastSavedDraft, persistDraft],
   );
 
-  const { editorRef, ingestBody, checkpoint, saveStatus } = useCampaignEditorPersistence({
-    campaignId: messageTemplateId,
+  const { editorRef, ingestBody, checkpoint, saveStatus } = useNewsletterEditorPersistence({
+    newsletterId: messageTemplateId,
     beaconPath: `templates/${messageTemplateId}`,
     editable,
     bridge,
@@ -164,7 +164,7 @@ export function TemplateContentView() {
   );
 
   const previewSubject = useMemo(
-    () => applyCampaignMergeTags(subject, previewRecipient, previewMergeOptions),
+    () => applyNewsletterMergeTags(subject, previewRecipient, previewMergeOptions),
     [subject, previewRecipient, previewMergeOptions],
   );
 
@@ -191,14 +191,14 @@ export function TemplateContentView() {
     if (plainTextTemplate) {
       const body = bodyMarkdown.trim() || "Nothing to preview yet";
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
-      return applyCampaignMergeTags(wrapped, previewRecipient, previewMergeOptions);
+      return applyNewsletterMergeTags(wrapped, previewRecipient, previewMergeOptions);
     }
     const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
     if (!layout) {
-      return applyCampaignMergeTags(content, previewRecipient, previewMergeOptions);
+      return applyNewsletterMergeTags(content, previewRecipient, previewMergeOptions);
     }
     const wrapped = preparedTemplateHtml.replaceAll("{{content}}", content);
-    return applyCampaignMergeTags(wrapped, previewRecipient, previewMergeOptions);
+    return applyNewsletterMergeTags(wrapped, previewRecipient, previewMergeOptions);
   }, [
     layout,
     preparedTemplateHtml,
@@ -247,8 +247,8 @@ export function TemplateContentView() {
           />
         </div>
       </div>
-      <CampaignComposeForm
-        campaignId={messageTemplateId}
+      <NewsletterComposeForm
+        newsletterId={messageTemplateId}
         assetOwner="template"
         editorRef={editorRef}
         templates={layouts}

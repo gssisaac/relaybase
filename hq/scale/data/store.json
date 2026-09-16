@@ -2,7 +2,7 @@
   "account": {
     "id": "dev",
     "workerUrl": "https://relaybase-api.gssisaac.workers.dev",
-    "domain": "relaybase.xyz",
+    "domain": "relaybase.email",
     "createdAt": "2026-09-14T21:33:15.802Z",
     "compliance": {
       "organizationName": "Strum Corp",
@@ -305,13 +305,13 @@
       "name": "Partner note",
       "subject": "A note for design partners",
       "previewText": "How we want feedback during the Scale send beta",
-      "bodyMarkdown": "Hello {{contact.name}},\n\nThank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.\n\n**We need from you**\n\n- One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.\n- Screenshots or Loom if the UI blocks you — especially Publish and Stats tabs.\n- Honest feedback on copy, footers, and unsubscribe flow.\n\n**We owe you**\n\n- Same-day replies on blocking bugs during business hours (UTC+7).\n- A written changelog when we flip List-Unsubscribe headers on the Worker.\n\nNo NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.\n\nGratefully,\nIsaac\n",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nThank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.\n\n**We need from you**\n\n* One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.\n\n* Screenshots or Loom if the UI blocks you — especially Publish and Stats tabs.\n\n* Honest feedback on copy, footers, and unsubscribe flow.\n\n**We owe you**\n\n* Same-day replies on blocking bugs during business hours (UTC+7).\n\n* A written changelog when we flip List-Unsubscribe headers on the Worker.\n\nNo NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.\n\nGratefully,\\\n Isaac\n",
       "layoutId": "tpl-minimal",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-15T12:20:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-16T02:07:05.613Z"
     },
     {
       "id": "msgtpl_broadcast_scheduled_ama",
@@ -527,7 +527,7 @@
       "updatedAt": "2026-09-15T17:23:05.623Z"
     }
   ],
-  "campaigns": [
+  "newsletters": [
     {
       "id": "broadcast_d63712e3-2630-42fa-8706-04255e013a90",
       "accountLinkId": "dev",
@@ -1560,35 +1560,35 @@
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_3301042f-3593-49fa-9b93-d712ad4a2408",
+      "id": "job_9937dde0-5348-4069-aee4-615929610e4d",
       "accountLinkId": "dev",
-      "kind": "campaign",
+      "kind": "newsletter",
       "refId": "broadcast_scheduled_ama",
       "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T01:43:36.289Z"
+      "createdAt": "2026-09-16T04:51:48.948Z"
     },
     {
-      "id": "job_0b1f38b6-7149-4242-873f-c8b13e6b47bd",
+      "id": "job_e88f2df0-f2a1-4cd1-a32a-312d01305d9c",
       "accountLinkId": "dev",
-      "kind": "campaign",
+      "kind": "newsletter",
       "refId": "broadcast_sent_sep_digest",
       "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T01:43:36.289Z"
+      "createdAt": "2026-09-16T04:51:48.948Z"
     },
     {
-      "id": "job_04d7c439-77d8-4864-84e2-a99ba1ced38f",
+      "id": "job_4fa80862-5d35-40a9-aecf-226375720642",
       "accountLinkId": "dev",
-      "kind": "campaign",
+      "kind": "newsletter",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T01:43:36.289Z"
+      "createdAt": "2026-09-16T04:51:48.948Z"
     }
   ],
   "trackingEvents": [],
-  "campaignAssets": [],
+  "newsletterAssets": [],
   "triggerAssets": [],
   "templateAssets": [],
   "audienceGroups": [
@@ -1596,9 +1596,9 @@
       "id": "audience_10425087-e030-4656-88cc-4872cc34d497",
       "accountLinkId": "dev",
       "name": "Engineering Weekly",
-      "domain": "relaybase.xyz",
+      "domain": "relaybase.email",
       "createdAt": "2026-09-14T21:33:22.778Z",
-      "defaultFrom": "hello@relaybase.xyz",
+      "defaultFrom": "isaac@relaybase.email",
       "dataSource": null,
       "cronEnabled": false,
       "cronIntervalMinutes": 60,
@@ -1775,6 +1775,20 @@
           "bounceReason": null,
           "consentSource": "manual",
           "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_1cd9a383-7655-418c-b83d-c2c3356f4c98",
+          "email": "tozerlewis@naver.com",
+          "name": null,
+          "source": "manual",
+          "addedAt": "2026-09-16T03:23:36.574Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "99HsDS3Nkow7vLLv69_mXxjblsmhyAXGiO2chbtm1kg",
+          "consentSource": "manual",
+          "consentedAt": "2026-09-16T03:23:36.574Z",
+          "bouncedAt": null,
+          "bounceReason": null
         }
       ]
     },

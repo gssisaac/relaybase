@@ -1,7 +1,7 @@
 # Scale Audience Group & Broadcast Architecture
 
 **Status:** Approved (canonical, reduced scope)  
-**Supersedes:** campaign/subscriber layers in [`crm-campaign-broadcast-subscriber-model.md`](./crm-campaign-broadcast-subscriber-model.md) (historical)  
+**Supersedes:** newsletter/subscriber layers in [`crm-newsletter-broadcast-subscriber-model.md`](./crm-newsletter-broadcast-subscriber-model.md) (historical)  
 **Engine:** `hq/scale` (dev: `data/store.json` → prod: tenant-local Scale service on customer Cloudflare / BYO deploy)  
 **App:** `app/src/scale/*`  
 **Date:** 2026-09-15  
@@ -10,7 +10,7 @@
 
 ## 1. Why this model
 
-Relaybase Scale targets solo founders and small teams. A separate **Campaign** entity plus **Subscriber** membership duplicated what **Audience Groups** already express in the product Worker console.
+Relaybase Scale targets solo founders and small teams. A separate **Newsletter** entity plus **Subscriber** membership duplicated what **Audience Groups** already express in the product Worker console.
 
 **Intentional reduction:**
 
@@ -84,7 +84,7 @@ Unsubscribe links use `(broadcastId, unsubscribeToken)` but **apply** to the bro
 | `GET/POST /scale/unsubscribe/:broadcastId/:token` | Confirm + RFC 8058 unsubscribe |
 | `GET /scale/t/o/...` | Open pixel |
 | `GET /scale/t/c/...` | Click redirect (http/https only) |
-| `GET /scale/assets/...` | Campaign images CDN |
+| `GET /scale/assets/...` | Newsletter images CDN |
 
 All other `/scale/*` routes require API auth in production.
 
@@ -105,4 +105,4 @@ All other `/scale/*` routes require API auth in production.
 | `/scale/audience` | Groups, contacts, settings, data source |
 | `/scale/broadcasts` | Broadcast list + detail (content, publish, stats, settings) |
 
-Campaign routes are **not** used in this model.
+Newsletter routes are **not** used in this model.

@@ -30,7 +30,7 @@ import {
 } from "@/lib/markdown-editor/utils/image-optimize";
 import { DEFAULT_IMAGE_OPTIMIZATION_SETTINGS } from "@/lib/markdown-editor/utils/image-settings";
 import {
-  ingestCampaignFile,
+  ingestNewsletterFile,
   markdownForIngestedFile,
   type IngestedPageFile,
 } from "@/lib/markdown-editor/utils/file-ingest";
@@ -41,13 +41,13 @@ import {
 } from "@/lib/markdown-editor/utils/editor-markdown";
 import { promotePageMediaBlocks } from "@/lib/markdown-editor/utils/media-markdown";
 import { markdownSelectAllExtension } from "@/lib/markdown-editor/utils/select-all";
-import { resolveCampaignAssetPath } from "@/lib/markdown-editor/utils/assets";
+import { resolveNewsletterAssetPath } from "@/lib/markdown-editor/utils/assets";
 import {
-  normalizeCampaignAssetUrl,
-  normalizeCampaignAssetUrlsInHtml,
+  normalizeNewsletterAssetUrl,
+  normalizeNewsletterAssetUrlsInHtml,
 } from "@/lib/markdown-editor/utils/asset-url";
 import { getScaleApiBase } from "@/lib/scale/api-base";
-import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/campaign-upload";
+import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import { cn } from "@/lib/utils";
 
 import "@blocknote/shadcn/style.css";
@@ -57,17 +57,17 @@ import "@/lib/markdown-editor/css/markdown-shared.css";
 export type MarkdownEditorHandle = EditorSnapshotProvider;
 
 type MarkdownEditorProps = {
-  /** Real campaign id — asset upload/resolution namespace (`/scale/campaigns/:campaignId/assets`). */
-  campaignId: string;
+  /** Real newsletter id — asset upload/resolution namespace (`/scale/newsletters/:newsletterId/assets`). */
+  newsletterId: string;
   /**
    * Document identity for the persistence snapshot's `filePath` binding —
    * must equal the `path` the caller's persistence hook uses, so a stale
    * snapshot from a previously-open document isn't applied to this one.
-   * Defaults to `campaignId` when the document and asset namespace are the
-   * same entity (e.g. template vs campaign send record).
+   * Defaults to `newsletterId` when the document and asset namespace are the
+   * same entity (e.g. template vs newsletter send record).
    */
   documentId?: string;
-  /** Which Scale asset namespace receives uploads (campaign, trigger, or message template). */
+  /** Which Scale asset namespace receives uploads (newsletter, trigger, or message template). */
   assetOwner?: CrmContentAssetOwner;
   value: string;
   editable?: boolean;
@@ -188,9 +188,9 @@ function openExternalLink(event: React.MouseEvent) {
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(
   {
-    campaignId,
-    documentId = campaignId,
-    assetOwner = "campaign",
+    newsletterId,
+    documentId = newsletterId,
+    assetOwner = "newsletter",
     value,
     editable = true,
     onChange,
@@ -206,7 +206,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const pendingEditorMarkdownRef = useRef<string | null>(null);
   const editorMountedRef = useRef(false);
   const editorRef = useRef<BlockNoteEditor | null>(null);
-  const campaignIdRef = useRef(campaignId);
+  const newsletterIdRef = useRef(newsletterId);
   const assetOwnerRef = useRef(assetOwner);
   const hydratedRef = useRef(false);
   const hydratedFingerprintRef = useRef<string | null>(null);
@@ -214,13 +214,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
 
   onChangeRef.current = onChange;
   valueRef.current = value;
-  campaignIdRef.current = campaignId;
+  newsletterIdRef.current = newsletterId;
   assetOwnerRef.current = assetOwner;
 
   const ingestFile = useCallback(async (file: File) => {
-    return ingestCampaignFile({
+    return ingestNewsletterFile({
       file,
-      campaignId: campaignIdRef.current,
+      newsletterId: newsletterIdRef.current,
       assetOwner: assetOwnerRef.current,
       settings: DEFAULT_IMAGE_OPTIMIZATION_SETTINGS,
     });
@@ -253,8 +253,8 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       return markdownUrl;
     },
     resolveFileUrl: async (url) => {
-      if (/^(https?:|data:|blob:)/i.test(url)) return normalizeCampaignAssetUrl(url);
-      const assetPath = resolveCampaignAssetPath(campaignIdRef.current, url);
+      if (/^(https?:|data:|blob:)/i.test(url)) return normalizeNewsletterAssetUrl(url);
+      const assetPath = resolveNewsletterAssetPath(newsletterIdRef.current, url);
       if (!assetPath) return url;
       const [cid, ...rest] = assetPath.split("/");
       const filename = rest.join("/");
@@ -298,7 +298,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       pendingEditorMarkdownRef.current = body;
       const markdown = body;
       const html = enhancePreviewHtml(
-        normalizeCampaignAssetUrlsInHtml(editorInstance.blocksToHTMLLossy()),
+        normalizeNewsletterAssetUrlsInHtml(editorInstance.blocksToHTMLLossy()),
       );
       onChangeRef.current({ markdown, html });
       return markdown;

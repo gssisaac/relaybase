@@ -21,19 +21,19 @@ export function slugify(input: string): string {
     .slice(0, 80);
 }
 
-/** Matches hq/scale campaign/trigger asset folder stems (legacy id prefixes stripped). */
-export function campaignAssetStem(campaignId: string): string {
+/** Matches hq/scale newsletter/trigger asset folder stems (legacy id prefixes stripped). */
+export function newsletterAssetStem(newsletterId: string): string {
   return (
-    campaignId
-      .replace(/^campaign_/, "")
+    newsletterId
+      .replace(/^newsletter_/, "")
       .replace(/^broadcast_/, "")
       .replace(/^automation_/, "")
-      .slice(0, 32) || "campaign"
+      .slice(0, 32) || "newsletter"
   );
 }
 
-export function pageAssetFolderName(campaignId: string): string {
-  return `.${campaignAssetStem(campaignId)}`;
+export function pageAssetFolderName(newsletterId: string): string {
+  return `.${newsletterAssetStem(newsletterId)}`;
 }
 
 export function slugifyFilename(name: string, fallback = "image"): string {
@@ -72,8 +72,8 @@ export function pageAssetFilename(originalName: string, ext: string, id?: string
   return `${id ?? shortAssetId()}-${slugifyFilename(originalName, fallback)}.${safeExt}`;
 }
 
-export function pageAssetMarkdownUrl(campaignId: string, filename: string): string {
-  return `./${pageAssetFolderName(campaignId)}/${filename}`;
+export function pageAssetMarkdownUrl(newsletterId: string, filename: string): string {
+  return `./${pageAssetFolderName(newsletterId)}/${filename}`;
 }
 
 export function assetKindFromHref(href: string): PageAssetKind | null {
@@ -105,15 +105,15 @@ export function humanizeAssetFilename(filename: string, fallback = "file"): stri
   return words.join(" ");
 }
 
-/** Resolve `./.campaign/…` href against campaign id to a storage key segment. */
-export function resolveCampaignAssetPath(campaignId: string, href: string): string | null {
+/** Resolve `./.newsletter/…` href against newsletter id to a storage key segment. */
+export function resolveNewsletterAssetPath(newsletterId: string, href: string): string | null {
   if (!href || /^(https?:|data:|blob:)/i.test(href)) return null;
   const relative = href.replace(/^\.\//, "");
-  const folder = pageAssetFolderName(campaignId);
+  const folder = pageAssetFolderName(newsletterId);
   if (!relative.startsWith(`${folder}/`)) return null;
   const filename = relative.slice(folder.length + 1);
   if (!filename || filename.includes("..")) return null;
-  return `${campaignId}/${filename}`;
+  return `${newsletterId}/${filename}`;
 }
 
 export function isUsableMediaSrc(url: string | undefined): boolean {

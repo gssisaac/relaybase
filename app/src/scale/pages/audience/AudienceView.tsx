@@ -10,7 +10,7 @@ import { useAudienceRoutes } from "@/scale/pages/audience/AudienceRouteContext";
 
 /**
  * `?id=` switch, not an `[id]` dynamic segment — same static-export
- * reasoning as `/scale/campaigns?id=` (see CampaignsView).
+ * reasoning as `/scale/newsletters?id=` (see NewslettersView).
  */
 function AudienceRoute() {
   const searchParams = useSearchParams();

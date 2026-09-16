@@ -606,7 +606,7 @@ const scheduledJobs = [
   {
     id: "job_scheduled_ama",
     accountLinkId: "dev",
-    kind: "campaign",
+    kind: "newsletter",
     refId: scheduledAma.id,
     runAt: scheduledAma.scheduledAt,
     status: "pending",

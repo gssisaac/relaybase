@@ -1,7 +1,7 @@
 /**
  * Scale dev JSON store types (`data/store.json`).
  *
- * Layout — HTML frame · Template — message copy · Trigger — event send · Campaign — audience send.
+ * Layout — HTML frame · Template — message copy · Trigger — event send · Newsletter — audience send.
  */
 
 // ============================================================================
@@ -90,13 +90,13 @@ export type Template = {
 };
 
 // ============================================================================
-// Campaigns (audience batch send)
+// Newsletters (audience batch send)
 // ============================================================================
 
-export type CampaignListStatus = "active" | "archived";
-export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+export type NewsletterListStatus = "active" | "archived";
+export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
 
-export type CampaignStats = {
+export type NewsletterStats = {
   sent: number;
   delivered: number;
   bounced: number;
@@ -110,7 +110,7 @@ export type CampaignStats = {
   unsubscribed: number;
 };
 
-export type Campaign = {
+export type Newsletter = {
   id: string;
   accountLinkId: string;
   name: string;
@@ -123,14 +123,14 @@ export type Campaign = {
   replyTo?: string | null;
   templateId: string;
   complianceIdentityId?: string | null;
-  listStatus: CampaignListStatus;
-  status: CampaignStatus;
+  listStatus: NewsletterListStatus;
+  status: NewsletterStatus;
   scheduledAt?: string | null;
   sentAt?: string | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   targetFilter?: Record<string, unknown>;
-  stats: CampaignStats;
+  stats: NewsletterStats;
   createdAt: string;
   updatedAt: string;
 };
@@ -149,7 +149,7 @@ export type RecipientStatus =
 
 export type Recipient = {
   id: string;
-  campaignId: string;
+  newsletterId: string;
   audienceMemberId: string;
   email: string;
   name?: string | null;
@@ -182,7 +182,7 @@ export type AccountSuppression = {
   email: string;
   reason: AccountSuppressionReason;
   audienceGroupId: string | null;
-  sourceCampaignId?: string | null;
+  sourceNewsletterId?: string | null;
   createdAt: string;
 };
 
@@ -210,7 +210,7 @@ export type Activity = {
 export type ScheduledJob = {
   id: string;
   accountLinkId: string;
-  kind: "campaign" | "sync" | string;
+  kind: "newsletter" | "sync" | string;
   refId: string;
   runAt: string;
   status: "pending" | "done" | "failed" | string;
@@ -227,7 +227,7 @@ export type TrackingEventType =
 
 export type TrackingEvent = {
   id: string;
-  campaignId: string;
+  newsletterId: string;
   recipientId: string;
   memberEmail: string;
   type: TrackingEventType;
@@ -236,10 +236,10 @@ export type TrackingEvent = {
   occurredAt: string;
 };
 
-export type CampaignAsset = {
+export type NewsletterAsset = {
   id: string;
   key: string;
-  campaignId: string;
+  newsletterId: string;
   filename: string;
   mimeType: string;
   contentBase64: string;
@@ -497,7 +497,7 @@ export type ScaleDataStore = {
   complianceIdentities: ComplianceIdentity[];
   layouts: Layout[];
   templates: Template[];
-  campaigns: Campaign[];
+  newsletters: Newsletter[];
   recipients: Recipient[];
   triggers: Trigger[];
   triggerEvents: TriggerEvent[];
@@ -508,7 +508,7 @@ export type ScaleDataStore = {
   activities: Activity[];
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
-  campaignAssets: CampaignAsset[];
+  newsletterAssets: NewsletterAsset[];
   triggerAssets: TriggerAsset[];
   templateAssets: MessageTemplateAsset[];
   audienceGroups: AudienceGroup[];

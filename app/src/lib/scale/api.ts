@@ -1,5 +1,5 @@
 /**
- * hq/scale client — Campaign (audience + send) and Trigger models.
+ * hq/scale client — Newsletter (audience + send) and Trigger models.
  */
 import { getScaleApiBase } from "./api-base";
 import { SCALE_API_REQUEST_HEADER } from "./scale-origin";
@@ -50,10 +50,10 @@ export type MessageTemplate = {
   updatedAt: string;
 };
 
-export type CampaignListStatus = "active" | "archived";
-export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+export type NewsletterListStatus = "active" | "archived";
+export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
 
-export type CampaignStats = {
+export type NewsletterStats = {
   sent: number;
   delivered: number;
   bounced: number;
@@ -67,7 +67,7 @@ export type CampaignStats = {
   unsubscribed: number;
 };
 
-export type Campaign = {
+export type Newsletter = {
   id: string;
   name: string;
   slug: string;
@@ -82,35 +82,35 @@ export type Campaign = {
   replyTo: string | null;
   defaultLayoutId: string | null;
   complianceIdentityId: string | null;
-  listStatus: CampaignListStatus;
+  listStatus: NewsletterListStatus;
   subject: string;
   previewText: string | null;
   bodyMarkdown: string;
   layoutId: string | null;
   messageTemplateId: string | null;
   templateVariables: Record<string, string>;
-  status: CampaignStatus;
+  status: NewsletterStatus;
   scheduledAt: string | null;
   sentAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;
-  stats: CampaignStats;
+  stats: NewsletterStats;
   audienceActiveCount: number;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CampaignMemberStatus = "active" | "unsubscribed" | "bounced";
-export type CampaignMemberSource = "manual" | "synced";
+export type NewsletterMemberStatus = "active" | "unsubscribed" | "bounced";
+export type NewsletterMemberSource = "manual" | "synced";
 
-export type CampaignMember = {
+export type NewsletterMember = {
   id: string;
-  campaignId: string;
+  newsletterId: string;
   audienceMemberId: string;
   email: string;
   name: string | null;
-  status: CampaignMemberStatus;
-  source: CampaignMemberSource;
+  status: NewsletterMemberStatus;
+  source: NewsletterMemberSource;
   unsubscribedAt: string | null;
   bouncedAt: string | null;
   bounceReason: string | null;
@@ -126,7 +126,7 @@ export type RecipientStatus =
   | "skipped"
   | "failed";
 
-export type CampaignTrackingEventType =
+export type NewsletterTrackingEventType =
   | "delivered"
   | "open"
   | "click"
@@ -134,17 +134,17 @@ export type CampaignTrackingEventType =
   | "unsubscribe"
   | "complaint";
 
-export type CampaignTrackingEvent = {
+export type NewsletterTrackingEvent = {
   id: string;
   recipientId: string;
   memberEmail: string;
-  type: CampaignTrackingEventType;
+  type: NewsletterTrackingEventType;
   url: string | null;
   reason: string | null;
   occurredAt: string;
 };
 
-export type CampaignLinkClickStat = {
+export type NewsletterLinkClickStat = {
   url: string;
   clicks: number;
   uniqueClicks: number;
@@ -152,7 +152,7 @@ export type CampaignLinkClickStat = {
 
 export type AccountSentOverview = {
   period: { from: string; to: string };
-  totals: CampaignStats & { campaigns: number };
+  totals: NewsletterStats & { newsletters: number };
   rates: { delivery: number; open: number; click: number; bounce: number };
   byWeek: { weekStart: string; sent: number; opened: number; clicked: number }[];
   byAudience: {
@@ -162,20 +162,20 @@ export type AccountSentOverview = {
     opened: number;
     clicked: number;
   }[];
-  campaigns: Array<{
+  newsletters: Array<{
     id: string;
     name: string;
     subject: string;
-    status: CampaignStatus;
+    status: NewsletterStatus;
     sentAt: string | null;
     finishedAt: string | null;
-    stats: CampaignStats;
+    stats: NewsletterStats;
     audienceGroupName: string | null;
   }>;
-  topLinks: { url: string; clicks: number; uniqueClicks: number; campaignId: string }[];
+  topLinks: { url: string; clicks: number; uniqueClicks: number; newsletterId: string }[];
 };
 
-export type CampaignDispatchProgress = {
+export type NewsletterDispatchProgress = {
   batchSize: number;
   batchIntervalSeconds: number;
   queue: {
@@ -238,7 +238,7 @@ export type ScaleOverview = {
       scheduledAt: string;
       audienceGroupName: string | null;
       recipientCount: number;
-      status: CampaignStatus;
+      status: NewsletterStatus;
     } | null;
     upcomingCount: number;
     upcomingList: Array<{
@@ -266,7 +266,7 @@ export type ScaleOverview = {
       occurredAt: string;
     }>;
   };
-  campaigns: {
+  newsletters: {
     draftCount: number;
     inProgressCount: number;
     recentSent: Array<{
@@ -313,7 +313,7 @@ export type ScaleOverview = {
 
 export type InProgressOverview = {
   sending: Array<{
-    campaign: Campaign;
+    newsletter: Newsletter;
     queue: {
       total: number;
       queued: number;
@@ -323,13 +323,13 @@ export type InProgressOverview = {
     };
     startedAt: string | null;
     lastDispatchedAt: string | null;
-    dispatch: CampaignDispatchProgress | null;
-    recentEvents: CampaignTrackingEvent[];
+    dispatch: NewsletterDispatchProgress | null;
+    recentEvents: NewsletterTrackingEvent[];
   }>;
-  scheduled: Campaign[];
+  scheduled: Newsletter[];
 };
 
-export type CampaignRecipient = {
+export type NewsletterRecipient = {
   id: string;
   audienceMemberId: string;
   email: string;
@@ -520,10 +520,10 @@ export const scaleApi = {
     }),
 
   getOverview: () => scaleFetch<ScaleOverview>("/scale/overview"),
-  listCampaigns: () => scaleFetch<{ campaigns: Campaign[] }>("/scale/campaigns"),
-  getSentOverview: () => scaleFetch<AccountSentOverview>("/scale/campaigns/sent-stats"),
-  getInProgressOverview: () => scaleFetch<InProgressOverview>("/scale/campaigns/in-progress"),
-  createCampaign: (input: {
+  listNewsletters: () => scaleFetch<{ newsletters: Newsletter[] }>("/scale/newsletters"),
+  getSentOverview: () => scaleFetch<AccountSentOverview>("/scale/newsletters/sent-stats"),
+  getInProgressOverview: () => scaleFetch<InProgressOverview>("/scale/newsletters/in-progress"),
+  createNewsletter: (input: {
     name: string;
     domain: string;
     audienceGroupId: string;
@@ -533,9 +533,9 @@ export const scaleApi = {
     fromEmail?: string;
     replyTo?: string;
     defaultLayoutId?: string;
-  }) => scaleFetch<Campaign>("/scale/campaigns", { method: "POST", body: JSON.stringify(input) }),
-  getCampaign: (id: string) => scaleFetch<Campaign>(`/scale/campaigns/${id}`),
-  updateCampaign: (
+  }) => scaleFetch<Newsletter>("/scale/newsletters", { method: "POST", body: JSON.stringify(input) }),
+  getNewsletter: (id: string) => scaleFetch<Newsletter>(`/scale/newsletters/${id}`),
+  updateNewsletter: (
     id: string,
     input: Partial<{
       name: string;
@@ -548,7 +548,7 @@ export const scaleApi = {
       replyTo: string | null;
       defaultLayoutId: string | null;
       complianceIdentityId: string | null;
-      listStatus: CampaignListStatus;
+      listStatus: NewsletterListStatus;
       subject: string;
       previewText: string;
       bodyMarkdown: string;
@@ -557,76 +557,76 @@ export const scaleApi = {
       templateVariables: Record<string, string>;
       audienceGroupId: string;
     }>,
-  ) => scaleFetch<Campaign>(`/scale/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
-  archiveCampaign: (id: string) =>
-    scaleFetch<Campaign>(`/scale/campaigns/${id}`, {
+  ) => scaleFetch<Newsletter>(`/scale/newsletters/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  archiveNewsletter: (id: string) =>
+    scaleFetch<Newsletter>(`/scale/newsletters/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ listStatus: "archived" }),
     }),
-  unarchiveCampaign: (id: string) =>
-    scaleFetch<Campaign>(`/scale/campaigns/${id}`, {
+  unarchiveNewsletter: (id: string) =>
+    scaleFetch<Newsletter>(`/scale/newsletters/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ listStatus: "active" }),
     }),
 
-  listCampaignAudience: (campaignId: string, params?: { status?: string; q?: string }) => {
+  listNewsletterAudience: (newsletterId: string, params?: { status?: string; q?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.q) qs.set("q", params.q);
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
-    return scaleFetch<{ members: CampaignMember[] }>(
-      `/scale/campaigns/${campaignId}/audience${suffix}`,
+    return scaleFetch<{ members: NewsletterMember[] }>(
+      `/scale/newsletters/${newsletterId}/audience${suffix}`,
     );
   },
-  syncCampaignAudience: (campaignId: string) =>
+  syncNewsletterAudience: (newsletterId: string) =>
     scaleFetch<{
       added: number;
       updated: number;
       skipped: number;
       contactCount: number;
       activeCount: number;
-    }>(`/scale/campaigns/${campaignId}/audience/sync`, { method: "POST" }),
-  testSendCampaign: (campaignId: string, to: string) =>
-    scaleFetch<{ ok: true }>(`/scale/campaigns/${campaignId}/test-send`, {
+    }>(`/scale/newsletters/${newsletterId}/audience/sync`, { method: "POST" }),
+  testSendNewsletter: (newsletterId: string, to: string) =>
+    scaleFetch<{ ok: true }>(`/scale/newsletters/${newsletterId}/test-send`, {
       method: "POST",
       body: JSON.stringify({ to }),
     }),
-  sendCampaign: (campaignId: string) =>
+  sendNewsletter: (newsletterId: string) =>
     scaleFetch<{
-      campaign: Campaign;
+      newsletter: Newsletter;
       sent: number;
       failed: number;
       skipped: number;
       async?: boolean;
       queued?: number;
-    }>(`/scale/campaigns/${campaignId}/send`, { method: "POST" }),
-  scheduleCampaign: (campaignId: string, runAt: string) =>
-    scaleFetch<Campaign>(`/scale/campaigns/${campaignId}/schedule`, {
+    }>(`/scale/newsletters/${newsletterId}/send`, { method: "POST" }),
+  scheduleNewsletter: (newsletterId: string, runAt: string) =>
+    scaleFetch<Newsletter>(`/scale/newsletters/${newsletterId}/schedule`, {
       method: "POST",
       body: JSON.stringify({ runAt }),
     }),
-  cancelSchedule: (campaignId: string) =>
-    scaleFetch<Campaign>(`/scale/campaigns/${campaignId}/cancel-schedule`, {
+  cancelSchedule: (newsletterId: string) =>
+    scaleFetch<Newsletter>(`/scale/newsletters/${newsletterId}/cancel-schedule`, {
       method: "POST",
     }),
-  duplicateCampaign: (campaignId: string) =>
-    scaleFetch<Campaign>(`/scale/campaigns/${campaignId}/duplicate`, {
+  duplicateNewsletter: (newsletterId: string) =>
+    scaleFetch<Newsletter>(`/scale/newsletters/${newsletterId}/duplicate`, {
       method: "POST",
     }),
-  getCampaignStats: (campaignId: string) =>
+  getNewsletterStats: (newsletterId: string) =>
     scaleFetch<{
-      campaign: Campaign;
-      dispatch: CampaignDispatchProgress | null;
-      recipients: CampaignRecipient[];
-      trackingEvents: CampaignTrackingEvent[];
-      linkClicks: CampaignLinkClickStat[];
-    }>(`/scale/campaigns/${campaignId}/stats`),
+      newsletter: Newsletter;
+      dispatch: NewsletterDispatchProgress | null;
+      recipients: NewsletterRecipient[];
+      trackingEvents: NewsletterTrackingEvent[];
+      linkClicks: NewsletterLinkClickStat[];
+    }>(`/scale/newsletters/${newsletterId}/stats`),
 
-  uploadCampaignAsset: (
-    campaignId: string,
+  uploadNewsletterAsset: (
+    newsletterId: string,
     input: { filename: string; mimeType: string; contentBase64: string },
   ) =>
-    scaleFetch<{ url: string; key: string }>(`/scale/campaigns/${campaignId}/assets`, {
+    scaleFetch<{ url: string; key: string }>(`/scale/newsletters/${newsletterId}/assets`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -743,7 +743,7 @@ export type TriggerSource =
       requiredFields?: string[];
     };
 
-export type TriggerStats = CampaignStats & {
+export type TriggerStats = NewsletterStats & {
   triggered: number;
   matched: number;
   deduped: number;

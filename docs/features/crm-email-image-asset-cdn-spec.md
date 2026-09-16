@@ -1,8 +1,8 @@
-# Scale Campaign Image Assets & Cloudflare R2 CDN Specification
+# Scale Newsletter Image Assets & Cloudflare R2 CDN Specification
 
 **Status:** Approved Architecture Draft  
 **Target Engine:** `hq/scale` (Cloudflare Workers + R2 CDN / Local JSON Store)  
-**App Editor:** `app/src/lib/markdown-editor/*` & `app/src/scale/pages/campaigns/*`  
+**App Editor:** `app/src/lib/markdown-editor/*` & `app/src/scale/pages/newsletters/*`  
 **Storage Target:** Cloudflare R2 Bucket `crm-assets` (Public CDN domain)  
 **Language:** English  
 **Date:** 2026-09-14  
@@ -26,15 +26,15 @@ To guarantee **100% universal rendering, inbox deliverability, and optimal visua
 
 | Image Use Case | Standard Format | Fallback / Alternative | Forbidden Formats in Email Body |
 |---|---|---|---|
-| **Campaign Body Images** (Hero photos, screenshots, banners, illustrations) | **JPEG (`.jpg` / `.jpeg`)** | PNG (if high-contrast text) | WebP, AVIF, SVG, Base64 data URI |
+| **Newsletter Body Images** (Hero photos, screenshots, banners, illustrations) | **JPEG (`.jpg` / `.jpeg`)** | PNG (if high-contrast text) | WebP, AVIF, SVG, Base64 data URI |
 | **Brand Logos & Template Icons** (Logos, badges, social icons with transparency) | **PNG (`.png`)** | JPEG (if opaque background) | SVG, WebP with transparency, Base64 data URI |
 | **Animated Demonstrations** | **GIF (`.gif`)** | Static JPEG poster image | Animated WebP, Video tags (`<video>`) |
 
 ### 1.3 Storage & CDN Strategy
-All campaign assets are hosted externally on a high-speed, globally distributed **Cloudflare R2 Bucket (`crm-assets`)** mapped to a public CDN custom domain (e.g., `https://assets.relaybase.xyz` or development host). 
+All newsletter assets are hosted externally on a high-speed, globally distributed **Cloudflare R2 Bucket (`crm-assets`)** mapped to a public CDN custom domain (e.g., `https://assets.relaybase.xyz` or development host). 
 
-- **Local Dev Phase:** Assets are received via `POST /scale/campaigns/:id/assets` and stored in `hq/scale/data/store.json` under the key `{campaignId}/{filename}`.
-- **Cloudflare Production Phase:** The exact same key layout `{campaignId}/{filename}` is written directly to the R2 bucket `crm-assets` with public read access and cached at Cloudflare edge nodes with `public, max-age=31536000, immutable`.
+- **Local Dev Phase:** Assets are received via `POST /scale/newsletters/:id/assets` and stored in `hq/scale/data/store.json` under the key `{newsletterId}/{filename}`.
+- **Cloudflare Production Phase:** The exact same key layout `{newsletterId}/{filename}` is written directly to the R2 bucket `crm-assets` with public read access and cached at Cloudflare edge nodes with `public, max-age=31536000, immutable`.
 
 ---
 
@@ -72,16 +72,16 @@ pie title Standard Image Format Distribution in Relaybase Scale
 
 ### 3.1 Key Path & URL Scheme
 
-Assets are organized deterministically under each campaign ID to ensure isolation, collision resistance, and clean lifecycle management:
+Assets are organized deterministically under each newsletter ID to ensure isolation, collision resistance, and clean lifecycle management:
 
 ```text
-Storage Key:  {campaignId}/{assetShortId}-{slugifiedName}.{ext}
-Public CDN:   https://assets.relaybase.xyz/scale/assets/{campaignId}/{assetShortId}-{slugifiedName}.{ext}
+Storage Key:  {newsletterId}/{assetShortId}-{slugifiedName}.{ext}
+Public CDN:   https://assets.relaybase.xyz/scale/assets/{newsletterId}/{assetShortId}-{slugifiedName}.{ext}
 ```
 
 ```text
 Example Keys:
-├── campaign_9f8a1c2b/
+├── newsletter_9f8a1c2b/
 │   ├── H7K2M9P4-summer-sale-hero.jpg
 │   ├── B3N8Q1X5-relaybase-logo-white.png
 │   └── F2L6V0R9-dashboard-demo.gif
@@ -94,8 +94,8 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 | Dimension | Local Development Store (`hq/scale`) | Production Cloudflare R2 (`strum-relaybase-scale`) |
 |---|---|---|
 | **Storage Engine** | Synchronous file store (`hq/scale/data/store.json`) | Cloudflare R2 (`env.CRM_ASSETS` bucket binding) |
-| **Ingestion Handler** | `POST /scale/campaigns/:id/assets` | `POST /scale/campaigns/:id/assets` (Worker route) |
-| **Retrieval Handler** | `GET /scale/assets/:campaignId/:filename` | Public R2 Custom Domain / Worker Cache API |
+| **Ingestion Handler** | `POST /scale/newsletters/:id/assets` | `POST /scale/newsletters/:id/assets` (Worker route) |
+| **Retrieval Handler** | `GET /scale/assets/:newsletterId/:filename` | Public R2 Custom Domain / Worker Cache API |
 | **URL Base** | `process.env.SCALE_PUBLIC_BASE_URL` (`http://localhost:32831`) | `https://assets.relaybase.xyz` (Cloudflare CDN) |
 | **Cache Headers** | `public, max-age=31536000, immutable` | `public, max-age=31536000, immutable` |
 | **Security** | Unauthenticated public GET for image assets | Unauthenticated public GET (GoogleImageProxy allowed) |
@@ -104,21 +104,21 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 
 ## 4. Comprehensive Use-Case Scenarios
 
-### UC-1: Drag-and-Drop / Paste Campaign Hero Photo (JPEG Standard)
-- **Actor:** Marketer / Founder creating a campaign broadcast in `CampaignContentView`.
-- **Precondition:** Campaign is in `draft` state; BlockNote markdown editor is focused.
+### UC-1: Drag-and-Drop / Paste Newsletter Hero Photo (JPEG Standard)
+- **Actor:** Marketer / Founder creating a newsletter broadcast in `NewsletterContentView`.
+- **Precondition:** Newsletter is in `draft` state; BlockNote markdown editor is focused.
 - **Trigger:** User drags a high-resolution 4K photo (`summer-launch.png` or `summer-launch.heic`, 8 MB) into the editor.
 - **Execution Flow:**
   1. `collectTransferFiles` catches the dropped file before clipboard/drag event invalidation.
-  2. `ingestCampaignFile` classifies the file as an image.
+  2. `ingestNewsletterFile` classifies the file as an image.
   3. Client-side compression (`optimizeImageToJpeg`):
      - Resizes max width to `1200px` (2x Retina for standard 600px email body container).
      - Compresses quality to `85%` JPEG.
      - Strips heavy EXIF/metadata.
   4. Generates unique asset key: `H7K2M9P4-summer-launch.jpg`.
-  5. POSTs Base64 payload to `/scale/campaigns/:id/assets`.
+  5. POSTs Base64 payload to `/scale/newsletters/:id/assets`.
   6. Server commits asset to storage (local JSON / R2) and returns public CDN URL.
-  7. Editor pastes markdown token: `![Summer Launch](https://assets.relaybase.xyz/scale/assets/campaign_123/H7K2M9P4-summer-launch.jpg)`.
+  7. Editor pastes markdown token: `![Summer Launch](https://assets.relaybase.xyz/scale/assets/newsletter_123/H7K2M9P4-summer-launch.jpg)`.
 - **Postcondition:** The image renders instantly in the editor and right-side mobile/desktop preview; outbound HTML is guaranteed compliant with all email clients.
 
 ---
@@ -126,7 +126,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 ### UC-2: Template Logo Insertion with Transparency (PNG Standard)
 - **Actor:** Marketing designer configuring an email template header/footer.
 - **Precondition:** User is adding a corporate logo with an alpha transparency layer.
-- **Trigger:** User uploads `company-logo-dark.png` with transparent background into the template editor or campaign body.
+- **Trigger:** User uploads `company-logo-dark.png` with transparent background into the template editor or newsletter body.
 - **Execution Flow:**
   1. File detector detects PNG format with transparency.
   2. Optimization pipeline preserves PNG format to maintain crisp vector-like edges and alpha channel.
@@ -144,7 +144,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 - **Execution Flow:**
   1. System detects MIME `image/gif`.
   2. Client-side WebP/JPEG re-encoders bypass the file to protect the animation frames.
-  3. Uploads raw GIF to `/scale/campaigns/:id/assets` with `image/gif` MIME type.
+  3. Uploads raw GIF to `/scale/newsletters/:id/assets` with `image/gif` MIME type.
   4. Markdown editor inserts `![Feature Demo](https://assets.relaybase.xyz/scale/assets/.../G4K8T2Q1-feature-demo.gif)`.
 - **Postcondition:**
   - Modern webmail (Gmail, Apple Mail, Outlook Mac/Web) loops the animation smoothly.
@@ -163,21 +163,21 @@ The transition from local development store to Cloudflare R2 preserves exact rou
   3. If format is **SVG**:
      - Client rasterizes SVG onto an offscreen canvas at 2x target resolution and exports high-density **PNG**.
   4. Ingested asset is uploaded as a compliant JPEG/PNG.
-- **Postcondition:** Zero WebP/SVG files reach the campaign markdown body or outbound email MIME payload.
+- **Postcondition:** Zero WebP/SVG files reach the newsletter markdown body or outbound email MIME payload.
 
 ---
 
 ### UC-5: Test Send & Live Dispatch Sanitization (Send-Time Safety Guards)
 - **Actor:** Sender clicking "Send Test Email" or executing a scheduled broadcast dispatch.
-- **Trigger:** `POST /scale/campaigns/:id/send` or `POST /scale/campaigns/:id/test-send`.
+- **Trigger:** `POST /scale/newsletters/:id/send` or `POST /scale/newsletters/:id/test-send`.
 - **Execution Flow:**
-  1. `renderCampaignForRecipient` compiles `bodyMarkdown` to HTML via `marked`.
-  2. **Sanitization Pass (`normalizeCampaignAssetUrlsInHtml` & Email Sanitizer):**
+  1. `renderNewsletterForRecipient` compiles `bodyMarkdown` to HTML via `marked`.
+  2. **Sanitization Pass (`normalizeNewsletterAssetUrlsInHtml` & Email Sanitizer):**
      - Checks all `<img>` tags.
-     - Any relative path `./.campaign/...` is converted to absolute public CDN URL.
+     - Any relative path `./.newsletter/...` is converted to absolute public CDN URL.
      - Any accidental Base64 data URI `src="data:image/..."` is flagged with a build error or safely stripped.
      - Adds mandatory email HTML attributes: `style="display:block; max-width:100%; height:auto;"` and default `alt=""`.
-  3. Embeds 1x1 transparent GIF open-tracking pixel (`/scale/t/o/:campaignId/:memberKey`).
+  3. Embeds 1x1 transparent GIF open-tracking pixel (`/scale/t/o/:newsletterId/:memberKey`).
   4. Wraps inside recipient's selected template.
   5. Dispatches payload to Customer Worker `/v1/send`.
 - **Postcondition:** Outbound email payload is strictly standard HTML with absolute HTTPS CDN image links.
@@ -185,7 +185,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 ---
 
 ### UC-6: Recipient Inbox Opening & Proxy Caching
-- **Actor:** Subscriber opens the received campaign email in Gmail Web or Mobile App.
+- **Actor:** Subscriber opens the received newsletter email in Gmail Web or Mobile App.
 - **Execution Flow:**
   1. Gmail's sanitizer scans HTML and replaces image URLs with `https://ci3.googleusercontent.com/proxy/...#https://assets.relaybase.xyz/scale/assets/...`.
   2. `GoogleImageProxy` sends an asynchronous HTTPS GET request to `assets.relaybase.xyz`.
@@ -205,7 +205,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 sequenceDiagram
     autonumber
     actor User as Marketer (App UI)
-    participant Editor as BlockNote Editor<br/>(CampaignContentView)
+    participant Editor as BlockNote Editor<br/>(NewsletterContentView)
     participant Ingest as File Ingest Pipeline<br/>(file-ingest.ts)
     participant Compress as Image Optimizer<br/>(image-optimize.ts)
     participant Server as HQ Scale API<br/>(hq/scale)
@@ -217,12 +217,12 @@ sequenceDiagram
     Note over Compress: Checks mimeType:<br/>- Photos/Banners -> JPEG (max 1200px)<br/>- Logos/Icons -> PNG<br/>- GIFs -> Passthrough GIF<br/>- WebP/SVG -> Auto-convert to JPEG/PNG
     Compress-->>Ingest: Optimized Blob + Target Extension (.jpg/.png/.gif)
     Ingest->>Ingest: Generate pageAssetFilename (e.g. H7K2M9P4-hero.jpg)
-    Ingest->>Server: POST /scale/campaigns/:id/assets<br/>{ filename, mimeType, contentBase64 }
+    Ingest->>Server: POST /scale/newsletters/:id/assets<br/>{ filename, mimeType, contentBase64 }
     
     alt Local Development Mode
-        Server->>Storage: Update store.json (draft.campaignAssets)
+        Server->>Storage: Update store.json (draft.newsletterAssets)
     else Production Cloudflare Mode
-        Server->>Storage: env.CRM_ASSETS.put(`${campaignId}/${filename}`, buffer)
+        Server->>Storage: env.CRM_ASSETS.put(`${newsletterId}/${filename}`, buffer)
     end
     
     Storage-->>Server: Write Confirmed (HTTP 200)
@@ -234,7 +234,7 @@ sequenceDiagram
 
 ---
 
-### Sequence 2: Campaign Dispatch, HTML Assembly & Worker Mail Pipeline
+### Sequence 2: Newsletter Dispatch, HTML Assembly & Worker Mail Pipeline
 
 ```mermaid
 sequenceDiagram
@@ -245,10 +245,10 @@ sequenceDiagram
     participant Worker as Customer Worker<br/>(*.workers.dev)
     participant SMTP as Cloudflare Email /<br/>Upstream Mail Relay
 
-    User->>CRM: Click "Send Broadcast Now"<br/>POST /scale/campaigns/:id/send { recipients }
-    Note over CRM: Resolve active subscribers<br/>Snapshot campaign bodyMarkdown & template
+    User->>CRM: Click "Send Broadcast Now"<br/>POST /scale/newsletters/:id/send { recipients }
+    Note over CRM: Resolve active subscribers<br/>Snapshot newsletter bodyMarkdown & template
     loop For each resolved recipient
-        CRM->>Render: renderCampaignForRecipient({ campaignId, bodyMarkdown, recipient, ... })
+        CRM->>Render: renderNewsletterForRecipient({ newsletterId, bodyMarkdown, recipient, ... })
         Note over Render: 1. Parse Markdown -> HTML<br/>2. Validate image tags (Absolute HTTPS CDN only)<br/>3. Merge tags ({{contact.name}}, etc.)<br/>4. Insert Open Pixel GIF & Click Tracker Links<br/>5. Embed in Template HTML wrapper
         Render-->>CRM: Final Rendered HTML Body
         CRM->>Worker: POST {workerUrl}/v1/send<br/>Headers: Authorization: Bearer {apiKey}<br/>Body: { to, subject, html }
@@ -302,7 +302,7 @@ sequenceDiagram
 ### 6.1 Asset Upload Endpoint
 
 - **Method:** `POST`
-- **Path:** `/scale/campaigns/:id/assets`
+- **Path:** `/scale/newsletters/:id/assets`
 - **Request Body (JSON):**
   ```json
   {
@@ -314,15 +314,15 @@ sequenceDiagram
 - **Response Body (JSON, 200 OK):**
   ```json
   {
-    "url": "https://assets.relaybase.xyz/scale/assets/campaign_123/H7K2M9P4-summer-launch.jpg",
-    "key": "campaign_123/H7K2M9P4-summer-launch.jpg"
+    "url": "https://assets.relaybase.xyz/scale/assets/newsletter_123/H7K2M9P4-summer-launch.jpg",
+    "key": "newsletter_123/H7K2M9P4-summer-launch.jpg"
   }
   ```
 
 ### 6.2 Asset Retrieval Endpoint
 
 - **Method:** `GET`
-- **Path:** `/scale/assets/:campaignId/:filename`
+- **Path:** `/scale/assets/:newsletterId/:filename`
 - **Response Headers:**
   ```http
   HTTP/1.1 200 OK
@@ -368,8 +368,8 @@ export const DEFAULT_EMAIL_IMAGE_SETTINGS: EmailImageOptimizeOptions = {
 
 ## 8. Summary of Rules for AI Agents & Developers
 
-1. **NEVER export or upload WebP / AVIF / SVG images for email campaign bodies.** Convert all general photos, heroes, and screenshots to high-quality JPEG (`.jpg`).
+1. **NEVER export or upload WebP / AVIF / SVG images for email newsletter bodies.** Convert all general photos, heroes, and screenshots to high-quality JPEG (`.jpg`).
 2. **ALWAYS use PNG (`.png`) for logos, badges, and template graphics** requiring alpha transparency or high-contrast typography.
 3. **NEVER embed Base64 data URIs (`data:image/...`) inside email HTML.** All images must resolve to public, absolute HTTPS URLs.
-4. **NEVER use CID (`cid:...`) attachments for marketing campaigns or broadcasts.** CID attachments bloat MIME size and break in webmail.
+4. **NEVER use CID (`cid:...`) attachments for marketing newsletters or broadcasts.** CID attachments bloat MIME size and break in webmail.
 5. **ALWAYS preserve immutable file naming (`{shortId}-{slug}.{ext}`).** Never overwrite an existing asset key in place, preventing stale cache poisoning across GoogleImageProxy and Cloudflare edge caches.

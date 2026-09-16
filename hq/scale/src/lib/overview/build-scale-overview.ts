@@ -1,8 +1,8 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { Campaign } from "../../db/types";
+import type { Newsletter } from "../../db/types";
 import { audienceGroupToSummary } from "../audience-groups/api-serialize";
-import { buildSentOverview } from "../campaigns/overview";
-import { serializeCampaign } from "../campaigns/serialize";
+import { buildSentOverview } from "../newsletters/overview";
+import { serializeNewsletter } from "../newsletters/serialize";
 
 function rate(part: number, total: number): number {
   if (!total) return 0;
@@ -29,11 +29,11 @@ function formatDayLabel(dayKey: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-function openRateForBroadcast(row: Campaign): number {
+function openRateForBroadcast(row: Newsletter): number {
   return rate(row.stats.opened, row.stats.delivered);
 }
 
-function clickRateForBroadcast(row: Campaign): number {
+function clickRateForBroadcast(row: Newsletter): number {
   return rate(row.stats.clicked, row.stats.delivered);
 }
 
@@ -47,7 +47,7 @@ export function buildScaleOverview() {
   const since30d = new Date(now - 30 * dayMs).toISOString();
   const in7d = new Date(now + 7 * dayMs).toISOString();
 
-  const broadcasts = data.campaigns.filter((b) => b.accountLinkId === accountId && b.listStatus === "active");
+  const broadcasts = data.newsletters.filter((b) => b.accountLinkId === accountId && b.listStatus === "active");
   const automations = data.triggers.filter((a) => a.accountLinkId === accountId && a.listStatus === "active");
   const groups = data.audienceGroups.filter((g) => g.accountLinkId === accountId);
   const triggerEvents = data.triggerEvents.filter((e) => e.accountLinkId === accountId);
@@ -55,7 +55,7 @@ export function buildScaleOverview() {
   const audienceNameById = new Map(groups.map((g) => [g.id, g.name]));
 
   const sentOverview = buildSentOverview({
-    campaigns: broadcasts,
+    newsletters: broadcasts,
     recipients: data.recipients,
     trackingEvents: data.trackingEvents,
     audienceNameById,
@@ -83,7 +83,7 @@ export function buildScaleOverview() {
 
   const scheduledRows = broadcasts
     .filter((b) => b.status === "scheduled" || b.status === "sending")
-    .map((row) => serializeCampaign(row))
+    .map((row) => serializeNewsletter(row))
     .sort((a, b) => {
       const aAt = a.scheduledAt ?? a.startedAt ?? a.updatedAt;
       const bAt = b.scheduledAt ?? b.startedAt ?? b.updatedAt;
@@ -242,7 +242,7 @@ export function buildScaleOverview() {
       triggers24h: events24h.length,
       recentEvents,
     },
-    campaigns: {
+    newsletters: {
       draftCount,
       inProgressCount,
       recentSent,

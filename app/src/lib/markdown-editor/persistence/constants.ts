@@ -25,7 +25,7 @@ export const OUTBOX_STORE_NAME = "save-outbox";
 export const OUTBOX_DB_VERSION = 2;
 
 /** localStorage key for emergency per-file drafts (mirrors `PREFERENCE_KEYS.fileDrafts`). */
-export const EMERGENCY_DRAFTS_KEY = "relaybase-scale:campaign-drafts";
+export const EMERGENCY_DRAFTS_KEY = "relaybase-scale:newsletter-drafts";
 
 /** Maximum number of retry attempts for a failed disk flush. */
 export const SAVE_RETRY_MAX_ATTEMPTS = 5;

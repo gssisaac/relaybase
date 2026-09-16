@@ -255,7 +255,7 @@ Customer-facing mailbox UI in `app/src/relaybase-email/`:
 | Compose | Send from registered addresses |
 | Accounts | Sender addresses on the domain |
 | Audience | Contacts for broadcasts |
-| Broadcasts | Bulk / campaign sends (dev stubs) |
+| Broadcasts | Bulk / newsletter sends (dev stubs) |
 | Domains | Domain connection and DNS hints |
 | Settings | API keys, domain config, inbound routing |
 

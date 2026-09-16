@@ -12,7 +12,7 @@ import { applyGmailContentLinkStyles } from "./gmail-link-style";
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's
  * `{{content}}`, merge merge tags, then tracking pixel/redirects (P0-2),
- * scoped to a single Campaign send to a single Recipient.
+ * scoped to a single Newsletter send to a single Recipient.
  */
 
 export function markdownToHtml(markdown: string): string {
@@ -20,20 +20,20 @@ export function markdownToHtml(markdown: string): string {
   return typeof out === "string" ? out : "";
 }
 
-/** Mirrors app/src/lib/markdown-editor/utils/assets.ts campaignAssetStem (no DOM/browser deps here). */
-function campaignAssetStem(broadcastId: string): string {
+/** Mirrors app/src/lib/markdown-editor/utils/assets.ts newsletterAssetStem (no DOM/browser deps here). */
+function newsletterAssetStem(broadcastId: string): string {
   return broadcastId.replace(/^broadcast_/, "").slice(0, 32) || "broadcast";
 }
 
 /** Resolve a page-relative `./.{stem}/{filename}` href to an absolute CDN asset URL, or null if not one. */
-function resolveRelativeCampaignAssetUrl(
+function resolveRelativeNewsletterAssetUrl(
   broadcastId: string,
   scaleBaseUrl: string,
   href: string,
 ): string | null {
   if (!href || /^(https?:|data:|blob:)/i.test(href)) return null;
   const relative = href.replace(/^\.\//, "");
-  const folder = `.${campaignAssetStem(broadcastId)}`;
+  const folder = `.${newsletterAssetStem(broadcastId)}`;
   if (!relative.startsWith(`${folder}/`)) return null;
   const filename = relative.slice(folder.length + 1);
   if (!filename || filename.includes("..")) return null;
@@ -52,7 +52,7 @@ const EMAIL_IMG_STYLE = "display:block;max-width:100%;height:auto;";
  * - Strips any Base64 data URI (Gmail/Outlook block or corrupt these outright).
  * - Adds mandatory email-safe `alt`/`style` attributes for Outlook/Gmail rendering.
  */
-export function sanitizeCampaignContentImages(
+export function sanitizeNewsletterContentImages(
   html: string,
   broadcastId: string,
   scaleBaseUrl: string,
@@ -62,7 +62,7 @@ export function sanitizeCampaignContentImages(
     if (/^data:image\//i.test(src)) return "";
 
     let nextTag = tag;
-    const resolved = resolveRelativeCampaignAssetUrl(broadcastId, scaleBaseUrl, src);
+    const resolved = resolveRelativeNewsletterAssetUrl(broadcastId, scaleBaseUrl, src);
     if (resolved) {
       nextTag = nextTag.replace(SRC_ATTR_RE, `src="${resolved}"`);
     }
@@ -142,7 +142,7 @@ export function buildListUnsubscribeUrl(
   return `${scaleBaseUrl}/scale/unsubscribe/${broadcastId}/${unsubscribeToken}`;
 }
 
-export function renderCampaignForRecipient(input: RenderBroadcastInput): string {
+export function renderNewsletterForRecipient(input: RenderBroadcastInput): string {
   const unsubscribeUrl = buildListUnsubscribeUrl(
     input.scaleBaseUrl,
     input.broadcastId,
@@ -173,7 +173,7 @@ export function renderCampaignForRecipient(input: RenderBroadcastInput): string 
     return `${html}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />`;
   }
 
-  const contentHtml = sanitizeCampaignContentImages(
+  const contentHtml = sanitizeNewsletterContentImages(
     applyGmailContentLinkStyles(markdownToHtml(input.bodyMarkdown)),
     input.broadcastId,
     input.scaleBaseUrl,

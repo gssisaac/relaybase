@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { emptyCampaignStats, normalizeCampaignStats } from "../lib/campaigns/stats";
+import { emptyNewsletterStats, normalizeNewsletterStats } from "../lib/newsletters/stats";
 import { normalizeTriggerStats } from "../lib/triggers/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
-import { ensureDevScheduleFixtures } from "../lib/campaigns/dev-schedule-fixtures";
+import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtures";
 import { getPresetMessageTemplates } from "../lib/messages/preset-templates";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
 import type { AccountComplianceSettings, ScaleDataStore } from "./types";
@@ -64,7 +64,7 @@ function defaultStore(): ScaleDataStore {
       createdAt: now,
     })),
     templates: [],
-    campaigns: [],
+    newsletters: [],
     recipients: [],
     triggers: [],
     triggerEvents: [],
@@ -75,7 +75,7 @@ function defaultStore(): ScaleDataStore {
     activities: [],
     scheduledJobs: [],
     trackingEvents: [],
-    campaignAssets: [],
+    newsletterAssets: [],
     triggerAssets: [],
     templateAssets: [],
     audienceGroups: [],
@@ -101,12 +101,12 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
 
   if (!store.layouts) store.layouts = [];
   if (!store.templates) store.templates = [];
-  if (!store.campaigns) store.campaigns = [];
+  if (!store.newsletters) store.newsletters = [];
   if (!store.triggers) store.triggers = [];
   if (!store.triggerEvents) store.triggerEvents = [];
   if (!store.triggerSends) store.triggerSends = [];
   if (!store.triggerTrackingEvents) store.triggerTrackingEvents = [];
-  if (!store.campaignAssets) store.campaignAssets = [];
+  if (!store.newsletterAssets) store.newsletterAssets = [];
   if (!store.triggerAssets) store.triggerAssets = [];
   if (!store.templateAssets) store.templateAssets = [];
 
@@ -117,21 +117,21 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
   }
 
   for (const job of store.scheduledJobs) {
-    if (job.kind === "broadcast") job.kind = "campaign";
+    if (job.kind === "broadcast") job.kind = "newsletter";
   }
 
   for (const row of store.accountSuppressions) {
     if (row.audienceGroupId === undefined) row.audienceGroupId = null;
-    if (row.sourceCampaignId === undefined) row.sourceCampaignId = null;
+    if (row.sourceNewsletterId === undefined) row.sourceNewsletterId = null;
   }
 
-  for (const row of store.campaigns) {
+  for (const row of store.newsletters) {
     if (!row.audienceGroupId) row.audienceGroupId = "";
     if (!row.domain) {
       const group = store.audienceGroups.find((g) => g.id === row.audienceGroupId);
       row.domain = group?.domain ?? "";
     }
-    row.stats = normalizeCampaignStats(row.stats);
+    row.stats = normalizeNewsletterStats(row.stats);
     if (row.startedAt === undefined) {
       row.startedAt =
         row.status === "draft" || row.status === "scheduled" ? null : (row.sentAt ?? null);
@@ -172,7 +172,7 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
             email,
             reason: "unsubscribe",
             audienceGroupId: row.id,
-            sourceCampaignId: null,
+            sourceNewsletterId: null,
             createdAt: contact.unsubscribedAt ?? now,
           });
         }

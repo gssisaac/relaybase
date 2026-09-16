@@ -4,9 +4,9 @@ const SCALE_UI_GET_PATHS = new Set([
   "/scale",
   "/scale/overview",
   "/scale/subscribers",
-  "/scale/campaigns",
-  "/scale/campaigns/sent",
-  "/scale/campaigns/in-progress",
+  "/scale/newsletters",
+  "/scale/newsletters/sent",
+  "/scale/newsletters/in-progress",
   "/scale/triggers",
   "/scale/triggers/trigger-stats",
   "/scale/triggers/edit",
@@ -81,11 +81,11 @@ export function shouldProxyRequestToScale(pathname: string, method: string, head
     return true;
   }
 
-  if (!pathname.startsWith("/scale/campaigns")) return false;
+  if (!pathname.startsWith("/scale/newsletters")) return false;
 
   if (method !== "GET") return true;
   if (isScaleApiRequest(headers)) return true;
-  if (pathname === "/scale/campaigns/sent-stats") return true;
+  if (pathname === "/scale/newsletters/sent-stats") return true;
   if (SCALE_UI_GET_PATHS.has(pathname)) return false;
   return true;
 }

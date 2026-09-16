@@ -1,13 +1,13 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
 import { syncAudienceGroupAsync } from "./lib/audience-groups/sync";
 import { resolveActiveAudienceContacts } from "./lib/audience-groups/resolver";
-import { dispatchCampaignToAudience, processCampaignDispatchBatch } from "./lib/campaigns/dispatch";
-import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "./lib/campaigns/dispatch-progress";
-import { rollupCampaignStatsFromRecipients } from "./lib/campaigns/stats";
+import { dispatchNewsletterToAudience, processNewsletterDispatchBatch } from "./lib/newsletters/dispatch";
+import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "./lib/newsletters/dispatch-progress";
+import { rollupNewsletterStatsFromRecipients } from "./lib/newsletters/stats";
 
 /**
  * Stand-ins for Cloudflare Cron Trigger + Queue — in-process intervals for
- * local dev (crm-campaign-broadcast-subscriber-model.md §5.1, §5.4).
+ * local dev (crm-newsletter-broadcast-subscriber-model.md §5.1, §5.4).
  */
 
 const SCHEDULE_POLL_MS = 10_000;
@@ -15,12 +15,12 @@ const STATS_ROLLUP_MS = DISPATCH_QUEUE_POLL_MS;
 const AUDIENCE_CRON_MS = 60_000;
 
 /** §5.1 — synchronous atomic claim on the document store guards against duplicate sends. */
-async function claimDueCampaigns(): Promise<void> {
+async function claimDueNewsletters(): Promise<void> {
   const now = new Date().toISOString();
   const due = store
     .read()
     .scheduledJobs.filter(
-      (j) => (j.kind === "campaign" || j.kind === "broadcast") && j.status === "pending" && j.runAt <= now,
+      (j) => (j.kind === "newsletter" || j.kind === "broadcast") && j.status === "pending" && j.runAt <= now,
     );
 
   for (const job of due) {
@@ -28,7 +28,7 @@ async function claimDueCampaigns(): Promise<void> {
     store.update((draft) => {
       const jobIdx = draft.scheduledJobs.findIndex((j) => j.id === job.id && j.status === "pending");
       if (jobIdx < 0) return;
-      const bIdx = draft.campaigns.findIndex(
+      const bIdx = draft.newsletters.findIndex(
         (b) => b.id === job.refId && b.status === "scheduled",
       );
       if (bIdx < 0) {
@@ -37,32 +37,32 @@ async function claimDueCampaigns(): Promise<void> {
       }
       draft.scheduledJobs[jobIdx] = { ...draft.scheduledJobs[jobIdx]!, status: "done" };
       const claimedAt = new Date().toISOString();
-      draft.campaigns[bIdx] = {
-        ...draft.campaigns[bIdx]!,
+      draft.newsletters[bIdx] = {
+        ...draft.newsletters[bIdx]!,
         status: "sending",
         sentAt: claimedAt,
         startedAt: claimedAt,
         finishedAt: null,
         updatedAt: claimedAt,
       };
-      claimedBroadcastId = draft.campaigns[bIdx]!.id;
+      claimedBroadcastId = draft.newsletters[bIdx]!.id;
     });
     if (!claimedBroadcastId) continue;
 
     try {
       // Late-binding resolution (§1.3): subscribers are resolved *now*, at
       // the exact dispatch moment — not frozen when the broadcast was scheduled.
-      const broadcast = store.read().campaigns.find((b) => b.id === claimedBroadcastId)!;
+      const broadcast = store.read().newsletters.find((b) => b.id === claimedBroadcastId)!;
       const members = resolveActiveAudienceContacts(broadcast);
-      await dispatchCampaignToAudience(broadcast, members);
+      await dispatchNewsletterToAudience(broadcast, members);
     } catch (err) {
       console.error(`[crm-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
       store.update((draft) => {
-        const idx = draft.campaigns.findIndex((b) => b.id === claimedBroadcastId);
+        const idx = draft.newsletters.findIndex((b) => b.id === claimedBroadcastId);
         if (idx >= 0) {
           const failedAt = new Date().toISOString();
-          draft.campaigns[idx] = {
-            ...draft.campaigns[idx]!,
+          draft.newsletters[idx] = {
+            ...draft.newsletters[idx]!,
             status: "failed",
             finishedAt: failedAt,
             updatedAt: failedAt,
@@ -77,7 +77,7 @@ async function claimDueCampaigns(): Promise<void> {
 async function processSendingBroadcastQueues(): Promise<void> {
   const sending = store
     .read()
-    .campaigns.filter(
+    .newsletters.filter(
       (b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID && b.status === "sending",
     );
 
@@ -86,13 +86,13 @@ async function processSendingBroadcastQueues(): Promise<void> {
       .read()
       .recipients.filter(
         (r) =>
-          r.campaignId === broadcast.id &&
+          r.newsletterId === broadcast.id &&
           (r.status === "queued" || r.status === "sending"),
       );
     if (pending.length === 0) continue;
 
     try {
-      await processCampaignDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
+      await processNewsletterDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
     } catch (err) {
       console.error(`[crm-scheduler] batch send failed for ${broadcast.id}`, err);
     }
@@ -102,12 +102,12 @@ async function processSendingBroadcastQueues(): Promise<void> {
 /** Reconciles stored `stats` from the recipient ledger for in-flight/recently sent broadcasts. */
 async function rollupStats(): Promise<void> {
   const data = store.read();
-  const active = data.campaigns.filter((b) => b.status === "sent" || b.status === "sending");
+  const active = data.newsletters.filter((b) => b.status === "sent" || b.status === "sending");
 
   for (const broadcast of active) {
-    const recipients = data.recipients.filter((r) => r.campaignId === broadcast.id);
-    const events = data.trackingEvents.filter((e) => e.campaignId === broadcast.id);
-    const next = rollupCampaignStatsFromRecipients(recipients, events);
+    const recipients = data.recipients.filter((r) => r.newsletterId === broadcast.id);
+    const events = data.trackingEvents.filter((e) => e.newsletterId === broadcast.id);
+    const next = rollupNewsletterStatsFromRecipients(recipients, events);
     const prev = broadcast.stats;
     if (
       next.sent === prev.sent &&
@@ -126,9 +126,9 @@ async function rollupStats(): Promise<void> {
     }
 
     store.update((draft) => {
-      const idx = draft.campaigns.findIndex((b) => b.id === broadcast.id);
+      const idx = draft.newsletters.findIndex((b) => b.id === broadcast.id);
       if (idx < 0) return;
-      draft.campaigns[idx] = { ...draft.campaigns[idx]!, stats: next };
+      draft.newsletters[idx] = { ...draft.newsletters[idx]!, stats: next };
     });
   }
 }
@@ -154,7 +154,7 @@ async function pollAudienceCron(): Promise<void> {
 
 export function startScheduler(): void {
   setInterval(() => {
-    void claimDueCampaigns().catch((err) => console.error("[crm-scheduler] poll failed", err));
+    void claimDueNewsletters().catch((err) => console.error("[crm-scheduler] poll failed", err));
   }, SCHEDULE_POLL_MS);
 
   setInterval(() => {

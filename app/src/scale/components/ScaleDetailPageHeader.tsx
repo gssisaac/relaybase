@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
-/** Detail sub-page title bar — back control + truncated title (matches campaign detail). */
+/** Detail sub-page title bar — back control + truncated title (matches newsletter detail). */
 export function ScaleDetailPageHeader({
   backHref,
   backLabel = "Back",

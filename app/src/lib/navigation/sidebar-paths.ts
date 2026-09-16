@@ -4,7 +4,15 @@ export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
 export const DEFAULT_STUDIO_PATH = "/studio/overview";
 
-const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
+const BLOCKED_PATH_PREFIXES = [
+  "/login",
+  "/cloud/login",
+  "/cloud/signup",
+  "/worker/login",
+  "/register",
+  "/setup",
+  "/api",
+] as const;
 
 function isEmailPathname(pathname: string): boolean {
   return (

@@ -8,33 +8,12 @@ import { triggerSourceSummary } from "@/studio/lib/triggers/trigger-label";
 import type { Trigger } from "@/lib/studio/api";
 import { cn } from "@/lib/utils";
 
-function sourceIcon(type: Trigger["source"]["type"]) {
-  switch (type) {
-    case "http_webhook":
-      return Webhook;
-    case "mailbox_inbound":
-      return Inbox;
-    case "form_submit":
-      return FileText;
-    case "internal_event":
-    default:
-      return Zap;
-  }
+function sourceIcon(_type: Trigger["source"]["type"]) {
+  return Webhook;
 }
 
-function sourceTypeLabel(type: Trigger["source"]["type"]): string {
-  switch (type) {
-    case "internal_event":
-      return "Internal event";
-    case "form_submit":
-      return "Form submit";
-    case "http_webhook":
-      return "HTTP webhook";
-    case "mailbox_inbound":
-      return "Mailbox inbound";
-    default:
-      return "Trigger";
-  }
+function sourceTypeLabel(_type: Trigger["source"]["type"]): string {
+  return "HTTP Webhook";
 }
 
 function cooldownLabel(seconds: number): string {

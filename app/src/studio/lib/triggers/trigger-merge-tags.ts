@@ -18,77 +18,38 @@ export type ComposeMergeTagSection = {
   tags: ComposeMergeTag[];
 };
 
-const INTERNAL_VERIFY_EMAIL_TAGS: ComposeMergeTag[] = [
+const WEBHOOK_STANDARD_TAGS: ComposeMergeTag[] = [
   {
     id: "trigger-verify-url",
     token: "{{trigger.verifyUrl}}",
-    label: "Verification link",
-    description: "URL the recipient opens to verify email.",
+    label: "Action URL",
+    description: "Link for verification, password reset, or action button.",
   },
   {
-    id: "trigger-sign-in-url",
-    token: "{{trigger.signInUrl}}",
-    label: "Sign-in link",
-    description: "Magic link or one-time sign-in URL.",
+    id: "trigger-code",
+    token: "{{trigger.code}}",
+    label: "Code / Token",
+    description: "One-time passcode, PIN, or security token.",
   },
   {
     id: "trigger-expires",
     token: "{{trigger.expiresInMinutes}}",
-    label: "Link expiry (minutes)",
+    label: "Expires in (minutes)",
   },
   {
-    id: "trigger-device",
-    token: "{{trigger.deviceSummary}}",
-    label: "Device summary",
+    id: "trigger-order-id",
+    token: "{{trigger.orderId}}",
+    label: "Order / Ref ID",
   },
   {
-    id: "trigger-requested-at",
-    token: "{{trigger.requestedAt}}",
-    label: "Requested at",
+    id: "trigger-amount",
+    token: "{{trigger.amount}}",
+    label: "Amount / Price",
   },
-];
-
-const INTERNAL_CREATED_TAGS: ComposeMergeTag[] = [
-  {
-    id: "trigger-welcome-url",
-    token: "{{trigger.welcomeUrl}}",
-    label: "Welcome link",
-  },
-];
-
-const FORM_SUBMIT_TAGS: ComposeMergeTag[] = [
   {
     id: "trigger-message",
     token: "{{trigger.message}}",
-    label: "Message",
-  },
-  {
-    id: "trigger-subject",
-    token: "{{trigger.subject}}",
-    label: "Subject (form field)",
-  },
-];
-
-const MAILBOX_INBOUND_TAGS: ComposeMergeTag[] = [
-  {
-    id: "trigger-inbound-subject",
-    token: "{{trigger.subject}}",
-    label: "Inbound subject",
-  },
-  {
-    id: "trigger-inbound-body",
-    token: "{{trigger.body}}",
-    label: "Inbound body",
-  },
-  {
-    id: "trigger-inbound-from-email",
-    token: "{{trigger.fromEmail}}",
-    label: "Sender email",
-  },
-  {
-    id: "trigger-inbound-from-name",
-    token: "{{trigger.fromName}}",
-    label: "Sender name",
+    label: "Custom message",
   },
 ];
 
@@ -115,25 +76,8 @@ function dedupeTags(tags: ComposeMergeTag[]): ComposeMergeTag[] {
 
 /** Suggested `{{trigger.*}}` tags for the automation's trigger configuration. */
 export function triggerMergeTagsForAutomation(source: TriggerSource): ComposeMergeTag[] {
-  switch (source.type) {
-    case "internal_event":
-      if (source.event === "account.verify_email") {
-        return [...INTERNAL_VERIFY_EMAIL_TAGS];
-      }
-      return [...INTERNAL_CREATED_TAGS];
-    case "form_submit": {
-      const extra = (source.requiredFields ?? []).map(tagFromPayloadPath);
-      return dedupeTags([...FORM_SUBMIT_TAGS, ...extra]);
-    }
-    case "http_webhook": {
-      const extra = (source.requiredFields ?? []).map(tagFromPayloadPath);
-      return dedupeTags(extra);
-    }
-    case "mailbox_inbound":
-      return [...MAILBOX_INBOUND_TAGS];
-    default:
-      return [];
-  }
+  const extra = (source.type === "http_webhook" && source.requiredFields ? source.requiredFields : []).map(tagFromPayloadPath);
+  return dedupeTags([...WEBHOOK_STANDARD_TAGS, ...extra]);
 }
 
 export function composeMergeTagSectionsForTrigger(

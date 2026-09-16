@@ -135,6 +135,7 @@ export function WorkerUrlInputDialog({
               <Label htmlFor="worker-custom-url">Worker URL</Label>
               <Input
                 id="worker-custom-url"
+                name="relaybase-worker-url"
                 value={customUrl}
                 onChange={(e) => {
                   setCustomUrl(e.target.value);
@@ -142,7 +143,7 @@ export function WorkerUrlInputDialog({
                 }}
                 placeholder="https://relaybase-api.<subdomain>.workers.dev"
                 className="font-mono text-xs"
-                autoComplete="off"
+                autoComplete="section-relaybase-worker url"
                 autoFocus={tab === "manual"}
               />
             </div>

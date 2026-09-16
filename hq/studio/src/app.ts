@@ -15,13 +15,22 @@ import { studioTriggerHooks } from "./routes/trigger-hooks";
 import { studioTriggerTracking } from "./routes/trigger-tracking";
 import { studioOverview } from "./routes/overview";
 import { studioApiAuthMiddleware } from "./lib/auth/studio-api-auth";
+import { hqAuth } from "./routes/auth";
 
 const app = new Hono();
 
-app.use("*", cors({ origin: "*" }));
+app.use(
+  "*",
+  cors({
+    origin: (origin) => origin ?? "*",
+    credentials: true,
+  }),
+);
 app.use("*", studioApiAuthMiddleware());
 
 app.get("/health", (c) => c.json({ ok: true, service: "relaybase-studio" }));
+
+app.route("/auth", hqAuth);
 
 app.route("/studio/account-link", studioAccountLink);
 app.route("/studio/compliance-identities", studioComplianceIdentities);

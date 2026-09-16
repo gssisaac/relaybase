@@ -11,7 +11,7 @@ export default function SignInRedirectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(`/login${window.location.search}`);
+    router.replace(`/cloud/login${window.location.search}`);
   }, [router]);
 
   return null;

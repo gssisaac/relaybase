@@ -20,6 +20,8 @@ import { buildListUnsubscribeUrl, renderNewsletterForRecipient } from "../lib/re
 import { resolveTemplateVariableDefaults } from "../lib/templates/variable-schema";
 import { newId, newToken } from "../lib/shared/ids";
 import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
+import { templateFileStore } from "../lib/templates/template-file-store";
+import type { Template, TemplateCategory } from "../db/types";
 
 export const studioMessageTemplates = new Hono();
 
@@ -60,14 +62,14 @@ studioMessageTemplates.get("/", (c) => {
 });
 
 studioMessageTemplates.get("/:id", (c) => {
-  const row = store.read().templates.find((t) => t.id === c.req.param("id"));
+  const row = templateFileStore.findById(c.req.param("id"));
   if (!row) return c.json({ error: "not found" }, 404);
   return c.json({ template: serializeMessageTemplate(row) });
 });
 
 studioMessageTemplates.post("/:id/assets", async (c) => {
   const templateId = c.req.param("id");
-  const template = store.read().templates.find((row) => row.id === templateId);
+  const template = templateFileStore.findById(templateId);
   if (!template) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -122,36 +124,35 @@ studioMessageTemplates.post("/", async (c) => {
 
   const id = newId("msgtpl");
   const now = new Date().toISOString();
-  store.update((draft) => {
-    draft.templates.push({
-      id,
-      accountLinkId: DEV_ACCOUNT_LINK_ID,
-      name,
-      subject: body.subject?.trim() ?? "",
-      previewText: body.previewText ?? null,
-      bodyMarkdown: body.bodyMarkdown ?? "",
-      layoutId: body.layoutId ?? "tpl-minimal",
-      templateVariables: {},
-      category:
-        body.category === "marketing" ||
-        body.category === "newsletter" ||
-        body.category === "conversational"
-          ? body.category
-          : "transactional",
-      isPreset: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-  });
+  const category: TemplateCategory =
+    body.category === "marketing" ||
+    body.category === "newsletter" ||
+    body.category === "conversational"
+      ? body.category
+      : "transactional";
+  const tpl: Template = {
+    id,
+    accountLinkId: DEV_ACCOUNT_LINK_ID,
+    name,
+    subject: body.subject?.trim() ?? "",
+    previewText: body.previewText ?? null,
+    bodyMarkdown: body.bodyMarkdown ?? "",
+    layoutId: body.layoutId ?? "tpl-minimal",
+    templateVariables: {},
+    category,
+    isPreset: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  templateFileStore.save(tpl);
 
-  const row = store.read().templates.find((t) => t.id === id)!;
+  const row = templateFileStore.findById(id)!;
   return c.json({ template: serializeMessageTemplate(row) }, 201);
 });
 
 studioMessageTemplates.post("/:id/test-send", async (c) => {
   const id = c.req.param("id");
-  const row = store.read().templates.find((t) => t.id === id);
-  if (!row) return c.json({ error: "not found" }, 404);
+  if (!templateFileStore.findById(id)) return c.json({ error: "not found" }, 404);
 
   let body: {
     to?: string;
@@ -232,7 +233,7 @@ studioMessageTemplates.post("/:id/test-send", async (c) => {
 
 studioMessageTemplates.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const existing = store.read().templates.find((t) => t.id === id);
+  const existing = templateFileStore.findById(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
   let body: {
@@ -269,20 +270,20 @@ studioMessageTemplates.patch("/:id", async (c) => {
     );
   });
 
-  const row = store.read().templates.find((t) => t.id === id)!;
+  const row = templateFileStore.findById(id)!;
   return c.json({ template: serializeMessageTemplate(row) });
 });
 
 studioMessageTemplates.delete("/:id", (c) => {
   const id = c.req.param("id");
-  const existing = store.read().templates.find((t) => t.id === id);
+  const existing = templateFileStore.findById(id);
   if (!existing) return c.json({ error: "not found" }, 404);
   if (existing.isPreset) {
     return c.json({ error: "Built-in templates cannot be deleted" }, 403);
   }
 
+  templateFileStore.delete(id);
   store.update((draft) => {
-    draft.templates = draft.templates.filter((t) => t.id !== id);
     draft.templateAssets = draft.templateAssets.filter((a) => a.templateId !== id);
   });
 

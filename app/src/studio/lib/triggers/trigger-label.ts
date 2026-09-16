@@ -8,20 +8,10 @@ export function triggerListRelativeDate(row: Trigger): string {
 }
 
 export function triggerSourceSummary(source: TriggerSource): string {
-  switch (source.type) {
-    case "internal_event":
-      return source.event === "account.verify_email"
-        ? "Verify email"
-        : "Account created";
-    case "form_submit":
-      return `Form · ${source.formKey}`;
-    case "http_webhook":
-      return "Webhook";
-    case "mailbox_inbound":
-      return `Inbox · ${source.localPart}@${source.domain}`;
-    default:
-      return "Trigger";
+  if (source.type === "http_webhook") {
+    return `Webhook · ${source.emailPath}`;
   }
+  return "HTTP Webhook";
 }
 
 export function triggerStatsLine(row: Trigger): string {

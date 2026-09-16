@@ -6,9 +6,9 @@ import { normalizeTriggerStats } from "../lib/triggers/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
 import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtures";
-import { getPresetMessageTemplates } from "../lib/messages/preset-templates";
+import { templateFileStore } from "../lib/templates/template-file-store";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
-import type { AccountComplianceSettings, StudioDataStore } from "./types";
+import type { AccountComplianceSettings, StudioDataStore, Template } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
@@ -63,7 +63,7 @@ function defaultStore(): StudioDataStore {
       isBuiltin: true,
       createdAt: now,
     })),
-    templates: [],
+    templates: templateFileStore.listAll(),
     newsletters: [],
     recipients: [],
     triggers: [],
@@ -100,7 +100,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   }
 
   if (!store.layouts) store.layouts = [];
-  if (!store.templates) store.templates = [];
+  if (!store.templates) store.templates = templateFileStore.listAll();
   if (!store.newsletters) store.newsletters = [];
   if (!store.triggers) store.triggers = [];
   if (!store.triggerEvents) store.triggerEvents = [];
@@ -109,12 +109,6 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   if (!store.newsletterAssets) store.newsletterAssets = [];
   if (!store.triggerAssets) store.triggerAssets = [];
   if (!store.templateAssets) store.templateAssets = [];
-
-  if (store.templates.length === 0) {
-    for (const preset of getPresetMessageTemplates(now)) {
-      store.templates.push(preset);
-    }
-  }
 
   for (const job of store.scheduledJobs) {
     if (job.kind === "broadcast") job.kind = "newsletter";
@@ -187,10 +181,6 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
     legacyHeader.isBuiltin = true;
   }
 
-  for (const tpl of store.templates) {
-    if (tpl.layoutId === "tpl-header-image") tpl.layoutId = "tpl-header";
-  }
-
   for (const builtin of getBuiltinTemplates()) {
     const existing = store.layouts.find((t) => t.id === builtin.id);
     if (existing?.isBuiltin) {
@@ -251,28 +241,40 @@ function ensureDataDir() {
 function readStore(): StudioDataStore {
   ensureDataDir();
   if (!fs.existsSync(STORE_FILE)) {
-    const initial = defaultStore();
-    fs.writeFileSync(STORE_FILE, `${JSON.stringify(initial, null, 2)}\n`, "utf8");
+    const initial = hydrateTemplates(defaultStore());
+    writeStore(initial);
     return initial;
   }
   const raw = fs.readFileSync(STORE_FILE, "utf8");
   try {
     const parsed = JSON.parse(raw) as StudioDataStore;
-    const store = normalizeStore(parsed);
-    if (ensureDevScheduleFixtures(store)) {
+    let migratedLegacyTemplates = false;
+    if (Array.isArray(parsed.templates) && parsed.templates.length > 0) {
+      templateFileStore.importFromLegacyRows(parsed.templates);
+      delete (parsed as { templates?: Template[] }).templates;
+      migratedLegacyTemplates = true;
+    }
+    const store = hydrateTemplates(normalizeStore(parsed));
+    if (migratedLegacyTemplates || ensureDevScheduleFixtures(store)) {
       writeStore(store);
     }
     return store;
   } catch {
-    const initial = defaultStore();
-    fs.writeFileSync(STORE_FILE, `${JSON.stringify(initial, null, 2)}\n`, "utf8");
+    const initial = hydrateTemplates(defaultStore());
+    writeStore(initial);
     return initial;
   }
 }
 
 function writeStore(store: StudioDataStore) {
   ensureDataDir();
-  fs.writeFileSync(STORE_FILE, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  const { templates: _templates, ...persisted } = store;
+  fs.writeFileSync(STORE_FILE, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
+}
+
+function hydrateTemplates(store: StudioDataStore): StudioDataStore {
+  store.templates = templateFileStore.listAll();
+  return store;
 }
 
 /** Synchronous JSON file store — dev environment; production D1 database to follow. */
@@ -284,7 +286,7 @@ export const store = {
     const draft = readStore();
     mutator(draft);
     writeStore(draft);
-    return draft;
+    return hydrateTemplates(draft);
   },
   dataDir: DATA_DIR,
 };

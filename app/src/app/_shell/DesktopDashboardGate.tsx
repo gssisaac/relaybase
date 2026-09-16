@@ -22,7 +22,12 @@ import { useAppSession } from "@/lib/desktop/app-session";
 import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
+
+function isStudioShellPath(pathname: string): boolean {
+  return pathname === "/studio" || pathname.startsWith("/studio/");
+}
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -178,23 +183,38 @@ export function DesktopDashboardGate({
       setGateMode("desktop");
       return;
     }
-    if (hasWebOwnerSession()) {
-      setGateMode("web-owner");
-      return;
-    }
-    // Web hard reload: memory is empty but the tab may still hold a refresh
-    // pair (`relaybase:owner-session`). Re-mint before deciding to redirect.
+
     let active = true;
-    void restoreWebOwnerSession().then((restored) => {
+
+    async function resolveWebGate() {
+      // Studio is HQ Cloud–gated; Worker passtoken is not required to enter the shell.
+      if (isStudioShellPath(pathname)) {
+        if (hasHqSession()) {
+          setGateMode("web-owner");
+          return;
+        }
+        const hqOk = await hqRefreshSession();
+        if (!active) return;
+        setGateMode(hqOk ? "web-owner" : "web-redirect");
+        return;
+      }
+
+      if (hasWebOwnerSession()) {
+        setGateMode("web-owner");
+        return;
+      }
+      const restored = await restoreWebOwnerSession();
       if (!active) return;
       setGateMode(
         restored && hasWebOwnerSession() ? "web-owner" : "web-redirect",
       );
-    });
+    }
+
+    void resolveWebGate();
     return () => {
       active = false;
     };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (gateMode !== "web-redirect") return;
@@ -212,6 +232,9 @@ export function DesktopDashboardGate({
       router.replace(`/compose${search}`);
     } else if (pathname === "/email/settings") {
       router.replace(`/mail-settings${search}`);
+    } else if (isStudioShellPath(pathname)) {
+      const next = `${pathname}${search}`;
+      router.replace(`/cloud/login?next=${encodeURIComponent(next)}`);
     } else {
       const auth = getWebTeamAuth();
       if (auth) {

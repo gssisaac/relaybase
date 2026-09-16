@@ -9,10 +9,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stringify as stringifyYaml } from "yaml";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ORIGIN = path.join(__dirname, "../data/store-origin.json");
-const STORE = path.join(__dirname, "../data/store.json");
+const DATA_DIR = process.env.STUDIO_DATA_DIR ?? path.join(__dirname, "../data");
+const ORIGIN = path.join(DATA_DIR, "store-origin.json");
+const STORE = path.join(DATA_DIR, "store.json");
+const TEMPLATES_DIR = process.env.STUDIO_TEMPLATES_DIR ?? path.join(DATA_DIR, "templates");
+
+function writeMessageTemplateYaml(row) {
+  const yaml = stringifyYaml(row, {
+    lineWidth: 0,
+    defaultKeyType: "PLAIN",
+    defaultStringType: "BLOCK_LITERAL",
+  });
+  fs.writeFileSync(path.join(TEMPLATES_DIR, `${row.id}.yaml`), `${yaml}\n`, "utf8");
+}
 
 function msgtplId(ownerId) {
   return `msgtpl_${ownerId}`;
@@ -210,11 +222,15 @@ const trackingEvents = (origin.trackingEvents ?? []).map((e) => ({
   newsletterId: e.newsletterId ?? e.broadcastId,
 }));
 
+fs.mkdirSync(TEMPLATES_DIR, { recursive: true });
+for (const row of messagesById.values()) {
+  writeMessageTemplateYaml(row);
+}
+
 const out = {
   account: origin.account,
   complianceIdentities: origin.complianceIdentities ?? [],
   layouts: [...layoutById.values()],
-  templates: [...messagesById.values()],
   newsletters,
   recipients,
   triggers,
@@ -237,7 +253,8 @@ console.log(
   JSON.stringify(
     {
       layouts: out.layouts.length,
-      messageTemplates: out.templates.length,
+      messageTemplates: messagesById.size,
+      templatesDir: TEMPLATES_DIR,
       newsletters: out.newsletters.length,
       triggers: out.triggers.length,
       audienceGroups: out.audienceGroups.length,

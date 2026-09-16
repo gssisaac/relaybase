@@ -33,7 +33,7 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (session.ready && !session.identity) {
-      router.replace("/login");
+      router.replace("/worker/login");
     }
   }, [session.ready, session.identity, router]);
 

@@ -10,7 +10,7 @@ export function signOutRedirectPath(
   store: AppSessionStore,
 ): string {
   if (!isDesktopRuntime()) {
-    return "/login";
+    return "/cloud/login";
   }
   if (isTeam) {
     return store.teamStatus?.hasSecret ? "/" : "/login";

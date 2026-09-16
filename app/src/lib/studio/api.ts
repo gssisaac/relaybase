@@ -357,11 +357,15 @@ class StudioApiError extends Error {
 }
 
 export async function studioFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const { getHqAccessToken } = await import("@/lib/hq-auth/session");
+  const hqToken = getHqAccessToken();
   const res = await fetch(`${getStudioApiBase()}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "content-type": "application/json",
       [STUDIO_API_REQUEST_HEADER]: "1",
+      ...(hqToken ? { Authorization: `Bearer ${hqToken}` } : {}),
       ...init?.headers,
     },
   });

@@ -82,7 +82,7 @@ export function NewTriggerDialog({
         <DialogHeader>
           <DialogTitle>New trigger</DialogTitle>
           <DialogDescription>
-            One trigger, one email — verify links, form replies, or inbox auto-responses.
+            One webhook, one email — verify links, password resets, receipts, or transactional alerts.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

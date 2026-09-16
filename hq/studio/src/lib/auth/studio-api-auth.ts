@@ -1,7 +1,11 @@
 import type { Context, Next } from "hono";
 
+import { requireJwtSecret } from "./hq-auth-config";
+import { verifyAccessToken } from "./jwt";
+
 const PUBLIC_PATH_PREFIXES = [
   "/health",
+  "/auth/",
   "/studio/t/",
   "/studio/unsubscribe",
   "/studio/assets/",
@@ -49,6 +53,21 @@ export function studioApiAuthMiddleware() {
     if (bearer === secret || headerKey === secret) {
       await next();
       return;
+    }
+
+    if (bearer) {
+      try {
+        const jwtSecret = requireJwtSecret();
+        const claims = verifyAccessToken(bearer, jwtSecret);
+        if (claims) {
+          c.set("hqUserId", claims.sub);
+          c.set("hqAccountLinkId", claims.accountLinkId);
+          await next();
+          return;
+        }
+      } catch {
+        /* fall through to 401 */
+      }
     }
 
     return c.json({ error: "unauthorized" }, 401);

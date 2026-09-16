@@ -41,7 +41,7 @@ function setWorkerUrlGlobal(workerUrl: string): void {
 
 /**
  * Unified web account login (owner passtoken or teammate password). The web
- * entry is `/login` (Owner tab default); also used on `/setup/connect`.
+ * Web entry is `/worker/login`; also used on `/setup/connect`.
  * First-time install lives at `/setup`.
  */
 export function AccountLoginView({
@@ -128,7 +128,12 @@ export function AccountLoginView({
           ))}
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form
+          className="space-y-4"
+          name="relaybase-worker-auth"
+          autoComplete="on"
+          onSubmit={handleSubmit}
+        >
           <WorkerUrlPicker
             value={workerUrl}
             onChange={setWorkerUrl}
@@ -140,8 +145,9 @@ export function AccountLoginView({
               <Label htmlFor="account-email">Account email</Label>
               <Input
                 id="account-email"
+                name="account-email"
                 type="email"
-                autoComplete="email"
+                autoComplete="section-relaybase-worker email"
                 required
                 value={accountEmail}
                 onChange={(e) => setAccountEmail(e.target.value)}
@@ -156,8 +162,13 @@ export function AccountLoginView({
             </Label>
             <Input
               id="secret"
+              name={role === "owner" ? "relaybase-passtoken" : "relaybase-team-password"}
               type="password"
-              autoComplete={role === "owner" ? "off" : "current-password"}
+              autoComplete={
+                role === "owner"
+                  ? "off"
+                  : "section-relaybase-worker current-password"
+              }
               required
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
@@ -198,9 +209,13 @@ export function AccountLoginView({
         </form>
 
         <p className="text-center text-xs text-muted-foreground">
-          Setting up Relaybase for the first time?{" "}
+          Studio in the browser?{" "}
+          <Link href="/cloud/login" className="hover:underline">
+            Relaybase Cloud sign in
+          </Link>
+          {" · "}
           <Link href="/setup" className="hover:underline">
-            Install on your Cloudflare account
+            First-time install
           </Link>
         </p>
       </div>

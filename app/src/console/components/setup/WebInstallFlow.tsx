@@ -253,7 +253,7 @@ export function WebInstallProgress() {
       } else {
         // An owner was already configured on this Worker — nothing to log
         // in with here. Send them to sign in with their existing passtoken.
-        router.push(`/login?workerUrl=${encodeURIComponent(workerUrl)}`);
+        router.push(`/worker/login?workerUrl=${encodeURIComponent(workerUrl)}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");

@@ -14,20 +14,18 @@ login, Worker auth middleware, desktop unlock, or mobile companion auth.
 
 ## Summary
 
-Four auth surfaces on the product Worker, plus **Cloudflare OAuth** for install
-/ recovery only (not daily mail).
+Four auth surfaces on the product Worker, plus **HQ Cloud Web Auth** for central web services, and **Cloudflare OAuth** for install / recovery only (not daily mail).
 
-| Actor | Credential | Worker routes | Desktop unlock |
-|-------|------------|---------------|----------------|
-| **Owner** | **Passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Mail: silent boot from mail refresh. When a **new login** is needed: Touch ID reads the keyring passtoken. Typed form only if bio fails / is declined or the keyring item is missing |
+| Actor | Credential | Target routes | Authentication / Unlock |
+|-------|------------|---------------|-------------------------|
+| **HQ Cloud Web User** | **Email + Password** | HQ Studio (`/studio/*`, `/auth/*`) | Web: 30-day HttpOnly cookie session (RTR Refresh Token) + in-memory Access JWT. Required for Studio. Password reset via secure email tokens |
+| **Owner (Worker Direct)** | **Passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Desktop: silent boot from mail refresh. When a **new login** is needed: Touch ID reads the keyring passtoken. Typed form only if bio fails / is declined or the keyring item is missing. Web: standalone login without HQ account |
 | **Invited teammate** | Per-account **mobile password** | `/mobile/*` (one email) | Silent `team_unlock` from keyring (no biometry) |
 | **Flutter mobile** | Same mobile password | `/mobile/*` | Secure storage per launch |
-| **API integrator** | Product API key (`rb-…`) | `/v1/*` | N/A |
+| **API integrator** | Product API key (`rb-…`) | `/v1/*` | Domain-scoped send key for broadcasts and triggers |
 
 Desktop entry is unified in **`AppSessionStore`** + **`DesktopDashboardGate`**.
-Web (browser build, in development) owners sign in at **`/login`** — see
-**[Web owner session](#web-owner-session)**. Everything else in this doc about
-the keyring, Touch ID, and Rust is **desktop** policy.
+Web browser authentication is explained below in **[Web & HQ Cloud authentication](#web--hq-cloud-authentication)**. Everything else in this doc regarding the OS keyring, Touch ID, and Rust is **desktop** policy.
 
 ---
 
@@ -196,36 +194,190 @@ Full layout: **[home-storage.md](../desktop/home-storage.md)**.
 
 ---
 
-## Web owner session
+## Web & HQ Cloud authentication
 
-Browser build only (`!isDesktopRuntime()`; in development, not live). No OS
-keyring, no Touch ID, no Rust — JS calls the Worker with `fetch` + Bearer
-(M-05). Follows N-01 in
-[rust-migration-strategy.md](../architecture/rust-migration-strategy.md).
-Desktop behavior above is unchanged by anything in this section.
+The web version features a **two-tier authentication model**:
 
-| Secret | Web storage |
-|--------|-------------|
-| Passtoken plaintext | **Never stored.** Typed on `/login` (or handed off once right after web install). Re-typed after the tab closes |
-| Owner `mailRefreshToken` + `consoleRefreshToken` + Worker URL | Tab `sessionStorage` `relaybase:owner-session` (`lib/desktop/auth/web-owner-persist.ts`) |
-| Mail / console access JWT | JS memory (`lib/desktop/auth/owner-session.ts`), re-minted via `POST /console/refresh` |
-| Teammate mobile password | Tab `sessionStorage` `relaybase:email-session` |
-| Recent Worker URLs | `localStorage` `relaybase.recentWorkerUrls` (URLs only, no secrets) |
+1. **HQ Cloud Account (Email + Password)**: Centralized identity managed by HQ Studio backend (`hq/studio/data/auth.json`). **Required for Studio** because studio newsletters, triggers, layouts, and tracking rely on cloud backend services.
+2. **Direct Worker Authentication (Passtoken / Mobile Password)**: Decentralized connection to the customer's Cloudflare Worker. Users can still access **Mailbox and Console independently** without signing up for an HQ Cloud account.
 
-Never for owner tokens: localStorage, cookies, or a BFF session cookie.
+### Passtoken isolation policy
 
-| Event | Behavior |
-|-------|----------|
-| Unauthenticated landing | `/login` (Owner tab default + Teammate). Install is `/setup`. Forgot passtoken: `/recover-admin` (same OAuth + reset flow as desktop). Legacy `/sign-in` redirects to `/login` |
-| Login | `AccountLoginView` → `webOwnerLogin()` → `/console/login`; refresh pair written to `relaybase:owner-session` |
-| Refresh rotation | Every successful `/console/refresh` overwrites the stored token for that scope (the Worker rotates refresh tokens) |
-| Same-tab hard reload | `/` immediately replaces to `/login` (or `/dashboard`/`/inbox` if memory already has a session). `/login` and `DesktopDashboardGate` call `restoreWebOwnerSession()` → refresh both scopes. Both must succeed; otherwise the survivor is revoked, storage cleared, user lands on `/login` |
-| Sign out | `ownerLogout()` + clear owner and team `sessionStorage` → `/login` |
-| Tab closed | `sessionStorage` is gone → `/login`, type passtoken again |
-| Duplicated tab | Copies `sessionStorage`; the first tab to refresh rotates the token, so the other tab's next refresh 401s and it must sign in again (the Worker does not revoke the family for this) |
+**HQ Studio and HQ Cloud never persist the customer's Worker passtoken.**
 
-Gate every web persist / restore / redirect with `!isDesktopRuntime()`; desktop
-never reads or writes `relaybase:owner-session`.
+- Passtoken is a master secret for customer Worker D1/R2 administration.
+- During **signup only**, the HQ server accepts passtoken (or teammate mobile password) in the `POST /auth/signup` body, calls the customer Worker to verify ownership, then **discards** the secret immediately. Nothing is written to `auth.json` except the HQ email/password hash and display name.
+- HQ Studio only needs permission to dispatch broadcast/newsletter emails (`POST /v1/send`), which uses a domain-scoped `sendApiKey` (`rb_live_...`).
+
+### Web entry URLs (autofill separation)
+
+| Flow | URL |
+|------|-----|
+| HQ Cloud sign-in | `/cloud/login` |
+| HQ Cloud sign-up (2-step) | `/cloud/signup` |
+| Worker passtoken / teammate | `/worker/login` |
+| Legacy | `/login` redirects to cloud or worker |
+
+Login and signup use **separate routes** so browsers do not mix Worker URL/passtoken autofill with HQ email/password fields.
+
+### HQ Cloud sign-up (2 steps)
+
+```mermaid
+flowchart LR
+  S1["Step 1 — /cloud/signup<br/>Owner: Worker URL + passtoken<br/>OR Teammate: Worker URL + email + team password"]
+  Verify["Client verify (Worker fetch)<br/>then server re-verify on signup"]
+  S2["Step 2 — same page<br/>Name (required)<br/>HQ email + password + confirm"]
+  Done["POST /auth/signup<br/>link workerUrl in store.json<br/>30-day cookie + Studio"]
+
+  S1 --> Verify --> S2 --> Done
+```
+
+| Step | UI | Server |
+|------|-----|--------|
+| 1 | `verifyWorkerForCloudSignup()` — `POST /console/login` or `GET /mobile/config` | — |
+| 2 | `hqSignup()` — no autofill on profile form | `signupUser()` re-runs `verifyWorkerSignupProof()`, writes user to `auth.json`, sets `store.json` `account.workerUrl` |
+
+Teammate sign-up may pre-fill the Step 2 email from the verified account email; the user may change it to any HQ Cloud login email.
+
+**`POST /auth/signup` body** (Step 2 submit; server re-verifies Worker proof):
+
+```json
+{
+  "name": "Alex Owner",
+  "email": "alex@example.com",
+  "password": "long-hq-password",
+  "confirmPassword": "long-hq-password",
+  "workerUrl": "https://relay.example.workers.dev",
+  "workerProof": {
+    "kind": "owner",
+    "passtoken": "rb_pass_…"
+  }
+}
+```
+
+Teammate proof uses `"kind": "team"` with `"accountEmail"` and `"teamPassword"` instead of `passtoken`. Response matches login: access JWT in JSON + `Set-Cookie` refresh (30 days).
+
+---
+
+### Storage and token lifecycle
+
+| Secret / Token | Location | Lifetime | Notes |
+|----------------|----------|----------|-------|
+| HQ Password Hash | `hq/studio/data/auth.json` | Persistent | `argon2id` (or `scrypt`) one-way salted hash |
+| HQ Refresh Token | `HttpOnly`, `Secure`, `SameSite=Lax` Cookie | 30 days | Scoped to `/auth` (or `/api/auth`). Rotated on every refresh (RTR) |
+| HQ Access Token | Client JS memory | 15 minutes | Scoped JWT attached as `Authorization: Bearer <token>` for `/studio/*` API |
+| Reset Password Token Hash | `hq/studio/data/auth.json` | 1 hour (single-use) | SHA-256 hash of random 32-byte hex token sent via email |
+| Worker Send Key (`sendApiKey`) | `hq/studio/data/store.json` | Persistent | Domain-scoped API key (`rb_live_...`) for email dispatch only |
+| Standalone Worker Refresh | Tab `sessionStorage` (`relaybase:owner-session`) | Tab lifetime | Used only for unlinked standalone Worker web access |
+
+---
+
+### Centralized auth schema (`data/auth.json`)
+
+```json
+{
+  "version": 1,
+  "users": [
+    {
+      "id": "usr_01j8abc123def456",
+      "email": "owner@yourdomain.com",
+      "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$...",
+      "name": "Isaac",
+      "accountLinkId": "acc_01j8xyz789",
+      "createdAt": "2026-09-16T10:00:00.000Z",
+      "updatedAt": "2026-09-16T10:00:00.000Z"
+    }
+  ],
+  "refreshTokens": [
+    {
+      "id": "rft_01j8token999",
+      "tokenHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "userId": "usr_01j8abc123def456",
+      "expiresAt": "2026-10-16T10:00:00.000Z",
+      "createdAt": "2026-09-16T10:00:00.000Z",
+      "userAgent": "Mozilla/5.0 ...",
+      "ip": "127.0.0.1"
+    }
+  ],
+  "passwordResetTokens": [
+    {
+      "id": "prt_01j8reset123",
+      "tokenHash": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+      "userId": "usr_01j8abc123def456",
+      "expiresAt": "2026-09-16T11:00:00.000Z",
+      "createdAt": "2026-09-16T10:00:00.000Z",
+      "used": false
+    }
+  ]
+}
+```
+
+---
+
+### Root (`/`) navigation and 30-day session restoration
+
+When navigating to `http://localhost:32830/`:
+
+```mermaid
+flowchart TD
+    Start["Visit GET /"] --> CheckCookie{"30-Day HQ Refresh Cookie<br/>present in request?"}
+    CheckCookie -- "Yes" --> CallRefresh["POST /auth/refresh (HQ Studio)"]
+    CallRefresh --> ValidateRefresh{"Valid & non-expired?"}
+    ValidateRefresh -- "Yes" --> MintAccess["Mint fresh Access Token (Memory)<br/>Rotate Refresh Token (New Cookie)"]
+    MintAccess --> RedirectStudio["Redirect to /studio/overview or /dashboard"]
+    ValidateRefresh -- "No" --> ClearCookie["Clear cookie"] --> FallbackWorker
+    CheckCookie -- "No" --> FallbackWorker{"sessionStorage has<br/>standalone Worker session?"}
+    FallbackWorker -- "Yes" --> RedirectWorker["Redirect to /dashboard or /inbox"]
+    FallbackWorker -- "No" --> RedirectLogin["Redirect to /login"]
+```
+
+---
+
+### Password reset flow (Forgot password)
+
+For users who lose their HQ Cloud account password:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User (Browser)
+    participant App as Web App (/forgot-password)
+    participant HQ as HQ Auth Backend (/auth/*)
+    participant Mail as Sender / Mail Worker
+    participant DB as data/auth.json
+
+    User->>App: Submits email on /forgot-password
+    App->>HQ: POST /auth/forgot-password { email }
+    HQ->>DB: Lookup user by email
+    alt User exists
+        HQ->>HQ: Generate secure 32-byte hex token
+        HQ->>DB: Store SHA-256(token), userId, expiresAt (+1 hr)
+        HQ->>Mail: Send email with reset URL: /reset-password?token=XYZ
+    end
+    HQ-->>App: 200 OK ("If the email exists, a reset link was sent")
+    
+    Note over User,App: User clicks link in email
+    User->>App: Navigates to /reset-password?token=XYZ
+    User->>App: Enters new password
+    App->>HQ: POST /auth/reset-password { token, newPassword }
+    HQ->>DB: Verify token hash, expiration, and used flag
+    alt Token valid & active
+        HQ->>HQ: Hash new password (argon2id)
+        HQ->>DB: Update passwordHash & mark token used
+        HQ->>DB: Revoke all active refreshTokens for user (security wipe)
+        HQ->>HQ: Issue fresh 30-day Refresh Token Cookie & Access Token
+        HQ-->>App: 200 OK + Set-Cookie (fresh session)
+        App-->>User: Redirect to /studio/overview (Logged in)
+    else Invalid or expired
+        HQ-->>App: 400 Bad Request ("Invalid or expired reset link")
+    end
+```
+
+#### Password reset security guarantees:
+1. **Timing & enumeration resistance**: `POST /auth/forgot-password` returns generic `200 OK` regardless of whether the email is registered.
+2. **Single-use tokens**: Tokens are immediately marked `used: true` upon successful password update.
+3. **Session revocation**: Changing the password invalidates all existing 30-day refresh tokens for that account across all devices.
+4. **Expiry**: Reset tokens expire strictly after 1 hour.
 
 ---
 
@@ -289,6 +441,12 @@ If the app binary or DMG is replaced or reinstalled and the Worker returns 401 U
 | `GET /health` | Health probe |
 | `GET /console/auth-status` | `{ ownerConfigured, passtokenPrefix? }` |
 | `POST /console/login` | Passtoken |
+| `POST /auth/signup` | HQ Cloud registration: Worker proof + profile (name, email, password); links `workerUrl` in `store.json` |
+| `POST /auth/login` | HQ Cloud account login → 30-day HttpOnly cookie + Access JWT |
+| `POST /auth/refresh` | 30-day Refresh Token rotation (RTR) → fresh cookie + Access JWT |
+| `POST /auth/logout` | Revoke active refresh token + clear cookie |
+| `POST /auth/forgot-password` | Request password reset email |
+| `POST /auth/reset-password` | Validate reset token & update password |
 
 ### Pepper bootstrap (`X-Auth-Pepper`)
 
@@ -306,6 +464,14 @@ Install / reinstall bootstrap: `setup-admin`, `init-db`, `migrate-db`. Proving `
 | `/mail/*` | `mail` access JWT (includes read-only `GET /mail/addresses`) |
 
 Handlers: `../relaybase-worker/src/routes/console/owner-auth.ts`.
+
+### HQ Studio session (Access JWT Bearer)
+
+| Route group | Scope |
+|-------------|-------|
+| `/studio/*` | HQ Access JWT Bearer (or `STUDIO_API_SECRET` server-to-server) |
+
+Handlers: `hq/studio/src/lib/auth/studio-api-auth.ts`.
 
 ### Mobile password
 
@@ -331,6 +497,11 @@ Handlers: `../relaybase-worker/src/routes/console/owner-auth.ts`.
 | O6b | Owner console 401 | Console gate overlay |
 | O7 | Rotate passtoken | Logged-in owner; revokes all sessions; write new `owner-passtoken` |
 | O8 | Forgot passtoken | CF OAuth (Secrets Store) → `/console/reset-admin` → write new `owner-passtoken` |
+| W1 | HQ Web Sign Up | `/cloud/signup` Step 1 Worker proof → Step 2 profile → `POST /auth/signup` → 30-day cookie + `store.json` worker link |
+| W2 | HQ Web Login | `POST /auth/login` (Email + Password) → 30-day cookie + Access JWT |
+| W3 | HQ Web 30-day auto-login | `GET /` → `POST /auth/refresh` (Cookie) → mint Access JWT + rotate cookie |
+| W4 | HQ Web Forgot/Reset Password | `POST /auth/forgot-password` (Email) + `POST /auth/reset-password` (Token) |
+| W5 | HQ Web Logout | `POST /auth/logout` → revoke DB refresh token + clear cookie |
 | T1 | Provision mobile password | Owner → `/console/addresses/mobile-password` |
 | T2 | Teammate first login | `/mobile/config` → keyring → `invitedReady` |
 | T3 | Teammate daily boot | Silent `team_unlock` → `invitedReady` |
@@ -343,6 +514,18 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 ---
 
 ## File map (auth touchpoints)
+
+### HQ Studio Backend (`hq/studio/`)
+
+| File | Role |
+|------|------|
+| `src/routes/auth.ts` | `/auth` endpoints: signup, login, refresh (RTR), logout, forgot-password, reset-password |
+| `src/lib/auth/verify-worker-proof.ts` | Server-side Worker proof on signup (passtoken / team password discarded after verify) |
+| `src/lib/auth/hq-auth-service.ts` | `signupUser`, login, refresh rotation, password reset |
+| `src/lib/auth/studio-api-auth.ts` | Validates HQ Access JWT Bearer on `/studio/*` routes |
+| `src/lib/auth/password.ts` | `argon2id` / `scrypt` password hashing and verification |
+| `src/lib/auth/jwt.ts` | Access token JWT signing and verification |
+| `data/auth.json` | Persistent HQ user records, password hashes, 30-day refresh tokens, reset tokens |
 
 ### Worker
 
@@ -381,7 +564,12 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 | `console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
 | `lib/desktop/auth/owner-session.ts` | Web owner session: memory access, `restoreWebOwnerSession()` |
 | `lib/desktop/auth/web-owner-persist.ts` | Web-only `relaybase:owner-session` refresh storage |
-| `console/components/setup/AccountLoginView.tsx` | Web `/login` form (owner passtoken / teammate password, `WorkerUrlPicker`) |
+| `console/components/setup/HqCloudLoginView.tsx` | HQ Cloud sign-in — `/cloud/login` |
+| `console/components/setup/HqCloudSignupView.tsx` | HQ Cloud 2-step sign-up — `/cloud/signup` |
+| `console/components/setup/AccountLoginView.tsx` | Worker sign-in — `/worker/login` (passtoken / teammate, `WorkerUrlPicker`) |
+| `lib/hq-auth/session.ts` | HQ access JWT memory + `hqSignup` / `hqLogin` / refresh cookie client |
+| `lib/hq-auth/verify-worker-signup.ts` | Step 1 client Worker verify before signup profile step |
+| `lib/hq-auth/HqStudioGate.tsx` | Studio layout gate (refresh cookie → access token) |
 
 After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`** (see **AGENT.md**).
 

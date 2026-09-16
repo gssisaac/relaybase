@@ -1,0 +1,150 @@
+"use client";
+
+import { getStudioApiBase } from "@/lib/studio/api-base";
+
+export type HqUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  accountLinkId: string;
+};
+
+type AuthPayload = {
+  accessToken: string;
+  expiresIn: number;
+  user: HqUser;
+};
+
+let accessToken: string | null = null;
+let accessExpiresAt = 0;
+let cachedUser: HqUser | null = null;
+
+const listeners = new Set<() => void>();
+
+function emit() {
+  for (const listener of listeners) listener();
+}
+
+function applyAuthPayload(payload: AuthPayload): void {
+  accessToken = payload.accessToken;
+  accessExpiresAt = Date.now() + Math.max(5, payload.expiresIn) * 1000;
+  cachedUser = payload.user;
+  emit();
+}
+
+export function subscribeHqAuth(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getHqAccessToken(): string | null {
+  if (!accessToken) return null;
+  if (accessExpiresAt - Date.now() < 30_000) return null;
+  return accessToken;
+}
+
+export function getHqUser(): HqUser | null {
+  return cachedUser;
+}
+
+export function hasHqSession(): boolean {
+  return Boolean(getHqAccessToken() && cachedUser);
+}
+
+export function clearHqSession(): void {
+  accessToken = null;
+  accessExpiresAt = 0;
+  cachedUser = null;
+  emit();
+}
+
+async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${getStudioApiBase()}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...init?.headers,
+    },
+  });
+  const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+  if (body === null) {
+    throw new Error("Empty response");
+  }
+  return body as T;
+}
+
+export type HqSignupWorkerProof =
+  | { kind: "owner"; passtoken: string }
+  | { kind: "team"; accountEmail: string; teamPassword: string };
+
+export async function hqSignup(input: {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  name: string;
+  workerUrl: string;
+  workerProof: HqSignupWorkerProof;
+}): Promise<HqUser> {
+  const payload = await authFetch<AuthPayload>("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  applyAuthPayload(payload);
+  return payload.user;
+}
+
+export async function hqLogin(input: { email: string; password: string }): Promise<HqUser> {
+  const payload = await authFetch<AuthPayload>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  applyAuthPayload(payload);
+  return payload.user;
+}
+
+/** Restore HQ session from 30-day refresh cookie (RTR). */
+export async function hqRefreshSession(): Promise<boolean> {
+  try {
+    const payload = await authFetch<AuthPayload>("/auth/refresh", {
+      method: "POST",
+      body: "{}",
+    });
+    applyAuthPayload(payload);
+    return true;
+  } catch {
+    clearHqSession();
+    return false;
+  }
+}
+
+export async function hqLogout(): Promise<void> {
+  try {
+    await authFetch<{ ok: boolean }>("/auth/logout", {
+      method: "POST",
+      body: "{}",
+    });
+  } catch {
+    /* best-effort */
+  }
+  clearHqSession();
+}
+
+export async function hqRequestPasswordReset(email: string): Promise<void> {
+  await authFetch<{ ok: boolean; message: string }>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function hqResetPassword(token: string, newPassword: string): Promise<HqUser> {
+  const payload = await authFetch<AuthPayload>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
+  });
+  applyAuthPayload(payload);
+  return payload.user;
+}

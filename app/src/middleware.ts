@@ -12,10 +12,15 @@ function studioUpstreamOrigin(): string {
   );
 }
 
+function shouldProxyToStudioUpstream(pathname: string, method: string, headers: Headers): boolean {
+  if (pathname.startsWith("/auth/")) return true;
+  return shouldProxyRequestToStudio(pathname, method, headers);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (!shouldProxyRequestToStudio(pathname, request.method, request.headers)) {
+  if (!shouldProxyToStudioUpstream(pathname, request.method, request.headers)) {
     return NextResponse.next();
   }
 
@@ -53,5 +58,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/studio/:path*"],
+  matcher: ["/studio/:path*", "/auth/:path*"],
 };

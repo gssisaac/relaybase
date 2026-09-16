@@ -1,4 +1,5 @@
 import type { Layout, StudioDataStore, Template, Trigger } from "../../db/types";
+import { templateFileStore } from "../templates/template-file-store";
 
 export type ResolvedMessage = {
   subject: string;
@@ -20,8 +21,8 @@ export function findLayout(
   return data.layouts.find((l) => l.id === layoutId);
 }
 
-export function findMessageTemplate(data: StudioDataStore, id: string): Template | undefined {
-  return data.templates.find((t) => t.id === id);
+export function findMessageTemplate(_data: StudioDataStore, id: string): Template | undefined {
+  return templateFileStore.findById(id);
 }
 
 export function requireMessage(data: StudioDataStore, messageTemplateId: string): ResolvedMessage {

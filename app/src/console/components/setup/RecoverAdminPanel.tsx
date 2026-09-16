@@ -292,12 +292,12 @@ export function RecoverAdminPanel() {
       return;
     }
     store.clearError();
-    router.replace("/login");
+    router.replace("/worker/login");
   }
 
   return (
     <SetupCenteredPage
-      backHref={isDesktop ? "/" : "/login"}
+      backHref={isDesktop ? "/" : "/worker/login"}
       backLabel="Back"
       backReplace
       onBack={handleBack}

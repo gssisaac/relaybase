@@ -87,17 +87,7 @@ studioTriggers.post("/", async (c) => {
   if (!domain) return c.json({ error: "Select a sending domain for this automation" }, 400);
 
   const purpose = purposeFromInput(body.purpose);
-  let source: TriggerSource = defaultTriggerForPurpose(purpose);
-  if (body.triggerType === "http_webhook") source = defaultHttpWebhookTrigger();
-  if (body.triggerType === "mailbox_inbound") {
-    source = {
-      type: "mailbox_inbound",
-      domain,
-      localPart: "hello",
-      replyToSender: true,
-      match: null,
-    };
-  }
+  const source: TriggerSource = defaultHttpWebhookTrigger();
 
   const data = store.read();
   const baseSlug = slugifyTrigger(name) || newId("automation").slice(0, 12);

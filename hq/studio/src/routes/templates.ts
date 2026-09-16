@@ -4,6 +4,7 @@ import type { Layout } from "../db/types";
 import { newId } from "../lib/shared/ids";
 import { serializeLayout } from "../lib/templates/layout-serialize";
 import { prepareTemplateImport } from "../lib/templates/prepare-import";
+import { templateFileStore } from "../lib/templates/template-file-store";
 
 export const studioTemplates = new Hono();
 
@@ -175,8 +176,8 @@ studioTemplates.patch("/:id/source", async (c) => {
   });
 });
 
-function layoutReferencedByMessages(data: ReturnType<typeof store.read>, layoutId: string): boolean {
-  return data.templates.some((t) => t.layoutId === layoutId);
+function layoutReferencedByMessages(_data: ReturnType<typeof store.read>, layoutId: string): boolean {
+  return templateFileStore.layoutIsReferenced(layoutId);
 }
 
 // DELETE /studio/layouts/:id — custom layouts only

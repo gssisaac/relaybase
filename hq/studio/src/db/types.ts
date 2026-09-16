@@ -1,5 +1,5 @@
 /**
- * Studio dev JSON store types (`data/store.json`).
+ * Studio dev store types (`data/store.json` + `data/templates/*.yaml`).
  *
  * Layout — HTML frame · Template — message copy · Trigger — event send · Newsletter — audience send.
  */
@@ -65,7 +65,7 @@ export type Layout = {
 };
 
 // ============================================================================
-// Templates (reusable message content)
+// Templates (reusable message content — persisted as `data/templates/<id>.yaml` in dev)
 // ============================================================================
 
 export type TemplateCategory =

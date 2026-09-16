@@ -1,5 +1,12 @@
 import type { StudioDataStore, Template, TemplateCategory } from "../../db/types";
+import { templateFileStore } from "../templates/template-file-store";
 import { messageTemplateIdForOwner } from "./resolve";
+
+function syncTemplateToDraft(draft: StudioDataStore, tpl: Template) {
+  const idx = draft.templates.findIndex((t) => t.id === tpl.id);
+  if (idx >= 0) draft.templates[idx] = tpl;
+  else draft.templates.push(tpl);
+}
 
 export function createMessageTemplate(
   draft: StudioDataStore,
@@ -13,8 +20,11 @@ export function createMessageTemplate(
   now: string,
 ): Template {
   const id = messageTemplateIdForOwner(input.ownerId);
-  const existing = draft.templates.find((t) => t.id === id);
-  if (existing) return existing;
+  const existing = templateFileStore.findById(id);
+  if (existing) {
+    syncTemplateToDraft(draft, existing);
+    return existing;
+  }
 
   const tpl: Template = {
     id,
@@ -30,7 +40,8 @@ export function createMessageTemplate(
     createdAt: now,
     updatedAt: now,
   };
-  draft.templates.push(tpl);
+  templateFileStore.save(tpl);
+  syncTemplateToDraft(draft, tpl);
   return tpl;
 }
 
@@ -49,7 +60,7 @@ export function patchMessageTemplate(
   },
   now: string,
 ): void {
-  const tpl = draft.templates.find((t) => t.id === messageTemplateId);
+  const tpl = templateFileStore.findById(messageTemplateId);
   if (!tpl) return;
   if (patch.name !== undefined) tpl.name = patch.name;
   if (patch.subject !== undefined) tpl.subject = patch.subject;
@@ -58,4 +69,6 @@ export function patchMessageTemplate(
   if (patch.layoutId !== undefined) tpl.layoutId = patch.layoutId;
   if (patch.templateVariables !== undefined) tpl.templateVariables = patch.templateVariables;
   tpl.updatedAt = now;
+  templateFileStore.save(tpl);
+  syncTemplateToDraft(draft, tpl);
 }

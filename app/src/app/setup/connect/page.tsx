@@ -29,7 +29,7 @@ export default function SetupConnectPage() {
         router.replace("/inbox");
         return;
       }
-      router.replace(`/login${window.location.search}`);
+      router.replace(`/worker/login${window.location.search}`);
       return;
     }
     if (store.phase.kind === "ownerRecover") {

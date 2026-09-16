@@ -75,7 +75,18 @@ async function main() {
 
   await fs.mkdir(outDir, { recursive: true });
 
-  const browser = await chromium.launch();
+  let browser;
+  try {
+    browser = await chromium.launch();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("Executable doesn't exist")) {
+      console.error(
+        "\nPlaywright Chromium is missing. Run:\n  pnpm exec playwright install chromium\n",
+      );
+    }
+    throw err;
+  }
   const page = await browser.newPage({
     viewport: { width: VIEWPORT_WIDTH, height: CLIP_HEIGHT + 32 },
     deviceScaleFactor: DEVICE_SCALE,

@@ -11,6 +11,7 @@ const SCALE_UI_GET_PATHS = new Set([
   "/scale/triggers/trigger-stats",
   "/scale/triggers/edit",
   "/scale/templates",
+  "/scale/templates/edit",
   "/scale/layouts",
   "/scale/schedule",
 ]);
@@ -58,7 +59,7 @@ export function shouldProxyRequestToScale(pathname: string, method: string, head
   if (pathname.startsWith("/scale/templates")) {
     if (method !== "GET" && method !== "HEAD") return true;
     if (isScaleApiRequest(headers)) return true;
-    if (pathname === "/scale/templates") return false;
+    if (SCALE_UI_GET_PATHS.has(pathname)) return false;
     return true;
   }
 

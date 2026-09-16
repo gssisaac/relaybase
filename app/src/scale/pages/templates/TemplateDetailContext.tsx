@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { upsertTemplateSidebarListRow } from "@/scale/lib/templates/template-sidebar-list";
 import { scaleApi, type MessageTemplate, type ScaleLayout } from "@/lib/scale/api";
 
 export type TemplateDraftFields = {
@@ -85,6 +86,7 @@ export function TemplateDetailProvider({
         scaleApi.listLayouts(),
       ]);
       setTemplate(detail.template);
+      upsertTemplateSidebarListRow(detail.template);
       setLayouts(layoutList.layouts);
       setNotFound(false);
       const fields: DraftFields = {
@@ -154,6 +156,7 @@ export function TemplateDetailProvider({
       .then(({ template: updated }) => {
         lastSaved.current = next;
         setTemplate(updated);
+        upsertTemplateSidebarListRow(updated);
         return true;
       })
       .catch(() => false)

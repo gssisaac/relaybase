@@ -1,8 +1,8 @@
 "use client";
 
-import { Calendar, ChevronDown, Loader2, Mail, Send, Zap } from "lucide-react";
+import { Calendar, ChevronDown, Mail, Send, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
@@ -71,6 +71,15 @@ function resolveGroupDomain(
   return group?.domain.trim().toLowerCase() || null;
 }
 
+function resolveAudienceGroupForSendingDomain(
+  groups: AudienceGroupSummary[],
+  domain: string,
+): AudienceGroupSummary | null {
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized) return null;
+  return groups.find((g) => g.domain.trim().toLowerCase() === normalized) ?? null;
+}
+
 export function TemplateUseActions() {
   const router = useRouter();
   const { apiBase } = useEmailPaths();
@@ -91,7 +100,6 @@ export function TemplateUseActions() {
   const [triggerDomain, setTriggerDomain] = useState<string | null>(null);
   const [triggerPurpose, setTriggerPurpose] = useState<TriggerPurpose>("transactional");
 
-  const [testAudienceId, setTestAudienceId] = useState("");
   const [testFromEmail, setTestFromEmail] = useState<string | null>(null);
   const [testToEmail, setTestToEmail] = useState("");
 
@@ -101,11 +109,6 @@ export function TemplateUseActions() {
 
   const defaultTitle =
     template?.name.trim() || template?.subject.trim() || "Untitled template";
-
-  const testAudienceDomain = useMemo(
-    () => resolveGroupDomain(audienceGroups, testAudienceId),
-    [audienceGroups, testAudienceId],
-  );
 
   useEffect(() => {
     setAudienceLoading(true);
@@ -133,7 +136,6 @@ export function TemplateUseActions() {
   }
 
   function resetTestForm() {
-    setTestAudienceId("");
     setTestFromEmail(null);
     setTestToEmail("");
     setFormError(null);
@@ -251,25 +253,20 @@ export function TemplateUseActions() {
   }
 
   async function handleTestSend() {
-    const audienceGroupId = testAudienceId.trim();
-    const domain = resolveGroupDomain(audienceGroups, audienceGroupId);
     const from = testFromEmail?.trim() ?? "";
     const to = testToEmail.trim();
-    if (!audienceGroupId || !domain) {
-      setFormError("Select a subscriber group");
-      return;
-    }
     if (!from.includes("@")) {
       setFormError("Select a sender account");
       return;
     }
-    const fromDomain = from.slice(from.indexOf("@") + 1).toLowerCase();
-    if (fromDomain !== domain) {
-      setFormError(`Sender must be on ${domain} (same as the subscriber group)`);
+    if (!to.includes("@")) {
+      setFormError("Enter a valid recipient email");
       return;
     }
-    if (!to.includes("@")) {
-      setFormError("Enter a valid test recipient");
+    const domain = from.slice(from.indexOf("@") + 1).toLowerCase();
+    const audienceGroup = resolveAudienceGroupForSendingDomain(audienceGroups, domain);
+    if (!audienceGroup) {
+      setFormError(`No subscriber group is linked to ${domain}. Create one or choose another sender.`);
       return;
     }
 
@@ -283,7 +280,7 @@ export function TemplateUseActions() {
       const newsletter = await createNewsletterFromHubTemplate({
         name: `Test: ${defaultTitle}`.slice(0, 120),
         domain,
-        audienceGroupId,
+        audienceGroupId: audienceGroup.id,
         hubTemplateId: messageTemplateId,
         snapshot,
         fromEmail: from,
@@ -302,23 +299,6 @@ export function TemplateUseActions() {
   return (
     <>
       <div className="flex shrink-0 items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => {
-            resetTestForm();
-            setTestOpen(true);
-          }}
-        >
-          {busy && testOpen ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Send className="size-4" />
-          )}
-          Test send
-        </Button>
-
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -356,6 +336,15 @@ export function TemplateUseActions() {
               <Zap className="size-4" />
               Create trigger
             </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                resetTestForm();
+                setTestOpen(true);
+              }}
+            >
+              <Send className="size-4" />
+              Test send
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -371,35 +360,19 @@ export function TemplateUseActions() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-test-audience">Subscriber group</Label>
-              <AudienceGroupCmdDropdown
-                triggerId="template-test-audience"
-                groups={audienceGroups}
-                loading={audienceLoading}
-                value={testAudienceId || null}
-                onValueChange={(id) => setTestAudienceId(id ?? "")}
-              />
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="template-test-from">From</Label>
               <AccountCmdDropdown
                 triggerId="template-test-from"
                 value={testFromEmail}
-                domainFilter={testAudienceDomain}
                 onValueChange={(email) => setTestFromEmail(email ?? null)}
               />
-              {testAudienceDomain ? (
-                <p className="text-xs text-muted-foreground">
-                  Senders on {testAudienceDomain} (matches the subscriber group domain).
-                </p>
-              ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-test-to">Send to</Label>
+              <Label htmlFor="template-test-to">To</Label>
               <Input
                 id="template-test-to"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={examplePlaceholder("you@example.com")}
                 value={testToEmail}
                 onChange={(e) => setTestToEmail(e.target.value)}
               />

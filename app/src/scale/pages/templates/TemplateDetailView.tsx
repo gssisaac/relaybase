@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { ScaleDetailPageHeader } from "@/scale/components/ScaleDetailPageHeader";
-import { useScalePaths } from "@/scale/lib/paths";
+import { messageTemplatePreviewHref } from "@/scale/lib/template-paths";
 import { TemplateContentView } from "@/scale/pages/templates/TemplateContentView";
 import {
   TemplateDetailProvider,
@@ -13,13 +13,13 @@ import {
 import { TemplateUseActions } from "@/scale/pages/templates/TemplateUseActions";
 
 function TemplateDetailBody() {
-  const { templates: templatesPath } = useScalePaths();
-  const { template, loading, notFound } = useTemplateDetail();
+  const { messageTemplateId, template, loading, notFound } = useTemplateDetail();
+  const previewHref = messageTemplatePreviewHref(messageTemplateId);
 
   if (loading && !template) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <ScaleDetailPageHeader backHref={templatesPath} backLabel="Back to templates" title="Loading…" />
+        <ScaleDetailPageHeader backHref={previewHref} backLabel="Back to preview" title="Loading…" />
         <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
           Loading template…
         </div>
@@ -31,14 +31,14 @@ function TemplateDetailBody() {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ScaleDetailPageHeader
-          backHref={templatesPath}
-          backLabel="Back to templates"
+          backHref={previewHref}
+          backLabel="Back to preview"
           title="Template not found"
         />
         <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
           This template does not exist or was removed.{" "}
-          <Link href={templatesPath} className="text-primary underline-offset-4 hover:underline">
-            Back to templates
+          <Link href={previewHref} className="text-primary underline-offset-4 hover:underline">
+            Back to preview
           </Link>
         </div>
       </div>
@@ -50,8 +50,8 @@ function TemplateDetailBody() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <ScaleDetailPageHeader
-        backHref={templatesPath}
-        backLabel="Back to templates"
+        backHref={previewHref}
+        backLabel="Back to preview"
         title={title}
         end={<TemplateUseActions />}
       />

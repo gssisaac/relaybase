@@ -121,6 +121,7 @@ describe("shouldProxyRequestToScale", () => {
 
   it("serves message templates UI without API header", () => {
     assert.equal(shouldProxyRequestToScale("/scale/templates", "GET", headers()), false);
+    assert.equal(shouldProxyRequestToScale("/scale/templates/edit", "GET", headers()), false);
   });
 
   it("proxies message template detail with Scale API header", () => {

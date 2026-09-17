@@ -250,8 +250,8 @@ export function NewslettersListView() {
           </>
         }
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <h1 className="truncate text-lg font-semibold tracking-tight">Newsletters</h1>
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+          <h1 className="min-w-0 shrink truncate text-sm font-semibold">Newsletters</h1>
           <NewslettersSectionNav active="list" />
         </div>
       </DesktopTitleBar>

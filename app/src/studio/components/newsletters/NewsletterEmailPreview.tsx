@@ -13,6 +13,10 @@ import {
 import { applyGmailContentLinkStyles } from "@/lib/markdown-editor/utils/editor-markdown";
 import { cn } from "@/lib/utils";
 
+/** iPhone 17 Pro Max logical display (440×956 pt @3x). */
+const IPHONE_17_PRO_MAX_WIDTH = 440;
+const IPHONE_17_PRO_MAX_HEIGHT = 956;
+
 function senderInitial(fromName: string | null, fromEmail: string): string {
   const source = fromName?.trim() || fromEmail.trim();
   const ch = source.charAt(0).toUpperCase();
@@ -146,14 +150,18 @@ export function NewsletterEmailPreview({
   if (device === "mobile") {
     return (
       <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-950"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-700"
         style={{ colorScheme: "light" }}
       >
         <div className="flex min-h-full items-center justify-center p-6 sm:p-8">
           <div
-            className="relative w-[min(390px,calc(100%-2rem))] shrink-0 aspect-[390/844] rounded-[2.75rem] border border-[#3f3f46] bg-[#18181b] p-[11px] shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_12px_40px_rgba(0,0,0,0.55),0_40px_100px_rgba(0,0,0,0.75),0_64px_160px_rgba(0,0,0,0.65)]"
+            className="relative shrink-0 rounded-[2.85rem] border border-neutral-600/90 bg-[#1c1c1e] p-[11px] shadow-[0_8px_24px_rgba(0,0,0,0.35),0_32px_64px_rgba(0,0,0,0.45),0_48px_120px_rgba(0,0,0,0.4)]"
+            style={{
+              width: `min(${IPHONE_17_PRO_MAX_WIDTH}px, calc(100% - 2rem))`,
+              aspectRatio: `${IPHONE_17_PRO_MAX_WIDTH} / ${IPHONE_17_PRO_MAX_HEIGHT}`,
+            }}
             role="img"
-            aria-label="Mobile preview frame"
+            aria-label="iPhone 17 Pro Max preview frame"
           >
             <div
               className="pointer-events-none absolute left-1/2 top-[14px] z-20 h-[26px] w-[96px] -translate-x-1/2 rounded-full bg-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"

@@ -36,6 +36,14 @@ describe("enhancePreviewHtml", () => {
       '<p><a href="https://relaybase.com/docs" style="color:#1155cc;text-decoration:underline;">Guide</a></p>',
     );
   });
+
+  it("renders email button markers as bulletproof tables", () => {
+    const marker =
+      '<div data-rb-email-button="" data-text="Go" data-href="https://relaybase.com" data-variant="primary" data-align="center"></div>';
+    const html = enhancePreviewHtml(marker);
+    assert.match(html, /<table role="presentation"/);
+    assert.match(html, /href="https:\/\/relaybase.com"/);
+  });
 });
 
 describe("applyGmailContentLinkStyles", () => {

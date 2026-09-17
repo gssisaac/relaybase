@@ -317,7 +317,7 @@ export function NewsletterComposeForm({
           <div
             className={cn(
               "flex min-h-0 flex-1 flex-col overflow-hidden",
-              device === "mobile" ? "bg-neutral-950" : "bg-[#f6f8fc]",
+              device === "mobile" ? "bg-neutral-700" : "bg-[#f6f8fc]",
             )}
             style={{ colorScheme: "light" }}
           >

@@ -1,6 +1,5 @@
 "use client";
 
-import type { BlockNoteEditor } from "@blocknote/core";
 import {
   SuggestionMenuController,
   TableHandlesController,
@@ -22,7 +21,7 @@ import {
 
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
 import { getNewsletterEditorSlashMenuItems } from "@/lib/markdown-editor/components/newsletter-slash-menu-items";
-import { newsletterEditorSchema } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
+import { newsletterEditorSchema, type NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 import { fingerprintEditorDocument, markdownFlushStrategy } from "@/lib/markdown-editor/utils/flush";
 import {
@@ -41,8 +40,7 @@ import {
   enhancePreviewHtml,
   serializeEditorMarkdown,
 } from "@/lib/markdown-editor/utils/editor-markdown";
-import { promoteEmailButtonBlocks } from "@/lib/markdown-editor/utils/email-button-markdown";
-import { promotePageMediaBlocks } from "@/lib/markdown-editor/utils/media-markdown";
+import { parseMarkdownToEditorBlocks } from "@/lib/markdown-editor/utils/email-button-markdown";
 import { markdownSelectAllExtension } from "@/lib/markdown-editor/utils/select-all";
 import { resolveNewsletterAssetPath } from "@/lib/markdown-editor/utils/assets";
 import {
@@ -84,7 +82,7 @@ function blockIdAtPoint(clientX: number, clientY: number): string | null {
 }
 
 function insertIngestedPageFiles(
-  editor: BlockNoteEditor,
+  editor: NewsletterEditor,
   items: IngestedPageFile[],
   dropPoint?: { clientX: number; clientY: number },
 ): void {
@@ -115,7 +113,7 @@ function plainBlocksFromMarkdown(markdown: string): { type: string; props?: { le
 }
 
 async function setEditorMarkdown(
-  editor: BlockNoteEditor,
+  editor: NewsletterEditor,
   markdown: string,
   syncingRef: MutableRefObject<boolean>,
   options?: { isStale?: () => boolean },
@@ -124,11 +122,7 @@ async function setEditorMarkdown(
   try {
     let blocks: unknown[];
     try {
-      blocks = promoteEmailButtonBlocks(
-        promotePageMediaBlocks(
-          linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(markdown)),
-        ),
-      );
+      blocks = await parseMarkdownToEditorBlocks(editor, markdown, linkifyParsedBlocks);
     } catch (err) {
       console.error("Failed to parse markdown for editor", err);
       blocks = plainBlocksFromMarkdown(markdown);
@@ -210,7 +204,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const syncingRef = useRef(false);
   const pendingEditorMarkdownRef = useRef<string | null>(null);
   const editorMountedRef = useRef(false);
-  const editorRef = useRef<BlockNoteEditor | null>(null);
+  const editorRef = useRef<NewsletterEditor | null>(null);
   const newsletterIdRef = useRef(newsletterId);
   const assetOwnerRef = useRef(assetOwner);
   const hydratedRef = useRef(false);
@@ -234,7 +228,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const ingestAndInsert = useCallback(
     async (
       files: File[],
-      editorInstance: BlockNoteEditor,
+      editorInstance: NewsletterEditor,
       dropPoint?: { clientX: number; clientY: number },
     ) => {
       if (files.length === 0) return;
@@ -300,7 +294,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   }, []);
 
   const emitChange = useCallback(
-    (body: string, editorInstance: BlockNoteEditor) => {
+    (body: string, editorInstance: NewsletterEditor) => {
       pendingEditorMarkdownRef.current = body;
       const markdown = body;
       const html = enhancePreviewHtml(
@@ -317,7 +311,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   }, []);
 
   const flushBody = useCallback(
-    (editorInstance?: BlockNoteEditor | null): string => {
+    (editorInstance?: NewsletterEditor | null): string => {
       const inst = editorInstance ?? editorRef.current;
       if (!inst || !editorMountedRef.current || !hydratedRef.current) {
         return readPersistedBody();
@@ -350,7 +344,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   }, [emitChange]);
 
   const notifyEditorChange = useCallback(
-    (editorInstance: BlockNoteEditor) => {
+    (editorInstance: NewsletterEditor) => {
       if (syncingRef.current || !hydratedRef.current) return;
       if (
         hydratedFingerprintRef.current != null &&

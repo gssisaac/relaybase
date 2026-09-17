@@ -2,7 +2,6 @@
 
 import { createReactBlockSpec } from "@blocknote/react";
 import { MousePointerClick } from "lucide-react";
-import { useMemo } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import {
   normalizeEmailButtonAlign,
   normalizeEmailButtonVariant,
@@ -20,7 +20,6 @@ import {
   type EmailButtonVariant,
 } from "@/lib/markdown-editor/utils/email-button-html";
 import { cn } from "@/lib/utils";
-import { useSelectedBlocks } from "@blocknote/react";
 
 const emailButtonPropSchema = {
   text: { default: "Button" as const },
@@ -47,79 +46,72 @@ function parseEmailButtonElement(element: HTMLElement) {
   };
 }
 
+type EmailButtonBlockProps = {
+  text: string;
+  url: string;
+  variant: EmailButtonVariant;
+  alignment: EmailButtonAlign;
+};
+
 function EmailButtonBlockRender(props: {
   block: {
     id: string;
-    props: {
-      text: string;
-      url: string;
-      variant: EmailButtonVariant;
-      alignment: EmailButtonAlign;
-    };
+    props: EmailButtonBlockProps;
   };
-  editor: {
-    isEditable: boolean;
-    updateBlock: (
-      block: { id: string },
-      update: { props: Partial<EmailButtonBlockRender["block"]["props"]> },
-    ) => void;
-  };
+  editor: NewsletterEditor;
 }) {
-  const selectedBlocks = useSelectedBlocks(props.editor as never);
-  const selected = useMemo(
-    () => selectedBlocks.some((b) => b.id === props.block.id),
-    [props.block.id, selectedBlocks],
-  );
-
   const { text, url, variant, alignment } = props.block.props;
   const label = text.trim() || "Button";
+  const editable = props.editor.isEditable;
 
   const previewAlign =
     alignment === "left" ? "justify-start" : alignment === "full" ? "justify-stretch" : "justify-center";
 
-  const updateProps = (patch: Partial<typeof props.block.props>) => {
+  const updateProps = (patch: Partial<EmailButtonBlockProps>) => {
     props.editor.updateBlock(props.block, {
       props: { ...props.block.props, ...patch },
     });
   };
 
   return (
-    <div className="my-2 space-y-2" contentEditable={false}>
+    <div className="my-1 space-y-2" contentEditable={false}>
       <div className={cn("flex", previewAlign)}>
         <span
           className={cn(
-            "inline-flex max-w-full items-center justify-center rounded-lg px-7 py-2.5 text-sm font-semibold",
+            "inline-flex max-w-full min-h-10 items-center justify-center rounded-lg px-7 py-2.5 text-sm font-semibold shadow-sm",
             alignment === "full" && "w-full",
             variant === "outline"
-              ? "border border-foreground bg-background text-foreground"
-              : "bg-foreground text-background",
+              ? "border border-zinc-800 bg-white text-zinc-900 dark:border-zinc-200 dark:bg-zinc-950 dark:text-zinc-50"
+              : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900",
           )}
         >
           {label}
         </span>
       </div>
-      {selected && props.editor.isEditable ? (
+      {editable ? (
         <div
-          className="grid gap-2 rounded-lg border border-border/80 bg-muted/30 p-3"
+          className="grid gap-2 rounded-lg border border-border/80 bg-muted/40 p-3"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="grid gap-1.5">
-            <Label htmlFor={`email-btn-text-${props.block.id}`}>Button label</Label>
-            <Input
-              id={`email-btn-text-${props.block.id}`}
-              value={text}
-              onChange={(e) => updateProps({ text: e.target.value })}
-              placeholder="Read more"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor={`email-btn-url-${props.block.id}`}>Link URL</Label>
-            <Input
-              id={`email-btn-url-${props.block.id}`}
-              value={url}
-              onChange={(e) => updateProps({ url: e.target.value })}
-              placeholder="https://"
-            />
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor={`email-btn-text-${props.block.id}`}>Button label</Label>
+              <Input
+                id={`email-btn-text-${props.block.id}`}
+                value={text}
+                onChange={(e) => updateProps({ text: e.target.value })}
+                placeholder="Read more"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`email-btn-url-${props.block.id}`}>Link URL</Label>
+              <Input
+                id={`email-btn-url-${props.block.id}`}
+                value={url}
+                onChange={(e) => updateProps({ url: e.target.value })}
+                placeholder="https://"
+              />
+            </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1.5">
@@ -171,7 +163,17 @@ export const EmailButtonBlockSpec = createReactBlockSpec(
     content: "none",
   },
   {
-    render: (props) => <EmailButtonBlockRender {...props} />,
+    render: (props) => (
+      <EmailButtonBlockRender
+        block={
+          props.block as {
+            id: string;
+            props: EmailButtonBlockProps;
+          }
+        }
+        editor={props.editor as NewsletterEditor}
+      />
+    ),
     parse: parseEmailButtonElement,
     toExternalHTML: (props) => (
       <div
@@ -196,3 +198,31 @@ export const defaultEmailButtonBlockProps = {
     alignment: "center" as const,
   },
 };
+
+/** Insert a button block and keep the cursor on it (slash menu). */
+export function insertEmailButtonAtCursor(editor: NewsletterEditor) {
+  const currentBlock = editor.getTextCursorPosition().block;
+  const content = currentBlock.content;
+  const isSlashOnly =
+    Array.isArray(content) &&
+    content.length === 1 &&
+    content[0].type === "text" &&
+    typeof content[0].text === "string" &&
+    content[0].text === "/";
+  const isEmptyParagraph =
+    currentBlock.type === "paragraph" &&
+    Array.isArray(content) &&
+    (content.length === 0 ||
+      (content.length === 1 &&
+        content[0].type === "text" &&
+        typeof content[0].text === "string" &&
+        content[0].text.trim() === ""));
+
+  let newBlock;
+  if (isEmptyParagraph || isSlashOnly) {
+    newBlock = editor.updateBlock(currentBlock, defaultEmailButtonBlockProps);
+  } else {
+    [newBlock] = editor.insertBlocks([defaultEmailButtonBlockProps], currentBlock, "after");
+  }
+  editor.setTextCursorPosition(newBlock, "end");
+}

@@ -1,12 +1,15 @@
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { BlockNoteSchema } from "@blocknote/core";
 
 import { EmailButtonBlockSpec } from "@/lib/markdown-editor/blocks/email-button-block";
 
-export const newsletterEditorSchema = BlockNoteSchema.create({
+export const newsletterEditorSchema = BlockNoteSchema.create().extend({
   blockSpecs: {
-    ...defaultBlockSpecs,
     emailButton: EmailButtonBlockSpec(),
   },
 });
 
-export type NewsletterEditorSchema = typeof newsletterEditorSchema;
+export type NewsletterEditor = import("@blocknote/core").BlockNoteEditor<
+  typeof newsletterEditorSchema.blockSchema,
+  typeof newsletterEditorSchema.inlineContentSchema,
+  typeof newsletterEditorSchema.styleSchema
+>;

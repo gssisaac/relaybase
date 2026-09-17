@@ -1,3 +1,5 @@
+import type { BlockNoteEditor } from "@blocknote/core";
+
 import {
   emailButtonMarkerHtml,
   emailButtonPropsFromMarkerHtml,
@@ -5,6 +7,10 @@ import {
   isEmailButtonMarkerHtml,
   type EmailButtonProps,
 } from "./email-button-html";
+import { promotePageMediaBlocks } from "./media-markdown";
+
+const EMAIL_BUTTON_MARKER_SPLIT =
+  /(<div\b[^>]*\bdata-rb-email-button\b[^>]*>\s*<\/div>)/gi;
 
 function inlinePlainText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -60,4 +66,45 @@ export function promoteEmailButtonBlocks<T>(blocks: T[]): T[] {
 export function serializeEmailButtonBlockMarkdown(block: unknown): string | null {
   if (!isEmailButtonBlock(block)) return null;
   return emailButtonMarkerHtml(block.props);
+}
+
+function markdownContainsEmailButtonMarker(markdown: string): boolean {
+  return /\bdata-rb-email-button\b/i.test(markdown);
+}
+
+/**
+ * Parse markdown that may contain raw email-button marker divs interleaved with
+ * normal markdown (BlockNote's markdown parser drops unknown HTML blocks).
+ */
+export async function parseMarkdownToEditorBlocks(
+  editor: BlockNoteEditor<any, any, any>,
+  markdown: string,
+  linkifyParsedBlocks: (blocks: unknown[]) => unknown[],
+): Promise<unknown[]> {
+  if (!markdownContainsEmailButtonMarker(markdown)) {
+    return promoteEmailButtonBlocks(
+      promotePageMediaBlocks(linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(markdown))),
+    );
+  }
+
+  const segments = markdown.split(EMAIL_BUTTON_MARKER_SPLIT);
+  const blocks: unknown[] = [];
+
+  for (const segment of segments) {
+    const trimmed = segment.trim();
+    if (!trimmed) continue;
+
+    if (isEmailButtonMarkerHtml(trimmed)) {
+      const props = emailButtonPropsFromMarkerHtml(trimmed);
+      if (props) blocks.push(emailButtonBlockFromProps(props));
+      continue;
+    }
+
+    const parsed = promoteEmailButtonBlocks(
+      promotePageMediaBlocks(linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(trimmed))),
+    );
+    blocks.push(...parsed);
+  }
+
+  return blocks.length > 0 ? blocks : [{ type: "paragraph", content: "" }];
 }

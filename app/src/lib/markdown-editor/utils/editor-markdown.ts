@@ -31,7 +31,7 @@ export function isEmptyParagraphBlock(block: unknown): boolean {
 }
 
 /** Serialize top-level blocks so intentional blank lines survive save/reload. */
-export function serializeEditorMarkdown(editor: BlockNoteEditor): string {
+export function serializeEditorMarkdown(editor: BlockNoteEditor<any, any, any>): string {
   const chunks: string[] = [];
   for (const block of editor.document) {
     if (isEmptyParagraphBlock(block)) {

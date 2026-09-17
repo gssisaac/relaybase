@@ -143,6 +143,11 @@
   border-top: 1px solid var(--border);
 }
 
+.gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 /* Table: force full width (BlockNote sets width: auto !important). */
 .gtm-md-editor [data-content-type="table"] table {
   box-sizing: border-box;

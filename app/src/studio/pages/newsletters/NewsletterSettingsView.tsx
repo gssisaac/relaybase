@@ -42,6 +42,7 @@ import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { ComplianceIdentityEditor } from "@/studio/components/ComplianceIdentityEditor";
 import { studioApi, StudioApiError } from "@/studio/api";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 
 export function NewsletterSettingsView() {
   const { newsletterId, newsletter, templates, setNewsletter } = useNewsletterDetail();
@@ -391,7 +392,9 @@ export function NewsletterSettingsView() {
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Archive &apos;{newsletter.name}&apos;?</DialogTitle>
+            <DialogTitle>
+              Archive &apos;{newsletterDisplaySubject(newsletter.subject)}&apos;?
+            </DialogTitle>
             <DialogDescription>
               Pending scheduled sends will be cancelled, but delivery history is preserved.
             </DialogDescription>

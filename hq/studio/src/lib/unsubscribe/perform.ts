@@ -1,4 +1,5 @@
 import { store } from "../../db/store";
+import { requireMessage } from "../messages/resolve";
 import { findSubscriberContactByUnsubscribeToken } from "../subscriber-groups/resolver";
 import { setSubscriberContactSendStatus } from "../subscriber-groups/send-status";
 
@@ -51,7 +52,7 @@ export function performBroadcastUnsubscribe(
   return {
     ok: true,
     email: contact.email,
-    listName: broadcast.name ?? "this list",
+    listName: requireMessage(store.read(), broadcast.messageId).subject.trim() || "this list",
   };
 }
 

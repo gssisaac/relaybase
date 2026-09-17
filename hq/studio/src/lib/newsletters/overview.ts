@@ -10,7 +10,6 @@ function resolveNewsletterSubject(row: Newsletter): string {
 
 export type SerializedNewsletter = {
   id: string;
-  name: string;
   slug: string;
   description: string | null;
   subscriberGroupId: string | null;
@@ -53,7 +52,6 @@ export type AccountNewsletterSentOverview = {
   }[];
   newsletters: Array<{
     id: string;
-    name: string;
     subject: string;
     status: Newsletter["status"];
     sentAt: string | null;
@@ -195,7 +193,6 @@ export function buildSentOverview(input: {
     bySubscriberGroup: [...subscriberMap.values()].sort((a, b) => b.sent - a.sent || a.name.localeCompare(b.name)),
     newsletters: sentRows.map((row) => ({
       id: row.id,
-      name: row.name,
       subject: resolveNewsletterSubject(row),
       status: row.status,
       sentAt: row.sentAt ?? null,

@@ -163,6 +163,9 @@ export class NewsletterDetailStore {
     this.draftTemplateId = fields.templateId;
     this.draftTemplateVariables = { ...fields.templateVariables };
     this.draftMessageId = fields.messageId;
+    if (this.newsletter) {
+      this.newsletter = { ...this.newsletter, subject: fields.subject };
+    }
   }
 
   async persistDraft(): Promise<boolean> {

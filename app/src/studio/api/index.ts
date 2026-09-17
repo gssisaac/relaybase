@@ -101,7 +101,6 @@ export type NewsletterStats = {
 
 export type Newsletter = {
   id: string;
-  name: string;
   slug: string;
   description: string | null;
   subscriberGroupId: string | null;
@@ -196,7 +195,6 @@ export type AccountSentOverview = {
   }[];
   newsletters: Array<{
     id: string;
-    name: string;
     subject: string;
     status: NewsletterStatus;
     sentAt: string | null;
@@ -265,7 +263,6 @@ export type StudioOverview = {
   schedule: {
     nextUpcoming: {
       id: string;
-      name: string;
       subject: string;
       scheduledAt: string;
       subscriberGroupName: string | null;
@@ -275,7 +272,6 @@ export type StudioOverview = {
     upcomingCount: number;
     upcomingList: Array<{
       id: string;
-      name: string;
       subject: string;
       scheduledAt: string;
       status: "scheduled" | "sending";
@@ -303,7 +299,7 @@ export type StudioOverview = {
     inProgressCount: number;
     recentSent: Array<{
       id: string;
-      name: string;
+      subject: string;
       sentAt: string;
       recipientCount: number;
       delivered: number;
@@ -586,7 +582,6 @@ export const studioApi = {
   getSentOverview: () => studioFetch<AccountSentOverview>("/studio/newsletters/sent-stats"),
   getInProgressOverview: () => studioFetch<InProgressOverview>("/studio/newsletters/in-progress"),
   createNewsletter: (input: {
-    name?: string;
     domain?: string;
     subscriberGroupId?: string;
     workerUrl?: string;
@@ -600,7 +595,6 @@ export const studioApi = {
   updateNewsletter: (
     id: string,
     input: Partial<{
-      name: string;
       slug: string;
       description: string | null;
       domain: string;

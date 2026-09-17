@@ -22,7 +22,6 @@ export function serializeNewsletter(row: Newsletter) {
   const message = resolveMessage(data, rowMessageId(row));
   return {
     id: row.id,
-    name: row.name,
     slug: row.slug,
     description: row.description ?? null,
     subscriberGroupId: row.subscriberGroupId || null,

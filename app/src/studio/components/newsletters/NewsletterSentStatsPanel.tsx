@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { NewsletterSentOverviewBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
@@ -202,11 +203,11 @@ export function NewsletterSentStatsPanel({ active }: { active: boolean }) {
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="truncate font-medium">{row.name}</p>
+                      <p className="truncate font-medium">{newsletterDisplaySubject(row.subject)}</p>
                       <NewsletterStatusBadge status={row.status} />
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
-                      {row.subscriberGroupName ?? "No subscriber group"} · {row.subject || "No subject"}
+                      {row.subscriberGroupName ?? "No subscriber group"}
                     </p>
                   </div>
                   <div className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">

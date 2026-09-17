@@ -95,7 +95,6 @@ export function HubTemplateUseMenu({
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [newsletterName, setNewsletterName] = useState("");
   const [newsletterSubscriberGroupId, setNewsletterSubscriberGroupId] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
 
@@ -124,7 +123,6 @@ export function HubTemplateUseMenu({
 
   function resetNewsletterForm(mode: NewsletterDialogMode) {
     setNewsletterMode(mode);
-    setNewsletterName(defaultTitle);
     setNewsletterSubscriberGroupId("");
     setScheduleAt("");
     setFormError(null);
@@ -165,13 +163,8 @@ export function HubTemplateUseMenu({
   }
 
   async function handleCreateNewsletter() {
-    const name = newsletterName.trim();
     const subscriberGroupId = newsletterSubscriberGroupId.trim();
     const domain = resolveGroupDomain(subscriberGroups, subscriberGroupId);
-    if (!name) {
-      setFormError("Newsletter name is required");
-      return;
-    }
     if (!subscriberGroupId || !domain) {
       setFormError("Select a subscriber group");
       return;
@@ -190,7 +183,6 @@ export function HubTemplateUseMenu({
       if (!snapshot) return;
 
       const newsletter = await createNewsletterFromHubTemplate({
-        name,
         domain,
         subscriberGroupId,
         hubTemplateId,
@@ -211,7 +203,7 @@ export function HubTemplateUseMenu({
         return;
       }
 
-      toast.success(`Newsletter “${newsletter.name}” created`);
+      toast.success(`Newsletter “${newsletter.subject.trim() || "(No subject)"}” created`);
       setNewsletterOpen(false);
       router.push(newsletterDetailHref(newsletter.id, "content"));
     } catch (err) {
@@ -420,15 +412,6 @@ export function HubTemplateUseMenu({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="hub-template-newsletter-name">Name</Label>
-              <Input
-                id="hub-template-newsletter-name"
-                value={newsletterName}
-                onChange={(e) => setNewsletterName(e.target.value)}
-                placeholder={examplePlaceholder("March newsletter")}
-              />
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="hub-template-newsletter-audience">Subscriber group</Label>
               <SubscriberGroupCmdDropdown

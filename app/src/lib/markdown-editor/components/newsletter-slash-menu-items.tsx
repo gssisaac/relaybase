@@ -1,9 +1,12 @@
-import { filterSuggestionItems } from "@blocknote/core/extensions";
+import {
+  filterSuggestionItems,
+  insertOrUpdateBlockForSlashMenu,
+} from "@blocknote/core/extensions";
 import { getDefaultReactSlashMenuItems } from "@blocknote/react";
 
 import {
+  defaultEmailButtonBlockProps,
   emailButtonSlashMenuIcon,
-  insertEmailButtonAtCursor,
 } from "@/lib/markdown-editor/blocks/email-button-block";
 import type { NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 
@@ -18,7 +21,7 @@ export function getNewsletterEditorSlashMenuItems(
       title: "Button",
       subtext: "Email link button (CTA)",
       onItemClick: () => {
-        insertEmailButtonAtCursor(editor);
+        insertOrUpdateBlockForSlashMenu(editor, defaultEmailButtonBlockProps);
       },
       aliases: ["button", "btn", "cta", "link"],
       group: "Email",

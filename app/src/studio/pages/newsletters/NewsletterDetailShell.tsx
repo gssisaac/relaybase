@@ -34,6 +34,7 @@ import type { NewsletterStatus } from "@/studio/api";
 import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import { useNewsletterContentChrome } from "@/studio/pages/newsletters/newsletter-content-chrome";
 import { useDesktopChrome } from "@/lib/desktop/shell";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: NewsletterDetailTab; label: string; icon: LucideIcon }[] = [
@@ -55,14 +56,13 @@ export function NewsletterDetailShell({
 }) {
   const { newsletters } = useStudioPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const { newsletterId, newsletter, notFound, refreshing } = useNewsletterDetail();
+  const { newsletterId, newsletter, draftSubject, notFound, refreshing } = useNewsletterDetail();
   const { settingsSheetOpen, setSettingsSheetOpen } = useNewsletterContentChrome();
   const showContentSave = section === "content" && newsletter?.status === "draft";
 
-  const title =
-    newsletter?.name?.trim() ||
-    newsletter?.subject?.trim() ||
-    (notFound ? "Newsletter not found" : "Untitled newsletter");
+  const title = notFound
+    ? "Newsletter not found"
+    : newsletterDisplaySubject(draftSubject || newsletter?.subject);
 
   const navOrder = newsletterDetailNavTabs(newsletter?.status);
   const navById = new Map(NAV.map((item) => [item.id, item]));

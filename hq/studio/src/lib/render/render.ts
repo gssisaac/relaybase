@@ -28,7 +28,12 @@ export function markdownToHtml(markdown: string): string {
 
 /** Mirrors app/src/lib/markdown-editor/utils/assets.ts newsletterAssetStem (no DOM/browser deps here). */
 function newsletterAssetStem(broadcastId: string): string {
-  return broadcastId.replace(/^broadcast_/, "").slice(0, 32) || "broadcast";
+  return (
+    broadcastId
+      .replace(/^newsletter_/, "")
+      .replace(/^broadcast_/, "")
+      .slice(0, 32) || "newsletter"
+  );
 }
 
 function resolveRelativeNewsletterAssetUrl(

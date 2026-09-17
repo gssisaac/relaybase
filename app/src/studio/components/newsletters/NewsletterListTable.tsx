@@ -5,6 +5,7 @@ import { NewsletterThumbnailPreview } from "@/studio/components/newsletters/News
 import { resolveMessageLayout } from "@/studio/components/messages/MessageThumbnailGrid";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import type { Newsletter, StudioLayout } from "@/studio/api";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import {
   EmailListContainer,
   EmailTableHeader,
@@ -66,7 +67,7 @@ export function NewsletterListTable({
               avatar={
                 <NewsletterListTableThumb newsletter={newsletter} layout={layout} />
               }
-              primary={newsletter.name}
+              primary={newsletterDisplaySubject(newsletter.subject)}
               subject={newsletter.subject.trim() || "No subject"}
               preview={statsLine(newsletter)}
               date={formatListDate(newsletter.updatedAt)}

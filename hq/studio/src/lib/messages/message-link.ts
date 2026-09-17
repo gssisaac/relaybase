@@ -1,5 +1,6 @@
 import { DEV_ACCOUNT_LINK_ID } from "../../db/store";
 import type { StudioDataStore } from "../../db/types";
+import { newsletterSubject } from "../newsletters/subject";
 
 export type MessageLinkedOwner = {
   kind: "trigger" | "newsletter";
@@ -34,7 +35,11 @@ export function resolveMessageLinkedOwner(
     (row) => row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.id === ownerId,
   );
   if (newsletter) {
-    return { kind: "newsletter", id: newsletter.id, name: newsletter.name };
+    return {
+      kind: "newsletter",
+      id: newsletter.id,
+      name: newsletterSubject(data, newsletter) || newsletter.id,
+    };
   }
 
   return null;

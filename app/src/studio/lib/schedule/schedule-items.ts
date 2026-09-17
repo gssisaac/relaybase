@@ -54,7 +54,7 @@ export function upcomingNewsletterScheduleItems(
       id: `newsletter:${b.id}`,
       kind: "newsletter",
       newsletterId: b.id,
-      title: b.name.trim() || "Untitled newsletter",
+      title: b.subject.trim() || "(No subject)",
       subject: b.subject.trim() || "(No subject)",
       subscriberGroupLabel: b.subscriberGroupName,
       recipientCount: b.subscriberContactCount ?? b.subscriberActiveCount,

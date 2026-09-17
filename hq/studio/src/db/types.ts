@@ -134,7 +134,6 @@ export type NewsletterStats = {
 export type Newsletter = {
   id: string;
   accountLinkId: string;
-  name: string;
   slug: string;
   description?: string | null;
   subscriberGroupId: string;

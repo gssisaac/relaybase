@@ -144,7 +144,9 @@ export function StudioAnalyticsView() {
                                 className={cn(overviewInsetItemClassName, "block")}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="truncate text-sm font-medium">{row.name}</p>
+                                  <p className="truncate text-sm font-medium">
+                                    {row.subject || "(No subject)"}
+                                  </p>
                                   <span className="shrink-0 text-xs text-muted-foreground">
                                     {formatOverviewWhen(row.sentAt)}
                                   </span>

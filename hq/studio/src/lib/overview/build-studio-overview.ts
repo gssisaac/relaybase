@@ -3,6 +3,7 @@ import type { Newsletter } from "../../db/types";
 import { subscriberGroupToSummary } from "../subscriber-groups/api-serialize";
 import { buildSentOverview } from "../newsletters/overview";
 import { serializeNewsletter } from "../newsletters/serialize";
+import { requireMessage } from "../messages/resolve";
 
 function rate(part: number, total: number): number {
   if (!total) return 0;
@@ -105,7 +106,6 @@ export function buildScaleOverview() {
   const nextUpcoming = nextRow
     ? {
         id: nextRow.id,
-        name: nextRow.name,
         subject: nextRow.subject,
         scheduledAt: nextRow.scheduledAt ?? nextRow.startedAt ?? nextRow.updatedAt,
         subscriberGroupName: nextRow.subscriberGroupName,
@@ -141,7 +141,7 @@ export function buildScaleOverview() {
     .slice(0, 5)
     .map((row) => ({
       id: row.id,
-      name: row.name,
+      subject: requireMessage(store.read(), row.messageId).subject,
       sentAt: row.sentAt ?? row.finishedAt ?? row.createdAt,
       recipientCount: row.stats.sent,
       delivered: row.stats.delivered,
@@ -227,7 +227,6 @@ export function buildScaleOverview() {
       upcomingCount: upcomingIn7d.length,
       upcomingList: scheduledRows.slice(0, 6).map((row) => ({
         id: row.id,
-        name: row.name,
         subject: row.subject,
         scheduledAt: row.scheduledAt ?? row.startedAt ?? row.updatedAt,
         status: row.status as "scheduled" | "sending",

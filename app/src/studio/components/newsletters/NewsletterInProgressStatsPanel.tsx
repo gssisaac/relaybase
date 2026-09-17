@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { NewsletterInProgressBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
@@ -102,7 +103,7 @@ export function NewsletterInProgressStatsPanel({ active }: { active: boolean }) 
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <CardTitle className="truncate text-sm">{row.newsletter.name}</CardTitle>
+                        <CardTitle className="truncate text-sm">{newsletterDisplaySubject(row.newsletter.subject)}</CardTitle>
                         <CardDescription className="truncate">
                           {row.newsletter.subscriberGroupName ?? "No subscriber group"} ·{" "}
                           {row.newsletter.subject || "No subject"}
@@ -183,7 +184,7 @@ export function NewsletterInProgressStatsPanel({ active }: { active: boolean }) 
                     className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm hover:bg-accent/50"
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{row.name}</p>
+                      <p className="truncate font-medium">{newsletterDisplaySubject(row.subject)}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {row.subscriberGroupName ?? "No subscriber group"} ·{" "}
                         {row.subscriberActiveCount.toLocaleString()} recipients

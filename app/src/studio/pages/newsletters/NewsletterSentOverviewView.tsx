@@ -13,6 +13,7 @@ import {
   NewsletterCloudflareLimitsAlertShowButton,
 } from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
@@ -217,7 +218,7 @@ export function NewsletterSentOverviewView() {
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="truncate font-medium">{row.name}</p>
+                          <p className="truncate font-medium">{newsletterDisplaySubject(row.subject)}</p>
                           <NewsletterStatusBadge status={row.status} />
                         </div>
                         <p className="truncate text-xs text-muted-foreground">

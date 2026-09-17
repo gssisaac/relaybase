@@ -160,8 +160,9 @@ function migrateLegacyAudienceNaming(store: StudioDataStore): boolean {
   return touched;
 }
 
-function normalizeStore(store: StudioDataStore): StudioDataStore {
+function normalizeStore(store: StudioDataStore): { store: StudioDataStore; newsletterNamesStripped: boolean } {
   const now = new Date().toISOString();
+  let newsletterNamesStripped = false;
   if (!store.account.compliance) {
     store.account.compliance = defaultCompliance(now);
   } else {
@@ -207,7 +208,12 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   }
 
   for (const row of store.newsletters) {
-    const legacy = row as Newsletter & { templateId?: string };
+    const legacyRow = row as Newsletter & { templateId?: string; name?: string };
+    if (legacyRow.name !== undefined) {
+      delete legacyRow.name;
+      newsletterNamesStripped = true;
+    }
+    const legacy = legacyRow;
     if (!row.messageId) {
       row.messageId = legacy.templateId ?? messageIdForOwner(row.id);
     }
@@ -326,7 +332,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
     if (row.clickCount === undefined) row.clickCount = 0;
   }
 
-  return store;
+  return { store, newsletterNamesStripped };
 }
 
 function ensureDataDir() {
@@ -375,12 +381,13 @@ function readStore(): StudioDataStore {
       migratedLegacyTemplates = true;
     }
     const legacyAudienceMigrated = migrateLegacyAudienceNaming(parsed);
-    const normalized = normalizeStore(parsed);
+    const { store: normalized, newsletterNamesStripped } = normalizeStore(parsed);
     const repairedOwnerMessages = ensureOwnerMessageFiles(normalized);
     const store = hydrateTemplates(normalized);
     if (
       migratedLegacyTemplates ||
       legacyAudienceMigrated ||
+      newsletterNamesStripped ||
       ensureDevScheduleFixtures(store) ||
       repairedOwnerMessages
     ) {

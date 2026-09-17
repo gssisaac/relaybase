@@ -178,7 +178,6 @@ export function NewslettersListView() {
 
       if (!q) return true;
       return (
-        b.name.toLowerCase().includes(q) ||
         b.slug.toLowerCase().includes(q) ||
         b.subject.toLowerCase().includes(q) ||
         (b.subscriberGroupName && b.subscriberGroupName.toLowerCase().includes(q))

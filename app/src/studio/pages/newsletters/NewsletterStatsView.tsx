@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import {
   useNewsletterDetail,
@@ -204,7 +205,7 @@ export function NewsletterStatsView() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => downloadRecipientsCsv(newsletter.name, recipients)}
+            onClick={() => downloadRecipientsCsv(newsletterDisplaySubject(newsletter.subject), recipients)}
           >
             <Download className="size-4" />
             Export CSV

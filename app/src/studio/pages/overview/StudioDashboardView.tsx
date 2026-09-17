@@ -116,8 +116,7 @@ export function StudioDashboardView() {
                       {nextScheduled ? (
                         <div className={overviewInsetHighlightClassName}>
                           <p className="text-xs font-medium text-muted-foreground">Next scheduled broadcast</p>
-                          <p className="font-medium">{nextScheduled.name}</p>
-                          <p className="text-xs text-muted-foreground">{nextScheduled.subject}</p>
+                          <p className="font-medium">{nextScheduled.subject || "(No subject)"}</p>
                           <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                             {formatOverviewWhen(nextScheduled.scheduledAt)} ·{" "}
                             {nextScheduled.subscriberGroupName ?? "Subscriber group"} ·{" "}
@@ -137,7 +136,9 @@ export function StudioDashboardView() {
                                 "flex items-center justify-between gap-2 text-sm",
                               )}
                             >
-                              <span className="min-w-0 truncate font-medium">{row.name}</span>
+                              <span className="min-w-0 truncate font-medium">
+                                {row.subject || "(No subject)"}
+                              </span>
                               <div className="flex shrink-0 items-center gap-2">
                                 <NewsletterStatusBadge status={row.status} />
                                 <span className="text-xs text-muted-foreground">

@@ -6,7 +6,7 @@ import {
   useCreateBlockNote,
   type FloatingUIOptions,
 } from "@blocknote/react";
-import { BlockNoteView } from "@blocknote/shadcn";
+import { MarkdownBlockNoteView } from "@/lib/markdown-editor/components/MarkdownBlockNoteView";
 import { autoPlacement, offset, shift, size } from "@floating-ui/react";
 import { useTheme } from "next-themes";
 import {
@@ -471,7 +471,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       onClick={openExternalLink}
     >
       {ready ? (
-        <BlockNoteView
+        <MarkdownBlockNoteView
           editor={editor}
           editable={editable}
           sideMenu={false}
@@ -487,7 +487,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
             shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
           />
           <TableHandlesController tableHandle={TableHandleWithIcons} />
-        </BlockNoteView>
+        </MarkdownBlockNoteView>
       ) : (
         <div className="min-h-[12rem]" aria-hidden />
       )}

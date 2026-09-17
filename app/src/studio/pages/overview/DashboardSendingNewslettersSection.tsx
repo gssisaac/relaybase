@@ -9,6 +9,7 @@ import { NewsletterStatusBadge } from "@/studio/components/newsletters/Newslette
 import { DashboardNewsletterDispatchStats } from "@/studio/pages/overview/DashboardNewsletterDispatchStats";
 import { studioApi, type InProgressOverview } from "@/studio/api";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 5_000;
@@ -74,11 +75,10 @@ export function DashboardSendingNewslettersSection() {
                     href={newsletterDetailHref(row.newsletter.id, "publish")}
                     className="truncate text-sm font-semibold hover:underline"
                   >
-                    {row.newsletter.name}
+                    {newsletterDisplaySubject(row.newsletter.subject)}
                   </Link>
                   <p className="truncate text-xs text-muted-foreground">
-                    {row.newsletter.subscriberGroupName ?? "Subscriber group"} ·{" "}
-                    {row.newsletter.subject || "No subject"}
+                    {row.newsletter.subscriberGroupName ?? "Subscriber group"}
                   </p>
                 </div>
                 <NewsletterStatusBadge status={row.newsletter.status} />

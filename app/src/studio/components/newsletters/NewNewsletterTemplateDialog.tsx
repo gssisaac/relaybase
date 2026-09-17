@@ -76,11 +76,16 @@ export function NewNewsletterTemplateDialog({
     setCreating(false);
   }
 
-  function pickTemplate(next: NewsletterTemplatePick) {
+  function pickTemplate(next: StudioTemplate) {
     setSelection(next);
     setStep("preview");
     setPreviewHtml("");
     setFormError(null);
+  }
+
+  function displaySubject(subject: string | null | undefined, fallback = "(No subject)") {
+    const trimmed = subject?.trim();
+    return trimmed || fallback;
   }
 
   function backToGallery() {
@@ -114,7 +119,6 @@ export function NewNewsletterTemplateDialog({
     );
   }, [templates, search]);
 
-  const blankSelected = selection === "blank";
   const templateSelected = selection && selection !== "blank" ? selection : null;
 
   const { plainTextTemplate, previewSubject, renderedPreview, PREVIEW_RECIPIENT } =
@@ -124,14 +128,15 @@ export function NewNewsletterTemplateDialog({
       previewHtml,
     });
 
-  async function handleCreate() {
-    if (!selection) return;
+  async function handleCreate(override?: NewsletterTemplatePick) {
+    const picked = override ?? selection;
+    if (!picked) return;
 
     setCreating(true);
     setFormError(null);
     try {
       const workerUrl = resolveEmailApiBase();
-      if (selection === "blank") {
+      if (picked === "blank") {
         const created = await studioApi.createNewsletter({
           ...(workerUrl ? { workerUrl } : {}),
         });
@@ -144,8 +149,8 @@ export function NewNewsletterTemplateDialog({
       }
 
       const created = await createNewsletterFromHubTemplate({
-        hubTemplateId: selection.id,
-        snapshot: catalogTemplateSnapshot(selection),
+        hubTemplateId: picked.id,
+        snapshot: catalogTemplateSnapshot(picked),
       });
       toast.success("Newsletter created");
       newslettersHubStore.upsertNewsletter(created);
@@ -161,11 +166,9 @@ export function NewNewsletterTemplateDialog({
 
   const canCreate = step === "preview" && selection !== null && !creating;
 
-  const previewTitle =
-    blankSelected ? "Blank newsletter" : (templateSelected?.name ?? "New newsletter");
-  const previewSubtitle = blankSelected
-    ? "Empty subject and body"
-    : (templateSelected?.subject ?? "");
+  const previewSubjectLine = templateSelected
+    ? displaySubject(templateSelected.subject)
+    : "(No subject)";
 
   return (
     <Dialog
@@ -199,7 +202,7 @@ export function NewNewsletterTemplateDialog({
               </Button>
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <DialogTitle className="truncate text-sm font-semibold">{previewTitle}</DialogTitle>
+                  <DialogTitle className="truncate text-sm font-semibold">{previewSubjectLine}</DialogTitle>
                   {templateSelected ? (
                     <div className="flex items-center gap-1">
                       <Button
@@ -225,8 +228,10 @@ export function NewNewsletterTemplateDialog({
                     </div>
                   ) : null}
                 </div>
-                {previewSubtitle ? (
-                  <DialogDescription className="truncate">{previewSubtitle}</DialogDescription>
+                {templateSelected?.category ? (
+                  <DialogDescription className="truncate">
+                    {templateSelected.category.replaceAll("_", " ")}
+                  </DialogDescription>
                 ) : null}
                 {templateSelected ? (
                   <p className="text-xs text-muted-foreground">
@@ -268,16 +273,19 @@ export function NewNewsletterTemplateDialog({
                       <li className="min-w-0">
                         <button
                           type="button"
-                          onClick={() => pickTemplate("blank")}
-                          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:border-primary/40 hover:shadow-sm"
+                          disabled={creating}
+                          onClick={() => void handleCreate("blank")}
+                          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:border-primary/40 hover:shadow-sm disabled:pointer-events-none disabled:opacity-60"
                         >
                           <div className="flex aspect-[640/452] w-full flex-col items-center justify-center gap-2 bg-muted/30">
                             <FilePlus2 className="size-8 text-muted-foreground" aria-hidden />
-                            <span className="text-xs font-medium text-muted-foreground">Blank newsletter</span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {creating ? "Creating…" : "Blank newsletter"}
+                            </span>
                           </div>
                           <div className="space-y-0.5 border-t px-3 py-2.5">
-                            <p className="truncate text-sm font-medium">Start from scratch</p>
-                            <p className="truncate text-xs text-muted-foreground">Empty subject and body</p>
+                            <p className="truncate text-sm font-medium">(No subject)</p>
+                            <p className="truncate text-xs text-muted-foreground">Start from scratch</p>
                           </div>
                         </button>
                       </li>
@@ -303,7 +311,9 @@ export function NewNewsletterTemplateDialog({
                                 isPreset
                               />
                               <div className="space-y-0.5 border-t px-3 py-2.5">
-                                <p className="truncate text-sm font-medium">{template.name}</p>
+                                <p className="truncate text-sm font-medium">
+                                  {displaySubject(template.subject, template.name)}
+                                </p>
                                 <p className="truncate text-xs text-muted-foreground">
                                   {template.category?.replaceAll("_", " ") ?? "Catalog"}
                                 </p>
@@ -348,24 +358,14 @@ export function NewNewsletterTemplateDialog({
                     previewIsPlainText={plainTextTemplate}
                     device={previewDevice}
                   />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                    <FilePlus2 className="size-10 text-muted-foreground" aria-hidden />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Start from scratch</p>
-                      <p className="text-xs text-muted-foreground">
-                        Your newsletter will have an empty subject and body.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           )}
         </div>
 
-        <DialogFooter className="shrink-0 flex-col items-stretch gap-2 border-t px-4 py-3 sm:flex-row sm:items-center">
-          {formError ? <p className="mr-auto text-xs text-destructive sm:mb-0">{formError}</p> : null}
+        <DialogFooter className="mx-0 mb-0 shrink-0 flex-row items-center justify-end gap-2 border-t bg-background px-4 py-3">
+          {formError ? <p className="mr-auto text-xs text-destructive">{formError}</p> : null}
           <Button
             type="button"
             variant="outline"

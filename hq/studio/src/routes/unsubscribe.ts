@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { store } from "../db/store";
+import { newsletterSubject } from "../lib/newsletters/subject";
 import { unsubscribeHtmlPage, unsubscribePath } from "../lib/unsubscribe/html-page";
 import {
   lookupUnsubscribeContact,
@@ -7,6 +9,13 @@ import {
 } from "../lib/unsubscribe/perform";
 
 export const studioUnsubscribe = new Hono();
+
+function newsletterListLabel(broadcastId: string): string {
+  const broadcast = store.read().newsletters.find((row) => row.id === broadcastId);
+  if (!broadcast) return "this list";
+  const subject = newsletterSubject(store.read(), broadcast).trim();
+  return subject || "this list";
+}
 
 // GET — confirmation only (no side effects; avoids prefetch auto-unsubscribe)
 studioUnsubscribe.get("/:broadcastId/:token", (c) => {
@@ -30,7 +39,7 @@ studioUnsubscribe.get("/:broadcastId/:token", (c) => {
     return c.body(
       unsubscribeHtmlPage({
         heading: "Already unsubscribed",
-        subtext: `${contact.email} is not on '${broadcast?.name ?? "this list"}'.`,
+        subtext: `${contact.email} is not on '${newsletterListLabel(broadcastId)}'.`,
       }),
     );
   }
@@ -39,7 +48,7 @@ studioUnsubscribe.get("/:broadcastId/:token", (c) => {
   return c.body(
     unsubscribeHtmlPage({
       heading: "Unsubscribe?",
-      subtext: `${contact.email} will stop receiving '${broadcast?.name ?? "this list"}'.`,
+      subtext: `${contact.email} will stop receiving '${newsletterListLabel(broadcastId)}'.`,
       formAction: unsubscribePath(broadcastId, token),
       footer: `<footer><a class="link" href="${unsubscribePath(broadcastId, token)}/resubscribe">Unsubscribed by mistake?</a></footer>`,
     }),
@@ -92,7 +101,7 @@ studioUnsubscribe.get("/:broadcastId/:token/resubscribe", (c) => {
   return c.body(
     unsubscribeHtmlPage({
       heading: "You're resubscribed",
-      subtext: `${contact.email} will receive emails from '${broadcast?.name ?? "this list"}' again.`,
+      subtext: `${contact.email} will receive emails from '${newsletterListLabel(broadcastId)}' again.`,
     }),
   );
 });

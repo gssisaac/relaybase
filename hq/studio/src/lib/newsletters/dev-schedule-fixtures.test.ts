@@ -24,7 +24,6 @@ function newsletter(id: string): Newsletter {
   return {
     id,
     accountLinkId: "dev",
-    name: id,
     slug: id,
     description: null,
     subscriberGroupId: "subscriber_x",

@@ -8,6 +8,7 @@ import { newsletterDetailHref } from "@/studio/lib/paths";
 import { resolveMessageLayout } from "@/studio/components/messages/MessageThumbnailGrid";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
 import type { Newsletter, StudioLayout } from "@/studio/api";
+import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
 import { cn } from "@/lib/utils";
 
 function formatCardDate(value: string): string {
@@ -43,9 +44,8 @@ export function NewsletterThumbnailGrid({
                   layout={layout}
                 />
                 <div className="space-y-1.5 border-t px-3 py-2.5">
-                  <p className="truncate text-sm font-medium">{newsletter.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {newsletter.subject.trim() || "No subject"}
+                  <p className="truncate text-sm font-medium">
+                    {newsletterDisplaySubject(newsletter.subject)}
                   </p>
                   <p className="line-clamp-2 text-xs text-muted-foreground">{statsLine(newsletter)}</p>
                 </div>

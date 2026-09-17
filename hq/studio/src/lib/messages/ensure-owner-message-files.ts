@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { Message, StudioDataStore } from "../../db/types";
+import { requireMessage } from "./resolve";
 import { messageFileStore } from "./message-file-store";
 
 function messageYamlPath(messageId: string): string {
@@ -46,7 +47,8 @@ export function ensureOwnerMessageFiles(store: StudioDataStore): boolean {
     ensure(row.messageId, row.name, row.accountLinkId, row.createdAt);
   }
   for (const row of store.newsletters) {
-    ensure(row.messageId, row.name, row.accountLinkId, row.createdAt);
+    const subject = row.messageId ? requireMessage(store, row.messageId).subject : "";
+    ensure(row.messageId, subject.trim() || row.id, row.accountLinkId, row.createdAt);
   }
 
   return repaired;

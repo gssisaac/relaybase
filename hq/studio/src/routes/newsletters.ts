@@ -79,7 +79,6 @@ studioNewsletters.get("/in-progress", (c) => {
 // POST /studio/broadcasts { name, subscriberGroupId, ... }
 studioNewsletters.post("/", async (c) => {
   let body: {
-    name?: string;
     domain?: string;
     workerUrl?: string;
     subscriberGroupId?: string;
@@ -95,7 +94,6 @@ studioNewsletters.post("/", async (c) => {
     /* empty */
   }
 
-  const name = body.name?.trim() || "Untitled newsletter";
   const subscriberGroupId = body.subscriberGroupId?.trim() || "";
   let domain = body.domain?.trim().toLowerCase() || "";
   let subscriberGroup = subscriberGroupId ? findSubscriberGroup(subscriberGroupId) : undefined;
@@ -119,16 +117,18 @@ studioNewsletters.post("/", async (c) => {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
   }
 
+  const id = newId("newsletter");
   const data = store.read();
-  const baseSlug = slugifyNewsletter(body.slug?.trim() || name) || newId("broadcast").slice(0, 12);
+  const baseSlug =
+    slugifyNewsletter(body.slug?.trim() || "") ||
+    id.replace(/^newsletter_/, "").slice(0, 12) ||
+    newId("newsletter").slice(0, 12);
   let slug = baseSlug;
   let suffix = 2;
   while (data.newsletters.some((row) => row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.slug === slug)) {
     slug = `${baseSlug}-${suffix}`;
     suffix += 1;
   }
-
-  const id = newId("broadcast");
   const now = new Date().toISOString();
   let created: Newsletter | null = null;
   store.update((draft) => {
@@ -137,7 +137,7 @@ studioNewsletters.post("/", async (c) => {
       {
         ownerId: id,
         accountLinkId: DEV_ACCOUNT_LINK_ID,
-        name,
+        name: "",
         layoutId: body.defaultLayoutId || "tpl-minimal",
       },
       now,
@@ -145,7 +145,6 @@ studioNewsletters.post("/", async (c) => {
     created = {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
-      name,
       slug,
       description: null,
       subscriberGroupId,
@@ -187,7 +186,6 @@ studioNewsletters.patch("/:id", async (c) => {
   if (!existing) return c.json({ error: "not found" }, 404);
 
   let body: {
-    name?: string;
     slug?: string;
     description?: string | null;
     domain?: string;
@@ -292,7 +290,7 @@ studioNewsletters.patch("/:id", async (c) => {
       const sendingMessage = requireMessage(store.read(), sending.messageId);
       return c.json(
         {
-          error: `Cannot archive broadcast while '${sendingMessage.subject || sending.name}' is currently sending.`,
+          error: `Cannot archive broadcast while '${sendingMessage.subject || "a newsletter"}' is currently sending.`,
         },
         409,
       );
@@ -315,7 +313,6 @@ studioNewsletters.patch("/:id", async (c) => {
       draft,
       prev.messageId,
       {
-        name: body.name?.trim(),
         subject: body.subject,
         previewText: body.previewText,
         bodyMarkdown: body.bodyMarkdown,
@@ -350,7 +347,6 @@ studioNewsletters.patch("/:id", async (c) => {
     draft.newsletters[idx] = {
       ...prev,
       subscriberGroupId: nextSubscriberGroupId,
-      name: body.name?.trim() || prev.name,
       slug: body.slug?.trim() ? slugifyNewsletter(body.slug) : prev.slug,
       description: body.description !== undefined ? body.description : prev.description,
       domain: domainPatch ?? prev.domain,
@@ -569,7 +565,7 @@ studioNewsletters.post("/:id/duplicate", (c) => {
   const source = findNewsletter(c.req.param("id")!);
   if (!source) return c.json({ error: "not found" }, 404);
 
-  const id = newId("broadcast");
+  const id = newId("newsletter");
   const now = new Date().toISOString();
   const baseSlug = `${source.slug}-copy`;
   let slug = baseSlug;
@@ -587,7 +583,7 @@ studioNewsletters.post("/:id/duplicate", (c) => {
       {
         ownerId: id,
         accountLinkId: DEV_ACCOUNT_LINK_ID,
-        name: `${source.name} (copy)`,
+        name: "",
         layoutId: sourceMessage.layoutId,
       },
       now,
@@ -596,7 +592,9 @@ studioNewsletters.post("/:id/duplicate", (c) => {
       draft,
       message.id,
       {
-        subject: sourceMessage.subject,
+        subject: sourceMessage.subject.trim()
+          ? `${sourceMessage.subject} (copy)`
+          : sourceMessage.subject,
         previewText: sourceMessage.previewText,
         bodyMarkdown: sourceMessage.bodyMarkdown,
         templateVariables: sourceMessage.templateVariables,
@@ -606,7 +604,6 @@ studioNewsletters.post("/:id/duplicate", (c) => {
     created = {
       ...source,
       id,
-      name: `${source.name} (copy)`,
       slug,
       messageId: message.id,
       status: "draft",

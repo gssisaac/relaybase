@@ -57,6 +57,7 @@ type NewsletterDetailHookValue = {
   syncDraft: (fields: NewsletterDraftFields) => void;
   persistDraft: () => Promise<boolean>;
   getLastSavedDraft: () => NewsletterDraftFields;
+  draftSubject: string;
 };
 
 /**
@@ -71,6 +72,7 @@ export function useNewsletterDetail(): NewsletterDetailHookValue {
       () => ({
         newsletterId: store.newsletterId,
         newsletter: store.newsletter,
+        draftSubject: store.draftSubject,
         templates: store.templates,
         subscriberMembers: store.subscriberMembers,
         loading: store.loading,
@@ -98,6 +100,7 @@ export function useNewsletterDetail(): NewsletterDetailHookValue {
     syncDraft: store.syncDraft,
     persistDraft: store.persistDraft,
     getLastSavedDraft: store.getLastSavedDraft,
+    draftSubject: store.draftSubject,
   };
 }
 

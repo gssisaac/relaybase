@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -11,47 +11,30 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { CF_EMAIL_SENDING_LIMITS_URL } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
-import { studioApi, type StudioOverview } from "@/studio/api";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
+import { useAnalytics } from "@/studio/stores/analytics";
 import { cn } from "@/lib/utils";
 
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
 import { formatOverviewWhen, overviewInsetItemClassName } from "./overview-inset-styles";
+import { StudioAnalyticsSkeleton } from "./StudioAnalyticsSkeleton";
 import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 import { StudioOverviewTopSection } from "./StudioOverviewTopSection";
 
 export function StudioAnalyticsView() {
   const { schedule, newsletters, triggers, subscribers } = useStudioPaths();
   const templateBrowseHref = `${newsletters}?new=1`;
-  const [data, setData] = useState<StudioOverview | null>(null);
-  const [templateCount, setTemplateCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const next = await studioApi.getOverview();
-      setData(next);
-    } catch {
-      toast.error("Could not load Studio analytics — is hq/studio running on port 32832?");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const analytics = useAnalytics();
+  const data = analytics.data;
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    void studioApi
-      .listTemplates()
-      .then((res) => setTemplateCount(res.templates.length))
-      .catch(() => setTemplateCount(0));
-  }, [data?.generatedAt]);
+    analytics.ensureLoaded().catch(() => {
+      toast.error(
+        analytics.loadError ??
+          "Could not load Studio analytics — is hq/studio running on port 32832?",
+      );
+    });
+  }, [analytics]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -61,10 +44,20 @@ export function StudioAnalyticsView() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing || loading}
+            onClick={() => {
+              void analytics.refresh({ force: true }).catch(() => {
+                toast.error(
+                  analytics.loadError ??
+                    "Could not load Studio analytics — is hq/studio running on port 32832?",
+                );
+              });
+            }}
+            disabled={analytics.fetching && !data}
           >
-            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden />
+            <RefreshCw
+              className={cn("size-3.5", analytics.isRefreshing && "animate-spin")}
+              aria-hidden
+            />
             Refresh
           </Button>
         }
@@ -81,9 +74,7 @@ export function StudioAnalyticsView() {
       </DesktopTitleBar>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
-          {loading && !data ? (
-            <p className="text-sm text-muted-foreground">Loading analytics…</p>
-          ) : null}
+          {analytics.showPlaceholder ? <StudioAnalyticsSkeleton /> : null}
 
           {data ? (
             <>
@@ -95,7 +86,6 @@ export function StudioAnalyticsView() {
                   triggers,
                   newsletters,
                   subscribers,
-                  templateCount,
                 }}
               />
 
@@ -213,7 +203,7 @@ export function StudioAnalyticsView() {
             </>
           ) : null}
 
-          {!loading && !data ? (
+          {!analytics.fetching && !data ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 Analytics unavailable. Start hq/studio and refresh.

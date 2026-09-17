@@ -2,7 +2,6 @@ import { isStudioApiRequest } from "../studio-origin/index";
 
 const STUDIO_UI_GET_PATHS = new Set([
   "/studio",
-  "/studio/overview",
   "/studio/dashboard",
   "/studio/analytics",
   "/studio/subscribers",
@@ -80,7 +79,7 @@ export function shouldProxyRequestToStudio(pathname: string, method: string, hea
   if (pathname.startsWith("/studio/brand/")) return true;
   if (pathname.startsWith("/studio/assets/")) return true;
 
-  if (pathname === "/studio/overview") {
+  if (pathname === "/studio/dashboard" || pathname === "/studio/analytics") {
     if (method !== "GET") return true;
     if (isStudioApiRequest(headers)) return true;
     return false;

@@ -31,7 +31,7 @@ export function useDashboard(): DashboardStore {
   React.useEffect(() => {
     return reaction(
       () => ({
-        data: store.data,
+        dataEpoch: store.dataEpoch,
         fetching: store.fetching,
         loadError: store.loadError,
         showPlaceholder: store.showPlaceholder,

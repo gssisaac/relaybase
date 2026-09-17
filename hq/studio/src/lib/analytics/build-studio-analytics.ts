@@ -1,9 +1,8 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
 import type { Newsletter } from "../../db/types";
-import { subscriberGroupToSummary } from "../subscriber-groups/api-serialize";
 import { buildSentOverview } from "../newsletters/overview";
-import { serializeNewsletter } from "../newsletters/serialize";
 import { requireMessage } from "../messages/resolve";
+import { templateCatalogStore } from "../templates/template-catalog-store";
 
 function rate(part: number, total: number): number {
   if (!total) return 0;
@@ -38,7 +37,7 @@ function clickRateForBroadcast(row: Newsletter): number {
   return rate(row.stats.clicked, row.stats.delivered);
 }
 
-export function buildScaleOverview() {
+export function buildStudioAnalytics() {
   const data = store.read();
   const accountId = DEV_ACCOUNT_LINK_ID;
   const now = Date.now();
@@ -46,7 +45,6 @@ export function buildScaleOverview() {
   const since24h = new Date(now - dayMs).toISOString();
   const since7d = new Date(now - 7 * dayMs).toISOString();
   const since30d = new Date(now - 30 * dayMs).toISOString();
-  const in7d = new Date(now + 7 * dayMs).toISOString();
 
   const broadcasts = data.newsletters.filter((b) => b.accountLinkId === accountId && b.listStatus === "active");
   const automations = data.triggers.filter((a) => a.accountLinkId === accountId && a.listStatus === "active");
@@ -71,48 +69,16 @@ export function buildScaleOverview() {
 
   let totalContacts = 0;
   let healthActive = 0;
-  let healthUnsubscribed = 0;
-  let healthBounced = 0;
   for (const group of groups) {
     for (const contact of group.contacts) {
       totalContacts += 1;
-      if (contact.sendStatus === "unsubscribed") healthUnsubscribed += 1;
-      else if (contact.sendStatus === "bounced") healthBounced += 1;
-      else healthActive += 1;
+      if (contact.sendStatus !== "unsubscribed" && contact.sendStatus !== "bounced") {
+        healthActive += 1;
+      }
     }
   }
 
-  const scheduledRows = broadcasts
-    .filter((b) => b.status === "scheduled" || b.status === "sending")
-    .map((row) => serializeNewsletter(row))
-    .sort((a, b) => {
-      const aAt = a.scheduledAt ?? a.startedAt ?? a.updatedAt;
-      const bAt = b.scheduledAt ?? b.startedAt ?? b.updatedAt;
-      return aAt.localeCompare(bAt);
-    });
-
-  const upcomingIn7d = scheduledRows.filter((row) => {
-    const at = row.scheduledAt ?? row.startedAt;
-    if (!at) return row.status === "sending";
-    return at <= in7d;
-  });
-
-  const nextRow = scheduledRows.find((row) => {
-    if (row.status === "sending") return true;
-    const at = row.scheduledAt;
-    return at && new Date(at).getTime() >= now;
-  });
-
-  const nextUpcoming = nextRow
-    ? {
-        id: nextRow.id,
-        subject: nextRow.subject,
-        scheduledAt: nextRow.scheduledAt ?? nextRow.startedAt ?? nextRow.updatedAt,
-        subscriberGroupName: nextRow.subscriberGroupName,
-        recipientCount: nextRow.subscriberContactCount ?? nextRow.subscriberActiveCount ?? 0,
-        status: nextRow.status,
-      }
-    : null;
+  const scheduledRows = broadcasts.filter((b) => b.status === "scheduled" || b.status === "sending");
 
   const automationById = new Map(automations.map((a) => [a.id, a]));
   const events24h = triggerEvents.filter((e) => e.occurredAt >= since24h);
@@ -133,7 +99,7 @@ export function buildScaleOverview() {
     });
 
   const draftCount = broadcasts.filter((b) => b.status === "draft").length;
-  const inProgressCount = broadcasts.filter((b) => b.status === "scheduled" || b.status === "sending").length;
+  const inProgressCount = scheduledRows.length;
 
   const recentSent = broadcasts
     .filter((b) => b.status === "sent")
@@ -141,7 +107,7 @@ export function buildScaleOverview() {
     .slice(0, 5)
     .map((row) => ({
       id: row.id,
-      subject: requireMessage(store.read(), row.messageId).subject,
+      subject: requireMessage(data, row.messageId).subject,
       sentAt: row.sentAt ?? row.finishedAt ?? row.createdAt,
       recipientCount: row.stats.sent,
       delivered: row.stats.delivered,
@@ -164,13 +130,6 @@ export function buildScaleOverview() {
     usedToday += 1;
   }
 
-  const failedSyncGroups = groups.filter((g) => g.dataSource && g.lastSyncStatus === "error").length;
-  const lastSyncAt = groups
-    .map((g) => g.lastSyncAt)
-    .filter((v): v is string => Boolean(v))
-    .sort()
-    .at(-1) ?? null;
-
   const sendsByWeek = sentOverview.byWeek.slice(-8).map((row) => ({
     weekStart: row.weekStart,
     label: formatWeekLabel(row.weekStart),
@@ -178,6 +137,15 @@ export function buildScaleOverview() {
     opened: row.opened,
     clicked: row.clicked,
   }));
+
+  let healthUnsubscribed = 0;
+  let healthBounced = 0;
+  for (const group of groups) {
+    for (const contact of group.contacts) {
+      if (contact.sendStatus === "unsubscribed") healthUnsubscribed += 1;
+      else if (contact.sendStatus === "bounced") healthBounced += 1;
+    }
+  }
 
   const subscriberHealthChart = [
     { key: "active", label: "Active", count: healthActive },
@@ -212,6 +180,7 @@ export function buildScaleOverview() {
 
   return {
     generatedAt: new Date(now).toISOString(),
+    templateCount: templateCatalogStore.listAll().length,
     summary: {
       totalContacts,
       activeTriggers: automations.filter((a) => a.status === "active").length,
@@ -221,17 +190,6 @@ export function buildScaleOverview() {
       avgOpenRate: sentOverview.rates.open,
       avgClickRate: sentOverview.rates.click,
       deliverableRate,
-    },
-    schedule: {
-      nextUpcoming,
-      upcomingCount: upcomingIn7d.length,
-      upcomingList: scheduledRows.slice(0, 6).map((row) => ({
-        id: row.id,
-        subject: row.subject,
-        scheduledAt: row.scheduledAt ?? row.startedAt ?? row.updatedAt,
-        status: row.status as "scheduled" | "sending",
-        subscriberGroupName: row.subscriberGroupName,
-      })),
     },
     triggers: {
       totalCount: automations.length,
@@ -251,22 +209,6 @@ export function buildScaleOverview() {
         percentUsed: null,
       },
     },
-    subscribers: {
-      groupCount: groups.length,
-      health: {
-        active: healthActive,
-        unsubscribed: healthUnsubscribed,
-        bounced: healthBounced,
-      },
-      recentSyncStatus: {
-        lastSyncAt,
-        failedGroupsCount: failedSyncGroups,
-      },
-      groups: groups
-        .map(subscriberGroupToSummary)
-        .sort((a, b) => b.contactCount - a.contactCount || a.name.localeCompare(b.name))
-        .slice(0, 6),
-    },
     charts: {
       sendsByWeek,
       subscriberHealth: subscriberHealthChart,
@@ -276,4 +218,4 @@ export function buildScaleOverview() {
   };
 }
 
-export type StudioOverviewPayload = ReturnType<typeof buildScaleOverview>;
+export type StudioAnalyticsPayload = ReturnType<typeof buildStudioAnalytics>;

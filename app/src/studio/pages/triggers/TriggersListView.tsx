@@ -35,13 +35,8 @@ import {
 import { triggerDetailHref } from "@/studio/lib/paths";
 import { NewTriggerDialog } from "@/studio/pages/triggers/NewTriggerDialog";
 import { TriggersOverviewTopSection } from "@/studio/pages/triggers/TriggersOverviewTopSection";
-import {
-  studioApi,
-  StudioApiError,
-  type Trigger,
-  type TriggerStatus,
-  type StudioOverview,
-} from "@/studio/api";
+import { studioApi, StudioApiError, type Trigger, type TriggerStatus } from "@/studio/api";
+import { useAnalyticsSession } from "@/studio/stores/analytics";
 import { cn } from "@/lib/utils";
 import {
   EmailListContainer,
@@ -66,10 +61,9 @@ function triggerRowLabel(row: Trigger): string {
 
 export function TriggersListView() {
   const router = useRouter();
+  const analytics = useAnalyticsSession();
   const [rows, setRows] = useState<Trigger[]>([]);
-  const [overview, setOverview] = useState<StudioOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [overviewLoading, setOverviewLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TriggerFilter>("all");
@@ -79,13 +73,11 @@ export function TriggersListView() {
 
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
-    else {
-      setLoading(true);
-      setOverviewLoading(true);
-    }
-    const [listResult, overviewResult] = await Promise.allSettled([
+    else setLoading(true);
+
+    const [listResult, analyticsResult] = await Promise.allSettled([
       studioApi.listTriggers(),
-      studioApi.getOverview(),
+      force ? analytics.refresh({ force: true }) : analytics.ensureLoaded(),
     ]);
 
     if (listResult.status === "fulfilled") {
@@ -95,16 +87,13 @@ export function TriggersListView() {
       toast.error("Could not load triggers");
     }
 
-    if (overviewResult.status === "fulfilled") {
-      setOverview(overviewResult.value);
-    } else if (!force) {
-      toast.error("Could not load overview stats — is hq/studio running on port 32832?");
+    if (analyticsResult.status === "rejected" && !force && !analytics.data) {
+      toast.error("Could not load analytics stats — is hq/studio running on port 32832?");
     }
 
     setLoading(false);
-    setOverviewLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [analytics]);
 
   useEffect(() => {
     void load();
@@ -190,12 +179,12 @@ export function TriggersListView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
-          {overviewLoading && !overview ? (
+          {analytics.showPlaceholder && !analytics.data ? (
             <p className="text-sm text-muted-foreground">Loading stats…</p>
           ) : null}
-          {overview ? (
+          {analytics.data ? (
             <TriggersOverviewTopSection
-              data={overview}
+              data={analytics.data}
               filter={filter}
               onFilterChange={setFilter}
             />

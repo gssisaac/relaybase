@@ -1,5 +1,10 @@
 import { StudioAnalyticsView } from "@/studio/pages/overview/StudioAnalyticsView";
+import { AnalyticsProvider } from "@/studio/stores/analytics";
 
 export default function StudioAnalyticsPage() {
-  return <StudioAnalyticsView />;
+  return (
+    <AnalyticsProvider>
+      <StudioAnalyticsView />
+    </AnalyticsProvider>
+  );
 }

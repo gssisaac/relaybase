@@ -3,7 +3,7 @@
 import { CalendarClock, LayoutTemplate, Mail, Users, Zap } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { StudioOverview } from "@/studio/api";
+import type { StudioAnalytics } from "@/studio/api";
 
 import { formatOverviewCompact, OverviewKpiCard } from "./OverviewKpiCard";
 import {
@@ -13,21 +13,20 @@ import {
   StudioOverviewTriggersChart,
 } from "./StudioOverviewCharts";
 
-type StudioOverviewPaths = {
+type StudioAnalyticsPaths = {
   schedule: string;
   templateBrowseHref: string;
   triggers: string;
   newsletters: string;
   subscribers: string;
-  templateCount: number;
 };
 
 export function StudioOverviewTopSection({
   data,
   paths,
 }: {
-  data: StudioOverview;
-  paths: StudioOverviewPaths;
+  data: StudioAnalytics;
+  paths: StudioAnalyticsPaths;
 }) {
   const { summary } = data;
 
@@ -38,7 +37,7 @@ export function StudioOverviewTopSection({
           href={paths.templateBrowseHref}
           icon={LayoutTemplate}
           label="Templates"
-          value={String(paths.templateCount)}
+          value={String(data.templateCount)}
           hint="Catalog blueprints for new campaigns"
         />
         <OverviewKpiCard

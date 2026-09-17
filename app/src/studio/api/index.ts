@@ -248,8 +248,9 @@ export type TriggerStatsOverview = {
   }>;
 };
 
-export type StudioOverview = {
+export type StudioAnalytics = {
   generatedAt: string;
+  templateCount: number;
   summary: {
     totalContacts: number;
     activeTriggers: number;
@@ -259,24 +260,6 @@ export type StudioOverview = {
     avgOpenRate: number;
     avgClickRate: number;
     deliverableRate: number;
-  };
-  schedule: {
-    nextUpcoming: {
-      id: string;
-      subject: string;
-      scheduledAt: string;
-      subscriberGroupName: string | null;
-      recipientCount: number;
-      status: NewsletterStatus;
-    } | null;
-    upcomingCount: number;
-    upcomingList: Array<{
-      id: string;
-      subject: string;
-      scheduledAt: string;
-      status: "scheduled" | "sending";
-      subscriberGroupName: string | null;
-    }>;
   };
   triggers: {
     totalCount: number;
@@ -311,19 +294,6 @@ export type StudioOverview = {
       dailyLimit: number | null;
       percentUsed: number | null;
     };
-  };
-  subscribers: {
-    groupCount: number;
-    health: { active: number; unsubscribed: number; bounced: number };
-    recentSyncStatus: { lastSyncAt: string | null; failedGroupsCount: number };
-    groups: Array<{
-      id: string;
-      name: string;
-      domain: string;
-      contactCount: number;
-      lastSyncStatus?: "success" | "error";
-      lastSyncAt?: string;
-    }>;
   };
   charts: {
     sendsByWeek: Array<{
@@ -631,7 +601,7 @@ export const studioApi = {
   deleteMessage: (id: string) =>
     studioFetch<{ ok: true }>(`/studio/messages/${id}`, { method: "DELETE" }),
 
-  getOverview: () => studioFetch<StudioOverview>("/studio/overview"),
+  getAnalytics: () => studioFetch<StudioAnalytics>("/studio/analytics"),
   getDashboard: () => studioFetch<StudioDashboardPayload>("/studio/dashboard"),
   listNewsletters: () => studioFetch<{ newsletters: Newsletter[] }>("/studio/newsletters"),
   getSentOverview: () => studioFetch<AccountSentOverview>("/studio/newsletters/sent-stats"),

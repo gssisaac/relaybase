@@ -8,7 +8,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import type { StudioOverview } from "@/studio/api";
+import type { StudioAnalytics } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 /** Compact overview charts — minimal axes, short height, pill bars. */
@@ -49,7 +49,7 @@ function MiniLegend({ config, keys }: { config: ChartConfig; keys: string[] }) {
   );
 }
 
-export function StudioOverviewSendsChart({ data }: { data: StudioOverview["charts"]["sendsByWeek"] }) {
+export function StudioOverviewSendsChart({ data }: { data: StudioAnalytics["charts"]["sendsByWeek"] }) {
   if (data.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">No sent newsletters yet — volume appears after your first send.</p>
@@ -78,7 +78,7 @@ export function StudioOverviewSendsChart({ data }: { data: StudioOverview["chart
   );
 }
 
-export function StudioOverviewSubscriberHealthChart({ data }: { data: StudioOverview["charts"]["subscriberHealth"] }) {
+export function StudioOverviewSubscriberHealthChart({ data }: { data: StudioAnalytics["charts"]["subscriberHealth"] }) {
   const chartData = data.map((row, index) => ({
     label: row.label,
     count: row.count,
@@ -108,7 +108,7 @@ export function StudioOverviewSubscriberHealthChart({ data }: { data: StudioOver
 export function StudioOverviewTriggersChart({
   data,
 }: {
-  data: StudioOverview["charts"]["automationTriggersByDay"];
+  data: StudioAnalytics["charts"]["automationTriggersByDay"];
 }) {
   const labels = data.map((row) => {
     const parts = row.label.split(" ");
@@ -135,7 +135,7 @@ export function StudioOverviewTriggersChart({
 export function StudioOverviewEngagementChart({
   data,
 }: {
-  data: StudioOverview["charts"]["engagementRates"];
+  data: StudioAnalytics["charts"]["engagementRates"];
 }) {
   const chartData = data.map((row, index) => ({
     label: row.label,

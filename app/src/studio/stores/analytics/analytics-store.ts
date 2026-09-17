@@ -2,28 +2,27 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { studioApi, type StudioDashboardPayload } from "@/studio/api";
+import { studioApi, type StudioAnalytics } from "@/studio/api";
 
-const SENDING_POLL_MS = 5_000;
-
-function cloneDashboardPayload(next: StudioDashboardPayload): StudioDashboardPayload {
+function cloneAnalyticsPayload(next: StudioAnalytics): StudioAnalytics {
   return structuredClone(next);
 }
 
-export class DashboardStore {
-  private payload: StudioDashboardPayload | null = null;
+export class AnalyticsStore {
+  /** Plain JSON — not MobX-deep-observed (Recharts/Immer freeze chart data). */
+  private payload: StudioAnalytics | null = null;
+  /** Incremented when `payload` changes so observers re-render. */
   dataEpoch = 0;
   fetching = false;
   loadError: string | null = null;
 
   private fetchPromise: Promise<void> | null = null;
-  private sendingPollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
   }
 
-  get data(): StudioDashboardPayload | null {
+  get data(): StudioAnalytics | null {
     return this.payload;
   }
 
@@ -35,19 +34,14 @@ export class DashboardStore {
     return this.payload !== null && this.fetching;
   }
 
-  get hasSending(): boolean {
-    return Boolean(this.payload?.sending);
-  }
-
-  private commitPayload(next: StudioDashboardPayload | null) {
-    this.payload = next ? cloneDashboardPayload(next) : null;
+  private commitPayload(next: StudioAnalytics | null) {
+    this.payload = next ? cloneAnalyticsPayload(next) : null;
     this.dataEpoch += 1;
   }
 
   ensureLoaded(): Promise<void> {
     if (this.payload !== null) {
       void this.refresh();
-      this.syncSendingPoll();
       return Promise.resolve();
     }
     return this.refresh();
@@ -64,15 +58,14 @@ export class DashboardStore {
     this.fetching = true;
     this.fetchPromise = (async () => {
       try {
-        const next = await studioApi.getDashboard();
+        const next = await studioApi.getAnalytics();
         runInAction(() => {
           this.commitPayload(next);
           this.loadError = null;
         });
-        this.syncSendingPoll();
       } catch {
         const message =
-          "Could not load Studio dashboard — is hq/studio running on port 32832?";
+          "Could not load Studio analytics — is hq/studio running on port 32832?";
         runInAction(() => {
           if (!hasCache) this.loadError = message;
         });
@@ -87,28 +80,7 @@ export class DashboardStore {
 
     return this.fetchPromise;
   }
-
-  private syncSendingPoll() {
-    if (this.hasSending) {
-      if (this.sendingPollTimer !== null) return;
-      this.sendingPollTimer = setInterval(() => {
-        void this.refresh({ force: true });
-      }, SENDING_POLL_MS);
-      return;
-    }
-    if (this.sendingPollTimer !== null) {
-      clearInterval(this.sendingPollTimer);
-      this.sendingPollTimer = null;
-    }
-  }
-
-  dispose() {
-    if (this.sendingPollTimer !== null) {
-      clearInterval(this.sendingPollTimer);
-      this.sendingPollTimer = null;
-    }
-  }
 }
 
-/** Session cache — survives remounts when leaving the dashboard route. */
-export const dashboardStore = new DashboardStore();
+/** Session cache — survives remounts when leaving the analytics route. */
+export const analyticsStore = new AnalyticsStore();

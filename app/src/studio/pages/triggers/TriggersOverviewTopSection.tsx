@@ -2,7 +2,7 @@
 
 import { Activity, FilePen, Pause, Zap } from "lucide-react";
 
-import type { TriggerStatus, StudioOverview } from "@/studio/api";
+import type { TriggerStatus, StudioAnalytics } from "@/studio/api";
 import { triggersStatsHref } from "@/studio/lib/paths";
 import { OverviewKpiCard } from "@/studio/pages/overview/OverviewKpiCard";
 
@@ -11,7 +11,7 @@ export function TriggersOverviewTopSection({
   filter,
   onFilterChange,
 }: {
-  data: StudioOverview;
+  data: StudioAnalytics;
   filter: "all" | TriggerStatus;
   onFilterChange: (filter: "all" | TriggerStatus) => void;
 }) {

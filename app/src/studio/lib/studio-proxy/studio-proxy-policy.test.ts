@@ -34,14 +34,15 @@ describe("shouldProxyRequestToStudio", () => {
     );
   });
 
-  it("serves overview UI without API header", () => {
-    assert.equal(shouldProxyRequestToStudio("/studio/overview", "GET", headers()), false);
+  it("serves insight UI without API header", () => {
     assert.equal(shouldProxyRequestToStudio("/studio/dashboard", "GET", headers()), false);
     assert.equal(shouldProxyRequestToStudio("/studio/analytics", "GET", headers()), false);
+    assert.equal(shouldProxyRequestToStudio("/studio/overview", "GET", headers()), false);
   });
 
-  it("proxies overview JSON with Studio API header", () => {
-    assert.equal(shouldProxyRequestToStudio("/studio/overview", "GET", headers(true)), true);
+  it("proxies dashboard and analytics JSON with Studio API header", () => {
+    assert.equal(shouldProxyRequestToStudio("/studio/dashboard", "GET", headers(true)), true);
+    assert.equal(shouldProxyRequestToStudio("/studio/analytics", "GET", headers(true)), true);
   });
 
   it("serves newsletter detail tab UI without API header", () => {

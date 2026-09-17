@@ -24,3 +24,5 @@ server/pnpm-lock.yaml
 # Local Studio JSON store (dev) — never commit data files
 hq/studio/data/*
 !hq/studio/data/.gitkeep
+# Committed seed only; runtime store is local (see scripts/migrate-store-from-origin.mjs)
+!hq/studio/data/store-origin.json

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { ExternalLink, MousePointerClick, Settings2 } from "lucide-react";
+import { ExternalLink, MousePointerClick } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,9 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useEmailButtonSettings } from "@/lib/markdown-editor/blocks/email-button-settings-context";
 import type { NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import {
   emailButtonEditorRowClassName,
+  emailButtonPropsFromBlockRecord,
   normalizeEmailButtonAlign,
   normalizeEmailButtonVariant,
   type EmailButtonAlign,
@@ -31,7 +33,7 @@ import { cn } from "@/lib/utils";
 
 const emailButtonPropSchema = {
   text: { default: "Button" as const },
-  url: { default: "https://" as const },
+  linkUrl: { default: "https://" as const },
   variant: {
     default: "primary" as const,
     values: ["primary", "outline"] as const,
@@ -48,7 +50,7 @@ function parseEmailButtonElement(element: HTMLElement) {
   }
   return {
     text: element.getAttribute("data-text") ?? "Button",
-    url: element.getAttribute("data-href") ?? "https://",
+    linkUrl: element.getAttribute("data-href") ?? "https://",
     variant: normalizeEmailButtonVariant(element.getAttribute("data-variant")),
     alignment: normalizeEmailButtonAlign(element.getAttribute("data-align")),
   };
@@ -56,7 +58,7 @@ function parseEmailButtonElement(element: HTMLElement) {
 
 export type EmailButtonBlockProps = {
   text: string;
-  url: string;
+  linkUrl: string;
   variant: EmailButtonVariant;
   alignment: EmailButtonAlign;
 };
@@ -79,7 +81,7 @@ function previewButtonClassName(
 function EmailButtonSettingsPanel(props: {
   blockId: string;
   text: string;
-  url: string;
+  linkUrl: string;
   variant: EmailButtonVariant;
   alignment: EmailButtonAlign;
   hasValidUrl: boolean;
@@ -97,7 +99,7 @@ function EmailButtonSettingsPanel(props: {
         <div className="flex shrink-0 items-center gap-2">
           {props.hasValidUrl ? (
             <a
-              href={props.url}
+                  href={props.linkUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
@@ -140,8 +142,8 @@ function EmailButtonSettingsPanel(props: {
           </Label>
           <Input
             id={`email-btn-url-${props.blockId}`}
-            value={props.url}
-            onChange={(e) => props.onChange({ url: e.target.value })}
+                  value={props.linkUrl}
+                  onChange={(e) => props.onChange({ linkUrl: e.target.value })}
             placeholder="https://example.com"
             className="h-8 font-mono text-xs"
           />
@@ -214,24 +216,28 @@ function EmailButtonBlockRender(props: {
   };
   editor: NewsletterEditor;
 }) {
-  const [open, setOpen] = useState(false);
+  const { openBlockId, setOpenBlockId } = useEmailButtonSettings();
   const textInputRef = useRef<HTMLInputElement>(null);
 
-  const text = props.block.props?.text ?? "Button";
-  const url = props.block.props?.url ?? "https://";
-  const variant = normalizeEmailButtonVariant(props.block.props?.variant);
-  const alignment = normalizeEmailButtonAlign(props.block.props?.alignment);
+  const blockProps = emailButtonPropsFromBlockRecord(
+    (props.block?.props ?? {}) as Record<string, unknown>,
+  );
+  const text = blockProps.text;
+  const linkUrl = blockProps.url;
+  const variant = blockProps.variant;
+  const alignment = blockProps.alignment;
   const label = (typeof text === "string" ? text.trim() : "") || "Button";
   const editable = props.editor?.isEditable ?? true;
   const blockId = props.block?.id ?? "new";
   const rowClassName = emailButtonEditorRowClassName(alignment);
+  const open = openBlockId === blockId;
 
   const updateProps = (patch: Partial<EmailButtonBlockProps>) => {
     if (!props.editor || !props.block) return;
     props.editor.updateBlock(props.block, {
       props: {
         text,
-        url,
+        linkUrl,
         variant,
         alignment,
         ...patch,
@@ -240,9 +246,9 @@ function EmailButtonBlockRender(props: {
   };
 
   const hasValidUrl =
-    typeof url === "string" &&
-    (url.startsWith("http://") || url.startsWith("https://")) &&
-    url.length > 8;
+    typeof linkUrl === "string" &&
+    (linkUrl.startsWith("http://") || linkUrl.startsWith("https://")) &&
+    linkUrl.length > 8;
 
   useEffect(() => {
     if (!open) return;
@@ -257,7 +263,7 @@ function EmailButtonBlockRender(props: {
       <div className="my-2 w-full max-w-full" contentEditable={false}>
         <div className={rowClassName}>
           <a
-            href={url}
+            href={linkUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={previewButtonClassName(variant, alignment)}
@@ -272,23 +278,24 @@ function EmailButtonBlockRender(props: {
   return (
     <div className="my-2 w-full max-w-full select-none" contentEditable={false}>
       <div className={rowClassName}>
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover
+          open={open}
+          onOpenChange={(next) => setOpenBlockId(next ? blockId : null)}
+        >
           <div className={cn("group/btn relative inline-flex", alignment === "full" && "w-full")}>
             <PopoverTrigger
               render={
                 <button
                   type="button"
-                  aria-label="Edit email button"
+                  aria-label="Email button"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                   className={cn(
                     previewButtonClassName(
                       variant,
                       alignment,
                       cn(
-                        "cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        variant === "outline"
-                          ? "hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                          : "hover:bg-zinc-800 dark:hover:bg-zinc-200",
+                        "cursor-default select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                         open && "ring-2 ring-primary/40 ring-offset-2",
                       ),
                     ),
@@ -298,23 +305,6 @@ function EmailButtonBlockRender(props: {
             >
               {label}
             </PopoverTrigger>
-
-            <button
-              type="button"
-              aria-label="Button settings"
-              title="Button settings"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen((prev) => !prev);
-              }}
-              className={cn(
-                "absolute -top-2.5 -right-2.5 flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-xs transition-opacity hover:text-foreground",
-                open ? "opacity-100 text-foreground ring-1 ring-primary/50" : "opacity-0 group-hover/btn:opacity-100",
-              )}
-            >
-              <Settings2 className="size-3.5" />
-            </button>
           </div>
 
           <PopoverContent
@@ -328,12 +318,12 @@ function EmailButtonBlockRender(props: {
             <EmailButtonSettingsPanel
               blockId={blockId}
               text={text}
-              url={url}
+              linkUrl={linkUrl}
               variant={variant}
               alignment={alignment}
               hasValidUrl={hasValidUrl}
               textInputRef={textInputRef}
-              onClose={() => setOpen(false)}
+              onClose={() => setOpenBlockId(null)}
               onChange={updateProps}
             />
           </PopoverContent>
@@ -363,17 +353,16 @@ export const EmailButtonBlockSpec = createReactBlockSpec(
     ),
     parse: parseEmailButtonElement,
     toExternalHTML: (props) => {
-      const text = props.block.props?.text ?? "Button";
-      const url = props.block.props?.url ?? "https://";
-      const variant = normalizeEmailButtonVariant(props.block.props?.variant);
-      const alignment = normalizeEmailButtonAlign(props.block.props?.alignment);
+      const parsed = emailButtonPropsFromBlockRecord(
+        (props.block?.props ?? {}) as Record<string, unknown>,
+      );
       return (
         <div
           data-rb-email-button=""
-          data-text={text}
-          data-href={url}
-          data-variant={variant}
-          data-align={alignment}
+          data-text={parsed.text}
+          data-href={parsed.url}
+          data-variant={parsed.variant}
+          data-align={parsed.alignment}
         />
       );
     },
@@ -389,7 +378,7 @@ export const defaultEmailButtonBlockProps = {
   type: "emailButton" as const,
   props: {
     text: "Button",
-    url: "https://",
+    linkUrl: "https://",
     variant: "primary" as const,
     alignment: "center" as const,
   },

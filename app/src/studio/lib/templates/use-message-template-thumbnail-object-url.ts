@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { StudioMessage, StudioLayout } from "@/lib/studio/api";
+import type { StudioMessage, StudioLayout } from "@/studio/api";
 
 import { captureMessageTemplateThumbnailBlob } from "./capture-message-template-thumbnail-client";
 import {

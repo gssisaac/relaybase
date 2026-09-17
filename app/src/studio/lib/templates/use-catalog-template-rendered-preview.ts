@@ -1,6 +1,6 @@
 "use client";
 
-import type { StudioLayout, StudioTemplate } from "@/lib/studio/api";
+import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { useMessageRenderedPreview } from "@/studio/pages/messages/use-message-rendered-preview";
 
 export function useCatalogTemplateRenderedPreview(input: {

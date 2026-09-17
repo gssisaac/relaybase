@@ -1,4 +1,4 @@
-import { studioApi, type Trigger } from "@/lib/studio/api";
+import { studioApi, type Trigger } from "@/studio/api";
 
 let cachedRows: Trigger[] | null = null;
 let inflight: Promise<Trigger[]> | null = null;

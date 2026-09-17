@@ -33,8 +33,8 @@ import { studioAudienceDetailHref, newsletterDetailHref } from "@/studio/lib/pat
 import {
   useNewsletterDetail,
   useNewsletterDetailStore,
-} from "@/studio/stores/NewsletterDetailContext";
-import { studioAudienceApi } from "@/lib/studio/audience-api";
+} from "@/studio/stores/newsletter-detail";
+import { studioAudienceApi } from "@/studio/api";
 import { useEmailPaths } from "@/email/lib/paths";
 
 const PREVIEW_CONTACT_LIMIT = 40;
@@ -228,7 +228,7 @@ export function NewsletterPublishView() {
     const result = await detailStore.sendNewsletter({ apiBase, sendingDomain: domain });
     if (!result.ok) {
       toast.error(result.error);
-      setBlockedError(result.error);
+      setBlockedError(result.error ?? null);
     }
   }
 

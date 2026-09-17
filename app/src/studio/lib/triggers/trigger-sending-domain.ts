@@ -1,4 +1,4 @@
-import type { TriggerSource } from "@/lib/studio/api";
+import type { TriggerSource } from "@/studio/api";
 import { domainOf } from "@/studio/lib/triggers/trigger-account-cmd-groups";
 
 export function sendingDomainFromTrigger(trigger: {

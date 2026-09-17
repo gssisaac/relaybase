@@ -6,7 +6,7 @@ import {
   triggerDetailFromPathname,
   triggerDetailHref,
   triggerTabFromPathname,
-} from "./paths.ts";
+} from "./index.ts";
 
 describe("triggerDetailHref", () => {
   it("writes nested tab routes", () => {

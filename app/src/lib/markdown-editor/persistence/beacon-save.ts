@@ -1,5 +1,4 @@
-import { getStudioApiBase } from "@/lib/studio/api-base";
-import { STUDIO_API_REQUEST_HEADER } from "@/lib/studio/studio-origin";
+import { getStudioApiBase, STUDIO_API_REQUEST_HEADER } from "@/studio/lib/studio-origin";
 
 /**
  * Best-effort body PATCH on tab close (fetch keepalive). `path` is

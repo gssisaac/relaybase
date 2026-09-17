@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { layoutFromSearch } from "@/studio/lib/layout-paths";
+import { layoutFromSearch } from "@/studio/lib/layouts/layout-paths";
 import { LayoutDetailView } from "@/studio/pages/layouts/LayoutDetailView";
 import { LayoutsListView } from "@/studio/pages/layouts/LayoutsListView";
 

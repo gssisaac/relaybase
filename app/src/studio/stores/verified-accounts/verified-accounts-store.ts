@@ -2,12 +2,12 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { studioAudienceApi } from "@/lib/studio/audience-api";
+import { studioAudienceApi } from "@/studio/api/audience-api";
 import {
   VerifiedDestinationApiError,
   verifiedDestinationApi,
   type CfVerifiedDestinationAddress,
-} from "@/lib/studio/verified-destination-api";
+} from "@/studio/api/verified-destination-api";
 
 export type VerificationStatus = "verified" | "pending" | "unverified";
 

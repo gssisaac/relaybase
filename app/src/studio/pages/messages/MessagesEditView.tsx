@@ -3,7 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { messageFromSearch } from "@/studio/lib/message-paths";
+import { messageFromSearch } from "@/studio/lib/messages/message-paths";
 import { useStudioPaths } from "@/studio/lib/paths";
 import { MessageDetailView } from "@/studio/pages/messages/MessageDetailView";
 

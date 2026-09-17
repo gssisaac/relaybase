@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { WorkflowPort } from "@/studio/components/triggers/nodes/WorkflowPort";
 import { triggerContentEditHref } from "@/studio/lib/paths";
-import type { Trigger } from "@/lib/studio/api";
+import type { Trigger } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function MessageNodeCard({

@@ -15,7 +15,7 @@ import {
 } from "@/studio/pages/triggers/TriggerConfigUiContext";
 import { TriggerLegacyConfigRedirect } from "@/studio/pages/triggers/TriggerLegacyConfigRedirect";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
-import { studioApi } from "@/lib/studio/api";
+import { studioApi } from "@/studio/api";
 
 function TriggerConfigViewBody() {
   const { triggerId, trigger } = useTriggerDetail();

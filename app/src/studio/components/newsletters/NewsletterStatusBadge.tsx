@@ -3,7 +3,7 @@
 import { Clock, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import type { NewsletterListStatus, NewsletterStatus } from "@/lib/studio/api";
+import type { NewsletterListStatus, NewsletterStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 interface NewsletterStatusBadgeProps {

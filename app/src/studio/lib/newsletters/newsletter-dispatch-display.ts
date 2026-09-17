@@ -1,4 +1,4 @@
-import type { NewsletterDispatchProgress } from "@/lib/studio/api";
+import type { NewsletterDispatchProgress } from "@/studio/api";
 
 export function formatWhen(value?: string | null): string {
   if (!value) return "—";

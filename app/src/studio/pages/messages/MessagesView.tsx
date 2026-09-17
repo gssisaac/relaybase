@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { messageFromSearch } from "@/studio/lib/message-paths";
+import { messageFromSearch } from "@/studio/lib/messages/message-paths";
 import { MessagesBrowseView } from "@/studio/pages/messages/MessagesBrowseView";
 import { MessagesListView } from "@/studio/pages/messages/MessagesListView";
 

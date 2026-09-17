@@ -5,7 +5,7 @@ import {
   readResponseJson,
   resolveEmailApiBase,
 } from "@/lib/desktop/api";
-import { studioApi } from "@/lib/studio/api";
+import { studioApi } from "@/studio/api";
 import {
   loadApiKeyVaultEntries,
   mergeKeysWithVault,

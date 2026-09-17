@@ -6,12 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { AudienceDataSourceGuide } from "@/studio/pages/audience/AudienceDataSourceGuide";
-import { useWorkerDomains } from "@/studio/lib/use-worker-domains";
+import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
 import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
-import { useVerifiedAccounts } from "@/lib/studio/VerifiedAccountsContext";
+import { useVerifiedAccounts } from "@/studio/stores/verified-accounts";
 import { VerifiedAccountsQuotaCard } from "@/studio/components/verified-accounts/VerifiedAccountsQuotaCard";
 import {
   formatOverviewCompact,
@@ -19,7 +19,7 @@ import {
 } from "@/studio/pages/overview/OverviewKpiCard";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { StudioApiError, studioAudienceApi } from "@/lib/studio/audience-api";
+import { StudioApiError, studioAudienceApi } from "@/studio/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

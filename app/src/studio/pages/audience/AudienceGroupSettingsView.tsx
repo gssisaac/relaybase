@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { useDomainAddresses } from "@/studio/lib/use-domain-addresses";
-import { useWorkerDomains } from "@/studio/lib/use-worker-domains";
+import { useDomainAddresses } from "@/studio/lib/domains/use-domain-addresses";
+import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
-import { StudioApiError, studioAudienceApi } from "@/lib/studio/audience-api";
+import { StudioApiError, studioAudienceApi } from "@/studio/api";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { AudienceDataSourceGuide } from "@/studio/pages/audience/AudienceDataSourceGuide";
 import {

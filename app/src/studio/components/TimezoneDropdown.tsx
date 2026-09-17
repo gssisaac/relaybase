@@ -4,7 +4,7 @@ import { Globe } from "lucide-react";
 import { useMemo } from "react";
 
 import { CmdDropdown } from "@/components/ui/cmd-dropdown";
-import { buildScheduleTimeZoneOptions } from "@/studio/lib/schedule-timezone";
+import { buildScheduleTimeZoneOptions } from "@/studio/lib/schedule/schedule-timezone";
 
 type TimezoneDropdownProps = {
   value: string;

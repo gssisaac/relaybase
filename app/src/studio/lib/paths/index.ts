@@ -12,7 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import type { TriggerStatus, NewsletterStatus } from "@/lib/studio/api";
+import type { TriggerStatus, NewsletterStatus } from "@/studio/api";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 

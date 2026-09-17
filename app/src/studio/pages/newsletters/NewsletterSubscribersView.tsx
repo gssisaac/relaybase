@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { studioAudienceDetailHref, useStudioPaths } from "@/studio/lib/paths";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
-import { studioApi, type NewsletterMemberStatus } from "@/lib/studio/api";
+import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
+import { studioApi, type NewsletterMemberStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLE: Record<NewsletterMemberStatus, string> = {

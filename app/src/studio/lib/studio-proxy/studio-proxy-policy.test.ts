@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { STUDIO_API_REQUEST_HEADER } from "./studio-origin.ts";
+import { STUDIO_API_REQUEST_HEADER } from "../studio-origin/index.ts";
 import { shouldProxyRequestToStudio } from "./studio-proxy-policy.ts";
 
 function headers(api = false): Headers {

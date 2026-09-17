@@ -1,6 +1,6 @@
 "use client";
 
-import { studioApi, type StudioTemplate } from "@/lib/studio/api";
+import { studioApi, type StudioTemplate } from "@/studio/api";
 import { HubTemplateUseMenu } from "@/studio/components/templates/HubTemplateUseMenu";
 import { catalogTemplateSnapshot } from "@/studio/lib/templates/catalog-template-snapshot";
 

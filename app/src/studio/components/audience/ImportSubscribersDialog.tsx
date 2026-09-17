@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StudioApiError, studioAudienceApi } from "@/lib/studio/audience-api";
+import { StudioApiError, studioAudienceApi } from "@/studio/api";
 import {
   NONE_COLUMN,
   guessEmailColumnIndex,

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { TemplateWireframe } from "@/studio/components/templates/TemplateWireframe";
 import { resolveMessageTemplateThumbnailPublicPath } from "@/studio/lib/templates/message-template-thumbnail-paths";
 import { useMessageTemplateThumbnailObjectUrl } from "@/studio/lib/templates/use-message-template-thumbnail-object-url";
-import type { StudioLayout, StudioTemplate } from "@/lib/studio/api";
+import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function TemplateThumbnailPreview({

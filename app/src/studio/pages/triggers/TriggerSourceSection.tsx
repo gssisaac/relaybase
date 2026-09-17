@@ -46,8 +46,8 @@ import {
   webhookTriggerFieldPaths,
 } from "@/studio/lib/triggers/trigger-webhook-integration";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
-import { getStudioApiBase } from "@/lib/studio/api-base";
-import { studioApi, StudioApiError, type TriggerSource } from "@/lib/studio/api";
+import { getStudioApiBase } from "@/studio/api";
+import { studioApi, StudioApiError, type TriggerSource } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 const COPY_URL_DISPLAY_CLASS =

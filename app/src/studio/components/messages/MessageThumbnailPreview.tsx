@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
 
 import { TemplateWireframe } from "@/studio/components/templates/TemplateWireframe";
 import { useMessageThumbnailObjectUrl } from "@/studio/lib/messages/use-message-thumbnail-object-url";
-import type { StudioLayout, StudioMessage } from "@/lib/studio/api";
+import type { StudioLayout, StudioMessage } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 /**

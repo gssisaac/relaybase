@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { studioApi, type StudioMessage } from "@/lib/studio/api";
+import { studioApi, type StudioMessage } from "@/studio/api";
 
 const NONE = "__none__";
 

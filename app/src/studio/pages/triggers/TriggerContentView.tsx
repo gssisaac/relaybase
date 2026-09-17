@@ -6,8 +6,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { MessagePicker } from "@/studio/components/messages/MessagePicker";
-import { messageDetailHref } from "@/studio/lib/message-paths";
-import type { StudioMessage } from "@/lib/studio/api";
+import { messageDetailHref } from "@/studio/lib/messages/message-paths";
+import type { StudioMessage } from "@/studio/api";
 
 import {
   applyTriggerPreviewMergeTags,
@@ -27,10 +27,10 @@ import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
-} from "@/studio/lib/compliance-identity";
+} from "@/studio/lib/compliance/compliance-identity";
 import { NewsletterComposeForm } from "@/studio/pages/newsletters/NewsletterComposeForm";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
-import { studioApi, type StudioAccountCompliance } from "@/lib/studio/api";
+import { studioApi, type StudioAccountCompliance } from "@/studio/api";
 import {
   useNewsletterEditorPersistence,
   type NewsletterPersistBridge,

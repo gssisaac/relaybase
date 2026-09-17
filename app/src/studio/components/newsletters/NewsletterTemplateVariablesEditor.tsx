@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { studioApi } from "@/lib/studio/api";
+import { studioApi } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";

@@ -2,7 +2,7 @@
 
 import { Activity, FilePen, Pause, Zap } from "lucide-react";
 
-import type { TriggerStatus, StudioOverview } from "@/lib/studio/api";
+import type { TriggerStatus, StudioOverview } from "@/studio/api";
 import { triggersStatsHref } from "@/studio/lib/paths";
 import { OverviewKpiCard } from "@/studio/pages/overview/OverviewKpiCard";
 

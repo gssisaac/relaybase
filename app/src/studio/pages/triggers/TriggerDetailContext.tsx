@@ -11,7 +11,7 @@ import {
 } from "react";
 
 import { upsertTriggerSidebarListRow } from "@/studio/lib/triggers/trigger-sidebar-list";
-import { studioApi, type Trigger, type StudioLayout } from "@/lib/studio/api";
+import { studioApi, type Trigger, type StudioLayout } from "@/studio/api";
 
 type DraftFields = {
   subject: string;

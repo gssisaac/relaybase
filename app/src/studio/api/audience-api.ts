@@ -3,7 +3,7 @@ import type {
   AudienceGroupSummary,
 } from "@/email/components/mailbox/types";
 
-import { StudioApiError, studioFetch } from "@/lib/studio/api";
+import { StudioApiError, studioFetch } from "@/studio/api";
 
 export type CrmAudienceGroupDetail = {
   group: AudienceGroupSummary;

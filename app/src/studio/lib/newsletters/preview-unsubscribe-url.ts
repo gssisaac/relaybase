@@ -1,6 +1,6 @@
 import type { PreviewPersonaId } from "@/studio/lib/newsletters/newsletter-merge-tags";
-import { STUDIO_PUBLIC_LINK_ORIGIN } from "@/lib/studio/studio-origin";
-import type { NewsletterMember } from "@/lib/studio/api";
+import { STUDIO_PUBLIC_LINK_ORIGIN } from "@/studio/lib/studio-origin";
+import type { NewsletterMember } from "@/studio/api";
 
 export function buildPreviewUnsubscribeUrl(
   newsletterId: string,

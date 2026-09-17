@@ -41,7 +41,7 @@ import {
   type Trigger,
   type TriggerStatus,
   type StudioOverview,
-} from "@/lib/studio/api";
+} from "@/studio/api";
 import { cn } from "@/lib/utils";
 import {
   EmailListContainer,

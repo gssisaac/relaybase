@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { studioApi, type TriggerStats } from "@/lib/studio/api";
+import { studioApi, type TriggerStats } from "@/studio/api";
 import { TriggerActivitySections } from "@/studio/pages/triggers/TriggerActivityView";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
 

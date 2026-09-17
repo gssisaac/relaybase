@@ -5,7 +5,7 @@ import { FileText, Inbox, Webhook, Zap } from "lucide-react";
 import { WorkflowPort } from "@/studio/components/triggers/nodes/WorkflowPort";
 import { TriggerStatusBadge } from "@/studio/components/triggers/TriggerStatusBadge";
 import { triggerSourceSummary } from "@/studio/lib/triggers/trigger-label";
-import type { Trigger } from "@/lib/studio/api";
+import type { Trigger } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 function sourceIcon(type: Trigger["source"]["type"]) {

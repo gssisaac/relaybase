@@ -18,7 +18,7 @@ import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailNavTabs } from "@/studio/lib/newsletters/newsletter-detail-nav";
 import { newsletterDetailHref, useStudioPaths, type NewsletterDetailTab } from "@/studio/lib/paths";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
+import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 

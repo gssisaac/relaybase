@@ -1,7 +1,7 @@
 import { toPng } from "html-to-image";
 
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
-import type { StudioMessage, StudioLayout } from "@/lib/studio/api";
+import type { StudioMessage, StudioLayout } from "@/studio/api";
 
 import { renderMessageTemplateThumbnailHtml } from "./render-message-template-thumbnail-html";
 

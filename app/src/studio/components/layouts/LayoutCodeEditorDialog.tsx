@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { studioApi, StudioApiError, type StudioLayout } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type StudioLayout } from "@/studio/api";
 
 export function LayoutCodeEditorDialog({
   template,

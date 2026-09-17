@@ -16,7 +16,7 @@ import {
   StudioApiError,
   type StudioMessage,
   type StudioLayout,
-} from "@/lib/studio/api";
+} from "@/studio/api";
 
 export type MessageDraftFields = {
   name: string;

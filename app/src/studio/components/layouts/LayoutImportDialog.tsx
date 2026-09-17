@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { STANDARD_COMPLIANCE_FOOTER_HTML_APPEND } from "@/studio/lib/layouts/layout-standard-footer";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { studioApi, StudioApiError } from "@/lib/studio/api";
+import { studioApi, StudioApiError } from "@/studio/api";
 
 export function LayoutImportDialog({
   open,

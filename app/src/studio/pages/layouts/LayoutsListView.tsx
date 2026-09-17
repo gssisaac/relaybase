@@ -12,9 +12,10 @@ import { LayoutImportDialog } from "@/studio/components/layouts/LayoutImportDial
 import { LayoutThumbnailPreview } from "@/studio/components/layouts/LayoutThumbnailPreview";
 import { templateThumbnailVariant } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
-import { layoutDetailHref } from "@/studio/lib/layout-paths";
+import { layoutDetailHref } from "@/studio/lib/layouts/layout-paths";
+import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { studioApi, type StudioLayout } from "@/lib/studio/api";
+import { studioApi, type StudioLayout } from "@/studio/api";
 import { cn } from "@/lib/utils";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 
@@ -151,15 +152,15 @@ function LayoutCardGrid({
   onSelect: (id: string) => void;
 }) {
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <ul className={studioGalleryGridClassName}>
       {layouts.map((t) => {
         const variant = templateThumbnailVariant(t.id, t.derivedFromLayoutId);
         return (
-          <li key={t.id}>
+          <li key={t.id} className="min-w-0">
             <Link
               href={layoutDetailHref(t.id)}
               className={cn(
-                "flex h-full flex-col rounded-lg border border-border bg-card p-3 text-left",
+                "flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-card p-3 text-left",
                 "transition-colors hover:border-primary/40 hover:bg-muted/30",
               )}
               onClick={(e) => {

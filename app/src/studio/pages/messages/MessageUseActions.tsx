@@ -2,7 +2,7 @@
 
 import { toast } from "sonner";
 
-import { studioApi } from "@/lib/studio/api";
+import { studioApi } from "@/studio/api";
 import { HubTemplateUseMenu } from "@/studio/components/templates/HubTemplateUseMenu";
 import type { HubTemplateSnapshot } from "@/studio/lib/templates/hub-template-launch";
 import { useMessageDetail } from "@/studio/pages/messages/MessageDetailContext";

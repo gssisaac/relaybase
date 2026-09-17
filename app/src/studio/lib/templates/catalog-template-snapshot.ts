@@ -1,4 +1,4 @@
-import type { StudioTemplate } from "@/lib/studio/api";
+import type { StudioTemplate } from "@/studio/api";
 import type { HubTemplateSnapshot } from "@/studio/lib/templates/hub-template-launch";
 
 export function catalogTemplateSnapshot(template: StudioTemplate): HubTemplateSnapshot {

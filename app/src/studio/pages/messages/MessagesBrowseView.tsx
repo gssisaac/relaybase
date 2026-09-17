@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { messageFromSearch, messagePreviewHref } from "@/studio/lib/message-paths";
+import { messageFromSearch, messagePreviewHref } from "@/studio/lib/messages/message-paths";
 import { MessageBrowseSidebarEmpty } from "@/studio/pages/messages/MessageDetailSidebar";
 import {
   MessageDetailProvider,

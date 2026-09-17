@@ -3,7 +3,7 @@
 import { CalendarClock, LayoutTemplate, Mail, Users, Zap } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { StudioOverview } from "@/lib/studio/api";
+import type { StudioOverview } from "@/studio/api";
 
 import { formatOverviewCompact, OverviewKpiCard } from "./OverviewKpiCard";
 import {

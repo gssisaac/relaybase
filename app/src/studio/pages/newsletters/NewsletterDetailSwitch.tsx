@@ -19,7 +19,7 @@ import { NewsletterDetailShell } from "@/studio/pages/newsletters/NewsletterDeta
 import { NewsletterPublishView } from "@/studio/pages/newsletters/NewsletterPublishView";
 import { NewsletterSettingsView } from "@/studio/pages/newsletters/NewsletterSettingsView";
 import { NewsletterStatsView } from "@/studio/pages/newsletters/NewsletterStatsView";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
+import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 
 function NewsletterNotFound() {
   const { newsletters } = useStudioPaths();

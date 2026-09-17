@@ -10,7 +10,7 @@ import {
   formatInMinutes,
   formatWhen,
 } from "@/studio/lib/newsletters/newsletter-dispatch-display";
-import type { NewsletterDispatchProgress } from "@/lib/studio/api";
+import type { NewsletterDispatchProgress } from "@/studio/api";
 
 type Props = {
   dispatch: NewsletterDispatchProgress;

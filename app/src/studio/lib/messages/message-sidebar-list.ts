@@ -1,4 +1,4 @@
-import { studioApi, type StudioMessage } from "@/lib/studio/api";
+import { studioApi, type StudioMessage } from "@/studio/api";
 
 /** Excludes catalog preset YAML ids if they ever appear under `/studio/messages`. */
 export function isMessageSidebarRow(row: StudioMessage): boolean {

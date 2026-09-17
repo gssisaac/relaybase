@@ -1,4 +1,4 @@
-import type { Newsletter } from "@/lib/studio/api";
+import type { Newsletter } from "@/studio/api";
 import { dateKeyInTimeZone } from "./schedule-timezone";
 
 export type ScheduleItemKind = "newsletter";

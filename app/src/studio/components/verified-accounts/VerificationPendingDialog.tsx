@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useVerifiedAccounts } from "@/lib/studio/VerifiedAccountsContext";
+import { useVerifiedAccounts } from "@/studio/stores/verified-accounts";
 
 export function VerificationPendingDialog({
   email,

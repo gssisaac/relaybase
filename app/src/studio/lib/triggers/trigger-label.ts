@@ -1,4 +1,4 @@
-import type { Trigger, TriggerSource } from "@/lib/studio/api";
+import type { Trigger, TriggerSource } from "@/studio/api";
 import { formatRelativeDate } from "@/lib/utils";
 
 /** Prefer last send time; fall back to last edit for list / sidebar timestamps. */

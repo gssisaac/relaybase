@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { badgeVariants } from "@/components/ui/badge";
-import type { MessageLinkedOwner } from "@/lib/studio/api";
+import type { MessageLinkedOwner } from "@/studio/api";
 import { newsletterDetailHref, triggerDetailHref } from "@/studio/lib/paths";
 import { cn } from "@/lib/utils";
 

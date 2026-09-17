@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
 import { TriggerSourceSection } from "@/studio/pages/triggers/TriggerSourceSection";
-import { studioApi, StudioApiError, type TriggerPurpose } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
 
 export function TriggerSettingsView() {
   const { triggerId, trigger, setTrigger } = useTriggerDetail();

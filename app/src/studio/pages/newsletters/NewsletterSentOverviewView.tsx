@@ -13,7 +13,7 @@ import { NewsletterStatusBadge } from "@/studio/components/newsletters/Newslette
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { studioApi, type AccountSentOverview } from "@/lib/studio/api";
+import { studioApi, type AccountSentOverview } from "@/studio/api";
 
 function rateLabel(value: number): string {
   return `${value.toFixed(1)}%`;

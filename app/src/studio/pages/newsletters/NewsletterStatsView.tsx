@@ -13,12 +13,12 @@ import { newsletterDetailHref } from "@/studio/lib/paths";
 import {
   useNewsletterDetail,
   useNewsletterDetailStats,
-} from "@/studio/stores/NewsletterDetailContext";
+} from "@/studio/stores/newsletter-detail";
 import type {
   NewsletterLinkClickStat,
   NewsletterRecipient,
   NewsletterTrackingEvent,
-} from "@/lib/studio/api";
+} from "@/studio/api";
 
 const EVENT_LABEL: Record<NewsletterTrackingEvent["type"], string> = {
   delivered: "Delivered",

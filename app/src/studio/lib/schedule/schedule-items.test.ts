@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { Newsletter } from "../../lib/studio/api.ts";
-import { upcomingNewsletterScheduleItems } from "./schedule-items.ts";
+import type { Newsletter } from "@/studio/api";
+import { upcomingNewsletterScheduleItems } from "./schedule-items";
 
 function newsletterRow(partial: Partial<Newsletter>): Newsletter {
   return {

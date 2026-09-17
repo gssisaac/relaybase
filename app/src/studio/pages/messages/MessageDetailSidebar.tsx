@@ -30,10 +30,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
 import { usePersistedTemplateDetailSidebarWidth } from "@/hooks/use-persisted-template-detail-sidebar-width";
-import { studioApi, StudioApiError, type StudioMessage } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type StudioMessage } from "@/studio/api";
 import { useStudioPaths } from "@/studio/lib/paths";
 import { messageLinkedOwnerLabel } from "@/studio/components/messages/MessageLinkedOwnerBadge";
-import { messagePreviewHref, messagesRootHref } from "@/studio/lib/message-paths";
+import { messagePreviewHref, messagesRootHref } from "@/studio/lib/messages/message-paths";
 import {
   getMessageSidebarListSnapshot,
   removeMessageSidebarListRow,

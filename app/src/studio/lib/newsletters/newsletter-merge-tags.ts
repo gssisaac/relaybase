@@ -1,10 +1,10 @@
 import {
   COMPLIANCE_PREVIEW_PLACEHOLDERS,
   resolveComplianceFieldForPreview,
-} from "@/studio/lib/compliance-preview-values";
+} from "@/studio/lib/compliance/compliance-preview-values";
 import type { LayoutWireframeVariant } from "@/studio/components/layouts/LayoutWireframe";
 import { PLAIN_TEXT_TEMPLATE_ID } from "@/studio/lib/layouts/layout-catalog";
-import type { NewsletterMember } from "@/lib/studio/api";
+import type { NewsletterMember } from "@/studio/api";
 
 export type BroadcastMergeTagCategory = "contact";
 

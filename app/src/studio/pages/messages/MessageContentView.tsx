@@ -24,8 +24,8 @@ import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
-} from "@/studio/lib/compliance-identity";
-import { studioApi, type StudioAccountCompliance } from "@/lib/studio/api";
+} from "@/studio/lib/compliance/compliance-identity";
+import { studioApi, type StudioAccountCompliance } from "@/studio/api";
 import {
   useNewsletterEditorPersistence,
   type NewsletterPersistBridge,

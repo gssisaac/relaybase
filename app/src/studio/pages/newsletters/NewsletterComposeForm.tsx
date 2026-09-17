@@ -19,7 +19,7 @@ import {
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
-import type { StudioAccountCompliance, StudioLayout } from "@/lib/studio/api";
+import type { StudioAccountCompliance, StudioLayout } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";

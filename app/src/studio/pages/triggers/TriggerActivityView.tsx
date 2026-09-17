@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { studioApi, type TriggerSend, type TriggerEvent } from "@/lib/studio/api";
+import { studioApi, type TriggerSend, type TriggerEvent } from "@/studio/api";
 
 function formatWhen(value: string): string {
   return new Date(value).toLocaleString(undefined, {

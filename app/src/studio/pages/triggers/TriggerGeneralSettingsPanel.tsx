@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { TriggerStatusBadge } from "@/studio/components/triggers/TriggerStatusBadge";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
-import { studioApi, StudioApiError, type TriggerPurpose } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
 
 export function TriggerGeneralSettingsPanel() {
   const { triggerId, trigger, setTrigger } = useTriggerDetail();

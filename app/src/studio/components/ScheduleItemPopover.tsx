@@ -15,11 +15,11 @@ import {
 } from "@/components/ui/popover";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref } from "@/studio/lib/paths";
-import type { ScheduleItem } from "@/studio/lib/schedule-items";
+import type { ScheduleItem } from "@/studio/lib/schedule/schedule-items";
 import {
   formatScheduleEventTime,
   formatScheduleWhen,
-} from "@/studio/lib/schedule-timezone";
+} from "@/studio/lib/schedule/schedule-timezone";
 import { cn } from "@/lib/utils";
 
 type ScheduleItemPopoverProps = {

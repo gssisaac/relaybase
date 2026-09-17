@@ -1,6 +1,6 @@
 "use client";
 
-import { getStudioApiBase } from "@/lib/studio/api-base";
+import { getStudioApiBase } from "@/studio/api";
 
 export type HqUser = {
   id: string;

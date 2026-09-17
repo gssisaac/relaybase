@@ -6,8 +6,8 @@ import { reaction } from "mobx";
 import {
   NewsletterDetailStore,
   type NewsletterDraftFields,
-} from "@/studio/stores/newsletter-detail-store";
-import type { Newsletter, NewsletterMember, StudioLayout } from "@/lib/studio/api";
+} from "./newsletter-detail-store";
+import type { Newsletter, NewsletterMember, StudioLayout } from "@/studio/api";
 
 const NewsletterDetailStoreContext = React.createContext<NewsletterDetailStore | null>(null);
 
@@ -118,15 +118,12 @@ export function useNewsletterDetailStats() {
     );
   }, [store]);
 
-  React.useEffect(() => {
-    void store.loadStats();
-  }, [store, store.newsletterId]);
-
   return {
+    newsletter: store.newsletter,
+    dispatch: store.dispatch,
     recipients: store.recipients,
     trackingEvents: store.trackingEvents,
     linkClicks: store.linkClicks,
-    dispatch: store.dispatch,
-    loadStats: store.loadStats,
+    refresh: store.refresh,
   };
 }

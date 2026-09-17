@@ -13,9 +13,9 @@ import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThu
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { useStudioPaths } from "@/studio/lib/paths";
-import { messagesRootHref } from "@/studio/lib/message-paths";
-import { templatesRootHref } from "@/studio/lib/template-paths";
-import { studioApi, type StudioTemplate, type StudioLayout } from "@/lib/studio/api";
+import { messagesRootHref } from "@/studio/lib/messages/message-paths";
+import { templatesRootHref } from "@/studio/lib/templates/template-paths";
+import { studioApi, type StudioTemplate, type StudioLayout } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function TemplatesGridView() {

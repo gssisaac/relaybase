@@ -1,7 +1,8 @@
 "use client";
 
 import { TemplateThumbnailPreview } from "@/studio/components/templates/TemplateThumbnailPreview";
-import type { StudioLayout, StudioTemplate } from "@/lib/studio/api";
+import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
+import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function resolveTemplateLayout(
@@ -30,20 +31,15 @@ export function TemplateThumbnailGrid({
   onTemplateSelect: (template: StudioTemplate) => void;
 }) {
   return (
-    <ul
-      className={cn(
-        "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-        className,
-      )}
-    >
+    <ul className={cn(studioGalleryGridClassName, className)}>
       {templates.map((template) => {
         const layout = resolveTemplateLayout(template, layouts);
         return (
-          <li key={template.id}>
+          <li key={template.id} className="min-w-0">
             <button
               type="button"
               onClick={() => onTemplateSelect(template)}
-              className="group flex w-full flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:border-primary/40 hover:shadow-sm"
+              className="group flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card text-left transition hover:border-primary/40 hover:shadow-sm"
             >
               <TemplateThumbnailPreview
                 templateId={template.id}

@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { upsertMessageSidebarListRow } from "@/studio/lib/messages/message-sidebar-list";
-import { studioApi } from "@/lib/studio/api";
+import { studioApi } from "@/studio/api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 
 type NewMessageDialogProps = {

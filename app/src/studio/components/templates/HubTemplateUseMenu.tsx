@@ -26,8 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { studioApi, StudioApiError, type TriggerPurpose } from "@/lib/studio/api";
-import { studioAudienceApi } from "@/lib/studio/audience-api";
+import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
+import { studioAudienceApi } from "@/studio/api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { AudienceGroupCmdDropdown } from "@/studio/components/AudienceGroupCmdDropdown";
 import { newsletterDetailHref, triggerDetailHref } from "@/studio/lib/paths";
@@ -40,7 +40,7 @@ import {
   BROADCAST_MERGE_TAGS,
   type BroadcastMergeTag,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
-import { syncStudioSendCredentials } from "@/studio/lib/sync-studio-send-credentials";
+import { syncStudioSendCredentials } from "@/studio/lib/send/sync-studio-send-credentials";
 
 function mergeTagKey(token: string): string {
   return token.replace(/^\{\{|\}\}$/g, "").trim();

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { studioApi, type TriggerStatsOverview } from "@/lib/studio/api";
+import { studioApi, type TriggerStatsOverview } from "@/studio/api";
 import { cn, formatRelativeDate } from "@/lib/utils";
 import { TriggerStatusBadge } from "@/studio/components/triggers/TriggerStatusBadge";
 import { triggerDetailHref } from "@/studio/lib/paths";

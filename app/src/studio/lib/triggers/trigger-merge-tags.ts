@@ -6,7 +6,7 @@ import {
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import { layoutVariableMergeTagSection } from "@/studio/lib/layouts/compose-merge-tag-sections";
 import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-template-variables";
-import type { TriggerSource } from "@/lib/studio/api";
+import type { TriggerSource } from "@/studio/api";
 
 export type ComposeMergeTag = {
   id: string;

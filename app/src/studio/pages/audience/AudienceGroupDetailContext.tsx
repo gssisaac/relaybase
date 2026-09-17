@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { studioAudienceApi } from "@/lib/studio/audience-api";
+import { studioAudienceApi } from "@/studio/api";
 import type {
   AudienceGroupContact,
   AudienceGroupSummary,

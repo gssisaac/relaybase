@@ -49,7 +49,7 @@ import { NewTriggerDialog } from "@/studio/pages/triggers/NewTriggerDialog";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
 import { useTriggerSidebarList } from "@/studio/pages/triggers/use-trigger-sidebar-list";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { studioApi, StudioApiError, type Trigger, type TriggerStatus } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type Trigger, type TriggerStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 type TriggerSidebarFilter = "all" | TriggerStatus;

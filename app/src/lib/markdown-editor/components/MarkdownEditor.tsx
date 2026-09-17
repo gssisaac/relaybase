@@ -46,7 +46,7 @@ import {
   normalizeNewsletterAssetUrl,
   normalizeNewsletterAssetUrlsInHtml,
 } from "@/lib/markdown-editor/utils/asset-url";
-import { getStudioApiBase } from "@/lib/studio/api-base";
+import { getStudioApiBase } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import { cn } from "@/lib/utils";
 

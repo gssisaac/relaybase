@@ -9,13 +9,13 @@ import { ScheduleItemPopover } from "@/studio/components/ScheduleItemPopover";
 import {
   scheduleItemsByDayKey,
   type ScheduleItem,
-} from "@/studio/lib/schedule-items";
+} from "@/studio/lib/schedule/schedule-items";
 import {
   addGregorianDays,
   dateKeyInTimeZone,
   gregorianDateKey,
   weekdayOfGregorianDateInTimeZone,
-} from "@/studio/lib/schedule-timezone";
+} from "@/studio/lib/schedule/schedule-timezone";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_EVENTS_SHOWN = 4;

@@ -15,7 +15,7 @@ import { NewsletterStatusBadge } from "@/studio/components/newsletters/Newslette
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { studioApi, type InProgressOverview } from "@/lib/studio/api";
+import { studioApi, type InProgressOverview } from "@/studio/api";
 
 function formatWhen(value?: string | null): string {
   if (!value) return "—";

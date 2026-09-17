@@ -1,4 +1,4 @@
-import type { StudioComplianceIdentity } from "@/lib/studio/api";
+import type { StudioComplianceIdentity } from "@/studio/api";
 
 export const ACCOUNT_DEFAULT_COMPLIANCE_VALUE = "__account_default__";
 

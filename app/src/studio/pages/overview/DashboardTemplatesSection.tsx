@@ -7,8 +7,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CatalogTemplatePreviewDialog } from "@/studio/components/templates/CatalogTemplatePreviewDialog";
 import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
-import { templatesRootHref } from "@/studio/lib/template-paths";
-import { studioApi, type StudioLayout, type StudioTemplate } from "@/lib/studio/api";
+import { templatesRootHref } from "@/studio/lib/templates/template-paths";
+import { studioApi, type StudioLayout, type StudioTemplate } from "@/studio/api";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
 

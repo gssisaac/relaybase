@@ -21,13 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useVerifiedAccounts } from "@/lib/studio/VerifiedAccountsContext";
+import { useVerifiedAccounts } from "@/studio/stores/verified-accounts";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/studio/pages/audience/AudienceGroupDetailContext";
 import { audienceContactDisplayName } from "@/lib/audience-display";
-import { StudioApiError, studioAudienceApi } from "@/lib/studio/audience-api";
+import { StudioApiError, studioAudienceApi } from "@/studio/api";
 import { ImportSubscribersDialog } from "@/studio/components/audience/ImportSubscribersDialog";
 import { AddVerifiedAccountDialog } from "@/studio/components/verified-accounts/AddVerifiedAccountDialog";
 import { VerificationPendingDialog } from "@/studio/components/verified-accounts/VerificationPendingDialog";

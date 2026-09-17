@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
 import { MessageThumbnailGrid } from "@/studio/components/messages/MessageThumbnailGrid";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
-import { messageDetailHref } from "@/studio/lib/message-paths";
+import { messageDetailHref } from "@/studio/lib/messages/message-paths";
 import { useStudioPaths } from "@/studio/lib/paths";
 import { NewMessageDialog } from "@/studio/pages/messages/NewMessageDialog";
-import { studioApi, type StudioLayout, type StudioMessage } from "@/lib/studio/api";
+import { studioApi, type StudioLayout, type StudioMessage } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function MessagesListView() {

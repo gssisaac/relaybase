@@ -20,8 +20,8 @@ import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
-} from "@/studio/lib/compliance-identity";
-import { studioApi, type Trigger, type StudioAccountCompliance, type StudioLayout } from "@/lib/studio/api";
+} from "@/studio/lib/compliance/compliance-identity";
+import { studioApi, type Trigger, type StudioAccountCompliance, type StudioLayout } from "@/studio/api";
 
 const PREVIEW_RECIPIENT = {
   email: "alex@example.com",

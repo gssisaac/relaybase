@@ -1,4 +1,4 @@
 export {
   STUDIO_PUBLIC_LINK_ORIGIN,
   getStudioApiBase,
-} from "@/lib/studio/studio-origin";
+} from "@/studio/lib/studio-origin";

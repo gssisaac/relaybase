@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { upsertTriggerSidebarListRow } from "@/studio/lib/triggers/trigger-sidebar-list";
-import { studioApi, StudioApiError, type TriggerPurpose } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 
 type NewTriggerDialogProps = {

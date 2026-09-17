@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
-import type { StudioLayout, StudioTemplate } from "@/lib/studio/api";
+import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { CatalogTemplateUseActions } from "@/studio/components/templates/CatalogTemplateUseActions";
 import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";

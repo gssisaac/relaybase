@@ -5,7 +5,7 @@
 import {
   defaultBrandLogoUrl,
   footerBrandLogoImageHtml,
-} from "@/studio/lib/brand-logo";
+} from "@/studio/lib/brand/brand-logo";
 
 export type TemplateVariableType = "text" | "image";
 

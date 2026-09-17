@@ -11,7 +11,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { CF_EMAIL_SENDING_LIMITS_URL } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
-import { studioApi, type StudioOverview } from "@/lib/studio/api";
+import { studioApi, type StudioOverview } from "@/studio/api";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
 import { cn } from "@/lib/utils";
 

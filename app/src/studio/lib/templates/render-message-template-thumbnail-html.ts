@@ -11,7 +11,7 @@ import {
 import { markdownToEmailHtml } from "@/studio/lib/markdown/markdown-to-email-html";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
 import { applyNewsletterMergeTags } from "@/studio/lib/newsletters/newsletter-merge-tags";
-import type { StudioLayout, StudioTemplate } from "@/lib/studio/api";
+import type { StudioLayout, StudioTemplate } from "@/studio/api";
 
 const PREVIEW_RECIPIENT = {
   email: LAYOUT_PREVIEW_FIXTURES.contactEmail,

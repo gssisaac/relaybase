@@ -1,6 +1,6 @@
 import { missingRequiredTemplateVariables } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
-import type { StudioAccountCompliance, TemplateVariablesSchema } from "@/lib/studio/api";
+import type { StudioAccountCompliance, TemplateVariablesSchema } from "@/studio/api";
 
 export type PreflightCheck = {
   id: string;

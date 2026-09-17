@@ -1,4 +1,4 @@
-import { isStudioApiRequest } from "./studio-origin";
+import { isStudioApiRequest } from "../studio-origin/index";
 
 const STUDIO_UI_GET_PATHS = new Set([
   "/studio",

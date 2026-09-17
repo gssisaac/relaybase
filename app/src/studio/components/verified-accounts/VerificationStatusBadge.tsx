@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { VerificationStatus } from "@/lib/studio/verified-accounts-store";
+import type { VerificationStatus } from "@/studio/stores/verified-accounts";
 import { cn } from "@/lib/utils";
 
 const STYLE: Record<

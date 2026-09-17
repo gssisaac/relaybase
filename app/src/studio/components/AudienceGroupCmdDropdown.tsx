@@ -7,7 +7,7 @@ import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
   audienceGroupCmdGroups,
   filterAudienceGroupsByDomain,
-} from "@/studio/lib/audience-group-cmd-groups";
+} from "@/studio/lib/audience/audience-group-cmd-groups";
 
 export type AudienceGroupCmdDropdownProps = {
   groups: AudienceGroupSummary[];

@@ -1,4 +1,4 @@
-import { getStudioApiBase } from "@/lib/studio/api-base";
+import { getStudioApiBase } from "@/studio/api";
 
 const STUDIO_ASSET_PATH_RE = /^\/studio\/assets(\/|$)/;
 

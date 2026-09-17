@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
-import { displayNameForAddress } from "@/studio/lib/use-domain-addresses";
+import { displayNameForAddress } from "@/studio/lib/domains/use-domain-addresses";
 import { domainOf } from "@/studio/lib/triggers/trigger-account-cmd-groups";
 import {
   Select,
@@ -38,10 +38,10 @@ import {
 import Link from "next/link";
 
 import { studioAudienceDetailHref } from "@/studio/lib/paths";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
+import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { ComplianceIdentityEditor } from "@/studio/components/ComplianceIdentityEditor";
-import { studioApi, StudioApiError } from "@/lib/studio/api";
+import { studioApi, StudioApiError } from "@/studio/api";
 
 export function NewsletterSettingsView() {
   const { newsletterId, newsletter, templates, setNewsletter } = useNewsletterDetail();

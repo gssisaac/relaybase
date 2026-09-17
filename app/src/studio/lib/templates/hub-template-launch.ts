@@ -1,5 +1,5 @@
 import { resolveEmailApiBase } from "@/lib/desktop/api";
-import { studioApi, type TriggerPurpose } from "@/lib/studio/api";
+import { studioApi, type TriggerPurpose } from "@/studio/api";
 
 export type HubTemplateSnapshot = {
   subject: string;

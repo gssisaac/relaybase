@@ -1,4 +1,4 @@
-import { getStudioApiBase } from "@/lib/studio/api-base";
+import { getStudioApiBase } from "@/studio/api";
 
 export const DEFAULT_BRAND_LOGO_FILENAME = "relaybase-icon.png";
 

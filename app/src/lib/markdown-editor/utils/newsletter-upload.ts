@@ -1,4 +1,4 @@
-import { studioApi } from "@/lib/studio/api";
+import { studioApi } from "@/studio/api";
 
 export type CrmContentAssetOwner = "newsletter" | "trigger" | "message";
 

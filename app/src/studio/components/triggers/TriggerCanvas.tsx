@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { TriggerNodeCard } from "@/studio/components/triggers/nodes/TriggerNodeCard";
 import { MessageNodeCard } from "@/studio/components/triggers/nodes/MessageNodeCard";
 import { WorkflowConnector } from "@/studio/components/triggers/nodes/WorkflowConnector";
-import type { Trigger } from "@/lib/studio/api";
+import type { Trigger } from "@/studio/api";
 import { TRIGGER_CONFIG_INSPECTOR_WIDTH_PX } from "@/studio/lib/triggers/trigger-config-inspector";
 import { useTriggerConfigUi } from "@/studio/pages/triggers/TriggerConfigUiContext";
 import { cn } from "@/lib/utils";

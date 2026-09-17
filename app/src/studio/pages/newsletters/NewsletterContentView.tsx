@@ -25,16 +25,16 @@ import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
 import { MessagePicker } from "@/studio/components/messages/MessagePicker";
 import { NewsletterComposeForm } from "@/studio/pages/newsletters/NewsletterComposeForm";
-import { messageDetailHref } from "@/studio/lib/message-paths";
-import type { StudioMessage } from "@/lib/studio/api";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
+import { messageDetailHref } from "@/studio/lib/messages/message-paths";
+import type { StudioMessage } from "@/studio/api";
+import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
-} from "@/studio/lib/compliance-identity";
-import { buildPreviewUnsubscribeUrl } from "@/studio/lib/preview-unsubscribe-url";
-import { studioApi, type NewsletterStatus, type StudioAccountCompliance } from "@/lib/studio/api";
+} from "@/studio/lib/compliance/compliance-identity";
+import { buildPreviewUnsubscribeUrl } from "@/studio/lib/newsletters/preview-unsubscribe-url";
+import { studioApi, type NewsletterStatus, type StudioAccountCompliance } from "@/studio/api";
 import {
   useNewsletterEditorPersistence,
   type NewsletterPersistBridge,

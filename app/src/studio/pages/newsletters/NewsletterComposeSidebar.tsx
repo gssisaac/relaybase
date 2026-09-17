@@ -29,8 +29,8 @@ import {
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import { runNewsletterPreflight } from "@/studio/lib/newsletters/newsletter-preflight";
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
-import type { StudioAccountCompliance } from "@/lib/studio/api";
-import type { StudioLayout } from "@/lib/studio/api";
+import type { StudioAccountCompliance } from "@/studio/api";
+import type { StudioLayout } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import { cn } from "@/lib/utils";
 

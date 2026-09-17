@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { LayoutImportDialog } from "@/studio/components/layouts/LayoutImportDialog";
-import { studioApi, type StudioLayout } from "@/lib/studio/api";
+import { studioApi, type StudioLayout } from "@/studio/api";
 
 export function LayoutLibraryDialog({
   trigger,

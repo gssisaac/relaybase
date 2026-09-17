@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { TriggerListStatus, TriggerStatus } from "@/lib/studio/api";
+import type { TriggerListStatus, TriggerStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function TriggerStatusBadge({

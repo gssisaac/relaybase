@@ -24,11 +24,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { layoutDetailHref } from "@/studio/lib/layout-paths";
+import { layoutDetailHref } from "@/studio/lib/layouts/layout-paths";
 import { useLayoutRenderedPreview } from "@/studio/pages/layouts/use-layout-rendered-preview";
 import { useStudioPaths } from "@/studio/lib/paths";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { studioApi, StudioApiError, type StudioLayout } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type StudioLayout } from "@/studio/api";
 
 export function LayoutDetailView({ layoutId }: { layoutId: string }) {
   const router = useRouter();

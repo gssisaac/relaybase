@@ -8,7 +8,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import type { StudioOverview } from "@/lib/studio/api";
+import type { StudioOverview } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 /** Compact overview charts — minimal axes, short height, pill bars. */

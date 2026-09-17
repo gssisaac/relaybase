@@ -17,9 +17,9 @@ import {
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
 import { resolveTriggerSendingDomain } from "@/studio/lib/triggers/trigger-sending-domain";
-import { displayNameForAddress } from "@/studio/lib/use-domain-addresses";
+import { displayNameForAddress } from "@/studio/lib/domains/use-domain-addresses";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
-import { studioApi, StudioApiError } from "@/lib/studio/api";
+import { studioApi, StudioApiError } from "@/studio/api";
 
 export type OutboundSenderDraft = {
   fromName: string | null;

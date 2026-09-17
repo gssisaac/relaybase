@@ -5,7 +5,7 @@ import { reaction } from "mobx";
 
 import { connectedCfAccountId } from "@/lib/desktop/bridge";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
-import { VerifiedAccountsStore } from "@/lib/studio/verified-accounts-store";
+import { VerifiedAccountsStore } from "./verified-accounts-store";
 
 const VerifiedAccountsStoreContext = React.createContext<VerifiedAccountsStore | null>(
   null,
@@ -69,5 +69,5 @@ export function useVerifiedAccounts(): VerifiedAccountsStore {
   return store;
 }
 
-export { VerifiedAccountsStore } from "@/lib/studio/verified-accounts-store";
-export type { VerificationStatus } from "@/lib/studio/verified-accounts-store";
+export { VerifiedAccountsStore } from "./verified-accounts-store";
+export type { VerificationStatus } from "./verified-accounts-store";

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { shouldProxyRequestToStudio } from "@/lib/studio/studio-proxy-policy";
+import { shouldProxyRequestToStudio } from "@/studio/lib/studio-proxy/studio-proxy-policy";
 
 const DEFAULT_STUDIO_UPSTREAM = "http://127.0.0.1:32831";
 

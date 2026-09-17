@@ -4,8 +4,9 @@ import Link from "next/link";
 
 import { MessageLinkedOwnerBadge } from "@/studio/components/messages/MessageLinkedOwnerBadge";
 import { MessageThumbnailPreview } from "@/studio/components/messages/MessageThumbnailPreview";
-import { messagePreviewHref } from "@/studio/lib/message-paths";
-import type { StudioLayout, StudioMessage } from "@/lib/studio/api";
+import { messagePreviewHref } from "@/studio/lib/messages/message-paths";
+import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
+import type { StudioLayout, StudioMessage } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function resolveMessageLayout(
@@ -27,18 +28,13 @@ export function MessageThumbnailGrid({
   className?: string;
 }) {
   return (
-    <ul
-      className={cn(
-        "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-        className,
-      )}
-    >
+    <ul className={cn(studioGalleryGridClassName, className)}>
       {messages.map((message) => {
         const layout = resolveMessageLayout(message, layouts);
         const href = messagePreviewHref(message.id);
         return (
-          <li key={message.id}>
-            <div className="group flex flex-col overflow-hidden rounded-lg border bg-card transition hover:border-primary/40 hover:shadow-sm">
+          <li key={message.id} className="min-w-0">
+            <div className="group flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card transition hover:border-primary/40 hover:shadow-sm">
               <Link href={href} className="flex min-w-0 flex-col outline-none">
                 <MessageThumbnailPreview messageId={message.id} message={message} layout={layout} />
                 <div className="space-y-1.5 border-t px-3 py-2.5">

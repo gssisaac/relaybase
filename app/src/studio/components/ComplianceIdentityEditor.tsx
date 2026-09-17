@@ -26,9 +26,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ACCOUNT_DEFAULT_COMPLIANCE_VALUE,
   findComplianceIdentityById,
-} from "@/studio/lib/compliance-identity";
+} from "@/studio/lib/compliance/compliance-identity";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { studioApi, StudioApiError, type StudioComplianceIdentity } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type StudioComplianceIdentity } from "@/studio/api";
 
 type EditorMode = "account-default" | "newsletter";
 

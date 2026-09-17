@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { StudioDetailPageHeader } from "@/studio/components/StudioDetailPageHeader";
-import { messagePreviewHref } from "@/studio/lib/message-paths";
+import { messagePreviewHref } from "@/studio/lib/messages/message-paths";
 import { MessageContentView } from "@/studio/pages/messages/MessageContentView";
 import { TemplateEditableTitle } from "@/studio/pages/messages/TemplateEditableTitle";
 import {

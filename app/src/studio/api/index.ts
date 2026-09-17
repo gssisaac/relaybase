@@ -1,10 +1,19 @@
 /**
  * hq/studio client — Newsletter (audience + send) and Trigger models.
  */
-import { getStudioApiBase } from "./api-base";
-import { STUDIO_API_REQUEST_HEADER } from "./studio-origin";
+import {
+  getStudioApiBase,
+  STUDIO_API_REQUEST_HEADER,
+  STUDIO_PUBLIC_LINK_ORIGIN,
+} from "@/studio/lib/studio-origin";
 
-export { getStudioApiBase, STUDIO_PUBLIC_LINK_ORIGIN } from "./api-base";
+export { getStudioApiBase, STUDIO_PUBLIC_LINK_ORIGIN } from "@/studio/lib/studio-origin";
+export { studioAudienceApi } from "./audience-api";
+export {
+  verifiedDestinationApi,
+  VerifiedDestinationApiError,
+  type CfVerifiedDestinationAddress,
+} from "./verified-destination-api";
 
 export type TemplateVariableField = {
   key: string;

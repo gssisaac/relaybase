@@ -1,5 +1,5 @@
 import type { NewsletterDetailTab } from "@/studio/lib/paths";
-import type { NewsletterStatus } from "@/lib/studio/api";
+import type { NewsletterStatus } from "@/studio/api";
 
 const DRAFT_TABS: NewsletterDetailTab[] = ["content", "publish", "settings"];
 

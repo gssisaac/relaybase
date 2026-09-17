@@ -24,7 +24,7 @@ import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { NewsletterCloudflareSendingLimitsCard } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
-import { studioAudienceApi } from "@/lib/studio/audience-api";
+import { studioAudienceApi } from "@/studio/api";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
   EmailListContainer,
@@ -40,7 +40,7 @@ import {
   StudioApiError,
   type Newsletter,
   type NewsletterStatus,
-} from "@/lib/studio/api";
+} from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export type NewsletterFilter = "draft" | "sent" | "in_progress" | "all";

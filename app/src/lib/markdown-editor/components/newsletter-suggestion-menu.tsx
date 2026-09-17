@@ -28,6 +28,7 @@ export const NewsletterSuggestionMenuRoot = forwardRef<
         className,
       )}
       ref={ref}
+      onMouseDown={(event) => event.preventDefault()}
     >
       {children}
     </div>

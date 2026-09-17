@@ -235,6 +235,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const valueRef = useRef(value);
   const syncingRef = useRef(false);
   const pendingEditorMarkdownRef = useRef<string | null>(null);
+  const emittedMarkdownsRef = useRef<Set<string>>(new Set());
   const editorMountedRef = useRef(false);
   const editorRef = useRef<NewsletterEditor | null>(null);
   const newsletterIdRef = useRef(newsletterId);
@@ -337,6 +338,12 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const emitChange = useCallback(
     (body: string, editorInstance: NewsletterEditor) => {
       pendingEditorMarkdownRef.current = body;
+      const set = emittedMarkdownsRef.current;
+      if (set.size >= 50) {
+        const first = set.keys().next().value;
+        if (first !== undefined) set.delete(first);
+      }
+      set.add(body);
       const markdown = body;
       const html = enhancePreviewHtml(
         normalizeNewsletterAssetUrlsInHtml(editorInstance.blocksToHTMLLossy()),
@@ -404,6 +411,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     if (!applied || hydrateGenRef.current !== gen) return;
     hydratedRef.current = true;
     hydratedFingerprintRef.current = fingerprintEditorDocument(editorInstance.document);
+    emittedMarkdownsRef.current.clear();
     // Seed parent preview HTML — notifyEditorChange skips unchanged fingerprints.
     // Raw source keeps the typed markdown; only refresh HTML from BlockNote.
     emitChange(
@@ -457,6 +465,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       setRawDraft(value);
       rawDraftRef.current = value;
       void syncMarkdownFromValue(value, { preserveMarkdown: true });
+      return;
+    }
+    if (emittedMarkdownsRef.current.has(value)) {
       return;
     }
     const currentMarkdown = serializeEditorMarkdown(editor);
@@ -606,6 +617,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     setUncontrolledSourceView("wysiwyg");
     setRawDraft(valueRef.current);
     rawDraftRef.current = valueRef.current;
+    emittedMarkdownsRef.current.clear();
     clearRawHydrateTimer();
   }, [clearRawHydrateTimer, documentId]);
 

@@ -1,7 +1,7 @@
 /** Keep in sync with app/src/lib/markdown-editor/utils/email-button-html.ts */
 
 export type EmailButtonVariant = "primary" | "outline";
-export type EmailButtonAlign = "left" | "center" | "full";
+export type EmailButtonAlign = "left" | "center" | "right" | "full";
 
 export type EmailButtonProps = {
   text: string;
@@ -11,7 +11,7 @@ export type EmailButtonProps = {
 };
 
 const VARIANTS: EmailButtonVariant[] = ["primary", "outline"];
-const ALIGNS: EmailButtonAlign[] = ["left", "center", "full"];
+const ALIGNS: EmailButtonAlign[] = ["left", "center", "right", "full"];
 
 export function normalizeEmailButtonVariant(value: string | null | undefined): EmailButtonVariant {
   return VARIANTS.includes(value as EmailButtonVariant) ? (value as EmailButtonVariant) : "primary";
@@ -65,8 +65,24 @@ function parseMarkerTag(tag: string): EmailButtonProps | null {
 
 function tableMargin(alignment: EmailButtonAlign): string {
   if (alignment === "left") return "16px 0";
+  if (alignment === "right") return "16px 0 16px auto";
   if (alignment === "full") return "16px 0";
-  return "20px auto";
+  return "16px auto";
+}
+
+function tableAlignAttr(alignment: EmailButtonAlign): string {
+  if (alignment === "left") return "left";
+  if (alignment === "right") return "right";
+  return "center";
+}
+
+function wrapEmailButtonRow(alignment: EmailButtonAlign, tableHtml: string): string {
+  if (alignment === "full") {
+    return `<div data-rb-email-button-row="full" style="width:100%;max-width:100%;margin:12px 0;">${tableHtml}</div>`;
+  }
+  const textAlign =
+    alignment === "left" ? "left" : alignment === "right" ? "right" : "center";
+  return `<div data-rb-email-button-row="" style="width:100%;max-width:100%;margin:12px 0;text-align:${textAlign};">${tableHtml}</div>`;
 }
 
 function buttonStyles(variant: EmailButtonVariant, alignment: EmailButtonAlign): {
@@ -100,11 +116,12 @@ export function renderBulletproofEmailButton(props: EmailButtonProps): string {
   const alignment = normalizeEmailButtonAlign(props.alignment);
   const variant = normalizeEmailButtonVariant(props.variant);
   const { tdBg, tdBorder, linkColor, linkBg, width } = buttonStyles(variant, alignment);
-  const tableAlign = alignment === "left" ? "left" : "center";
+  const tableAlign = tableAlignAttr(alignment);
   const padding = alignment === "full" ? "14px 20px" : "12px 28px";
   const display = alignment === "full" ? "block" : "inline-block";
+  const tableDisplay = alignment === "full" ? "table" : "inline-table";
 
-  return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" align="${tableAlign}" style="margin:${tableMargin(alignment)};border-collapse:separate;">
+  const table = `<table role="presentation" border="0" cellpadding="0" cellspacing="0" align="${tableAlign}" style="display:${tableDisplay};margin:${tableMargin(alignment)};border-collapse:separate;${alignment === "full" ? "width:100%;" : ""}">
   <tr>
     <td align="center" bgcolor="${tdBg}" style="border-radius:8px;background-color:${tdBg};border:${tdBorder};width:${width};">
       <a href="${url}" target="_blank" style="display:${display};padding:${padding};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:${linkColor};background-color:${linkBg};text-decoration:none;border-radius:8px;line-height:1.2;text-align:center;">
@@ -113,6 +130,8 @@ export function renderBulletproofEmailButton(props: EmailButtonProps): string {
     </td>
   </tr>
 </table>`;
+
+  return wrapEmailButtonRow(alignment, table);
 }
 
 export function transformEmailButtonMarkersToBulletproof(html: string): string {

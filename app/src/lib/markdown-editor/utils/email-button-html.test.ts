@@ -34,7 +34,7 @@ describe("transformEmailButtonMarkersToBulletproof", () => {
     assert.match(html, /<table role="presentation"/);
     assert.match(html, /href="https:\/\/relaybase.com"/);
     assert.match(html, /Go/);
-    assert.doesNotMatch(html, /data-rb-email-button/);
+    assert.doesNotMatch(html, /\bdata-rb-email-button=""/);
   });
 });
 
@@ -48,6 +48,29 @@ describe("renderBulletproofEmailButton", () => {
     });
     assert.match(html, /color:#ffffff/);
     assert.match(html, /display:block/);
+  });
+
+  it("wraps centered buttons in a full-width row for preview layout", () => {
+    const html = renderBulletproofEmailButton({
+      text: "Go",
+      url: "https://relaybase.com",
+      variant: "primary",
+      alignment: "center",
+    });
+    assert.match(html, /data-rb-email-button-row/);
+    assert.match(html, /text-align:center/);
+    assert.match(html, /align="center"/);
+  });
+
+  it("supports right alignment in bulletproof output", () => {
+    const html = renderBulletproofEmailButton({
+      text: "Go",
+      url: "https://relaybase.com",
+      variant: "primary",
+      alignment: "right",
+    });
+    assert.match(html, /text-align:right/);
+    assert.match(html, /align="right"/);
   });
 });
 

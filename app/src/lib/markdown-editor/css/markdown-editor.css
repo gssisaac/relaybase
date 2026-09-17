@@ -146,11 +146,14 @@
 .gtm-md-editor [data-content-type="emailButton"] .bn-block-outer,
 .gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
   overflow: visible !important;
+  width: 100%;
+  max-width: 100%;
 }
 
 .gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
   padding-top: 8px;
   padding-bottom: 8px;
+  display: block;
 }
 
 /* Table: force full width (BlockNote sets width: auto !important). */

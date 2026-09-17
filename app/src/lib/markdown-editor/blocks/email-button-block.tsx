@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import type { NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import {
+  emailButtonEditorRowClassName,
   normalizeEmailButtonAlign,
   normalizeEmailButtonVariant,
   type EmailButtonAlign,
@@ -37,7 +38,7 @@ const emailButtonPropSchema = {
   },
   alignment: {
     default: "center" as const,
-    values: ["left", "center", "full"] as const,
+    values: ["left", "center", "right", "full"] as const,
   },
 } as const;
 
@@ -187,6 +188,9 @@ function EmailButtonSettingsPanel(props: {
                 <SelectItem value="center" className="text-xs">
                   Center
                 </SelectItem>
+                <SelectItem value="right" className="text-xs">
+                  Right
+                </SelectItem>
                 <SelectItem value="full" className="text-xs">
                   Full width
                 </SelectItem>
@@ -220,11 +224,7 @@ function EmailButtonBlockRender(props: {
   const label = (typeof text === "string" ? text.trim() : "") || "Button";
   const editable = props.editor?.isEditable ?? true;
   const blockId = props.block?.id ?? "new";
-
-  const previewAlign =
-    alignment === "left" ? "justify-start" : alignment === "full" ? "justify-stretch" : "justify-center";
-
-  const popoverAlign = alignment === "left" ? "start" : "center";
+  const rowClassName = emailButtonEditorRowClassName(alignment);
 
   const updateProps = (patch: Partial<EmailButtonBlockProps>) => {
     if (!props.editor || !props.block) return;
@@ -254,8 +254,8 @@ function EmailButtonBlockRender(props: {
 
   if (!editable) {
     return (
-      <div className="my-2" contentEditable={false}>
-        <div className={cn("flex", previewAlign)}>
+      <div className="my-2 w-full max-w-full" contentEditable={false}>
+        <div className={rowClassName}>
           <a
             href={url}
             target="_blank"
@@ -270,8 +270,8 @@ function EmailButtonBlockRender(props: {
   }
 
   return (
-    <div className="my-2 select-none" contentEditable={false}>
-      <div className={cn("flex", previewAlign)}>
+    <div className="my-2 w-full max-w-full select-none" contentEditable={false}>
+      <div className={rowClassName}>
         <Popover open={open} onOpenChange={setOpen}>
           <div className={cn("group/btn relative inline-flex", alignment === "full" && "w-full")}>
             <PopoverTrigger
@@ -318,7 +318,7 @@ function EmailButtonBlockRender(props: {
           </div>
 
           <PopoverContent
-            align={popoverAlign}
+            align="center"
             side="bottom"
             sideOffset={8}
             className="z-[80] w-80 max-w-[min(20rem,calc(100vw-2rem))] gap-0 p-3.5"

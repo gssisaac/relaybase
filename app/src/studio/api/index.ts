@@ -339,6 +339,60 @@ export type StudioOverview = {
   };
 };
 
+export type StudioDashboardSendingAggregate = {
+  newsletterCount: number;
+  recipientTotal: number;
+  processed: number;
+  remaining: number;
+  queued: number;
+  inFlight: number;
+  delivered: number;
+  failed: number;
+  bounced: number;
+  skipped: number;
+  failureRate: number;
+  overallPercent: number;
+  latestEtaIso: string | null;
+  throughputPerMin: number | null;
+};
+
+export type StudioDashboardPayload = {
+  generatedAt: string;
+  sending: StudioDashboardSendingAggregate | null;
+  templates: StudioTemplate[];
+  layouts: StudioLayout[];
+  schedule: {
+    nextUpcoming: {
+      id: string;
+      subject: string;
+      scheduledAt: string;
+      subscriberGroupName: string | null;
+      recipientCount: number;
+      status: NewsletterStatus;
+    } | null;
+    upcomingCount: number;
+    upcomingList: Array<{
+      id: string;
+      subject: string;
+      scheduledAt: string;
+      status: "scheduled" | "sending";
+      subscriberGroupName: string | null;
+    }>;
+  };
+  subscribers: {
+    groupCount: number;
+    recentSyncStatus: { lastSyncAt: string | null; failedGroupsCount: number };
+    groups: Array<{
+      id: string;
+      name: string;
+      domain: string;
+      contactCount: number;
+      lastSyncStatus?: "success" | "error";
+      lastSyncAt?: string;
+    }>;
+  };
+};
+
 export type InProgressOverview = {
   sending: Array<{
     newsletter: Newsletter;
@@ -578,6 +632,7 @@ export const studioApi = {
     studioFetch<{ ok: true }>(`/studio/messages/${id}`, { method: "DELETE" }),
 
   getOverview: () => studioFetch<StudioOverview>("/studio/overview"),
+  getDashboard: () => studioFetch<StudioDashboardPayload>("/studio/dashboard"),
   listNewsletters: () => studioFetch<{ newsletters: Newsletter[] }>("/studio/newsletters"),
   getSentOverview: () => studioFetch<AccountSentOverview>("/studio/newsletters/sent-stats"),
   getInProgressOverview: () => studioFetch<InProgressOverview>("/studio/newsletters/in-progress"),

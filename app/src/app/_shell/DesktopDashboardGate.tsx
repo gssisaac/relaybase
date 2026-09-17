@@ -184,7 +184,7 @@ export function DesktopDashboardGate({
     let active = true;
 
     async function resolveWebGate() {
-      // Studio is HQ Cloud–gated; Worker passtoken is not required to enter the shell.
+      // Studio is session-gated; Worker passtoken is not required to enter the shell.
       if (isStudioShellPath(pathname)) {
         if (hasHqSession()) {
           setGateMode("web-owner");
@@ -231,7 +231,7 @@ export function DesktopDashboardGate({
       router.replace(`/mail-settings${search}`);
     } else if (isStudioShellPath(pathname)) {
       const next = `${pathname}${search}`;
-      router.replace(`/cloud/login?next=${encodeURIComponent(next)}`);
+      router.replace(`/studio/login?next=${encodeURIComponent(next)}`);
     } else {
       const auth = getWebTeamAuth();
       if (auth) {

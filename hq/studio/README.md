@@ -26,7 +26,7 @@ Override the data root with `STUDIO_DATA_DIR`.
 
 Legacy monolithic `data/store.json` is migrated once on startup into `data/store/`. Legacy `templates[]` in that file is imported to YAML, then removed.
 
-## HQ Cloud auth (`/auth/*`)
+## Studio web auth (`/auth/*`)
 
 User records live in `data/auth.json` (same directory as the store shards). The web app
 proxies `/auth/*` to this service in local dev.

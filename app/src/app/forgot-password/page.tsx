@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
           </form>
         )}
         <p className="text-center text-xs text-muted-foreground">
-          <Link href="/cloud/login" className="hover:underline">
+          <Link href="/studio/login" className="hover:underline">
             Back to sign in
           </Link>
         </p>

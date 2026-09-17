@@ -12,7 +12,7 @@ import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
 import { cn } from "@/lib/utils";
 import { hqSignup } from "@/lib/hq-auth/session";
 import {
-  verifyWorkerForCloudSignup,
+  verifyWorkerForStudioSignup,
   type SignupWorkerRole,
 } from "@/lib/hq-auth/verify-worker-signup";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
@@ -33,8 +33,8 @@ type VerifiedWorker = {
   teamPassword?: string;
 };
 
-/** HQ Cloud sign-up — `/cloud/signup` (Step 1: Worker proof, Step 2: account). */
-export function HqCloudSignupView() {
+/** Relaybase Studio sign-up — `/studio/signup` (Step 1: Worker proof, Step 2: account). */
+export function HqStudioSignupView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
@@ -72,7 +72,7 @@ export function HqCloudSignupView() {
     setBusy(true);
     setError(null);
     try {
-      await verifyWorkerForCloudSignup({
+      await verifyWorkerForStudioSignup({
         role,
         workerUrl: trimmedUrl,
         passtoken: role === "owner" ? passtoken : undefined,
@@ -128,17 +128,17 @@ export function HqCloudSignupView() {
   }
 
   const loginHref = next
-    ? `/cloud/login?next=${encodeURIComponent(next)}`
-    : "/cloud/login";
+    ? `/studio/login?next=${encodeURIComponent(next)}`
+    : "/studio/login";
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Create Relaybase Cloud account</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Create Relaybase Studio account</h1>
           <p className="text-sm text-muted-foreground">
             Step {step} of 2 —{" "}
-            {step === 1 ? "Verify your Worker" : "Your Cloud profile"}
+            {step === 1 ? "Verify your Worker" : "Your Studio profile"}
           </p>
         </div>
 
@@ -151,7 +151,7 @@ export function HqCloudSignupView() {
         {step === 1 ? (
           <form
             className="space-y-4"
-            name="relaybase-cloud-signup-worker"
+            name="relaybase-studio-signup-worker"
             autoComplete="off"
             onSubmit={handleVerifyWorker}
           >
@@ -217,7 +217,7 @@ export function HqCloudSignupView() {
               />
               {role === "owner" ? (
                 <p className="text-[11px] text-muted-foreground">
-                  Used once to prove Worker ownership — not stored on Relaybase Cloud.
+                  Used once to prove Worker ownership — not stored on Relaybase Studio.
                 </p>
               ) : null}
             </div>
@@ -231,7 +231,7 @@ export function HqCloudSignupView() {
         ) : (
           <form
             className="space-y-4"
-            name="relaybase-cloud-signup-profile"
+            name="relaybase-studio-signup-profile"
             autoComplete="off"
             onSubmit={handleCreateAccount}
           >
@@ -243,7 +243,7 @@ export function HqCloudSignupView() {
               <Label htmlFor="hq-signup-name">Name</Label>
               <Input
                 id="hq-signup-name"
-                name="relaybase-cloud-display-name"
+                name="relaybase-studio-display-name"
                 autoComplete="off"
                 data-1p-ignore
                 required
@@ -256,7 +256,7 @@ export function HqCloudSignupView() {
               <Label htmlFor="hq-signup-email">Email</Label>
               <Input
                 id="hq-signup-email"
-                name="relaybase-cloud-signup-email"
+                name="relaybase-studio-signup-email"
                 type="email"
                 inputMode="email"
                 autoComplete="off"
@@ -273,7 +273,7 @@ export function HqCloudSignupView() {
               <Label htmlFor="hq-signup-password">Password</Label>
               <Input
                 id="hq-signup-password"
-                name="relaybase-cloud-signup-password"
+                name="relaybase-studio-signup-password"
                 type="password"
                 autoComplete="new-password"
                 data-1p-ignore
@@ -287,7 +287,7 @@ export function HqCloudSignupView() {
               <Label htmlFor="hq-signup-confirm">Confirm password</Label>
               <Input
                 id="hq-signup-confirm"
-                name="relaybase-cloud-signup-confirm"
+                name="relaybase-studio-signup-confirm"
                 type="password"
                 autoComplete="new-password"
                 data-1p-ignore
@@ -300,7 +300,7 @@ export function HqCloudSignupView() {
                 <p className="text-[11px] text-destructive">Passwords do not match.</p>
               ) : (
                 <p className="text-[11px] text-muted-foreground">
-                  At least 10 characters. HQ Cloud only — not your Worker passtoken.
+                  At least 10 characters. Studio account only — not your Worker passtoken.
                 </p>
               )}
             </div>

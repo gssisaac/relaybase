@@ -3,11 +3,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-/** Legacy `/signup` → `/cloud/signup`. */
+/** Legacy `/signup` → `/studio/signup`. */
 export default function SignupRedirectPage() {
   const router = useRouter();
   useEffect(() => {
-    router.replace(`/cloud/signup${window.location.search}`);
+    router.replace(`/studio/signup${window.location.search}`);
   }, [router]);
   return null;
 }

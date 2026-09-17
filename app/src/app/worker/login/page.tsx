@@ -50,7 +50,7 @@ function WorkerLoginInner() {
   );
 }
 
-/** Worker passtoken / teammate login — separate URL from `/cloud/login`. */
+/** Worker passtoken / teammate login — separate URL from `/studio/login`. */
 export default function WorkerLoginPage() {
   return (
     <Suspense fallback={<AppLoadingScreen />}>

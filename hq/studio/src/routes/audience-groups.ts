@@ -186,10 +186,7 @@ studioAudience.patch("/:id", async (c) => {
 
   const dataSourceTouched = body.dataSource !== undefined;
   store.update((draft) => {
-    if (domainPatch) {
-      draft.account.domain = domainPatch;
-      if (workerUrl) draft.account.workerUrl = workerUrl;
-    }
+    if (workerUrl) draft.account.workerUrl = workerUrl;
     const idx = draft.audienceGroups.findIndex((g) => g.id === id);
     if (idx < 0) return;
     const g = draft.audienceGroups[idx]!;

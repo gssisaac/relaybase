@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { useDomainAddresses } from "@/studio/lib/domains/use-domain-addresses";
+import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
@@ -70,13 +71,12 @@ export function AudienceGroupSettingsView() {
   const { audienceRoot } = useAudienceRoutes();
   const router = useRouter();
   const { groupId, detail, refresh } = useAudienceGroupDetail();
-  const { readyDomainNames, loading: domainsLoading, refresh: refreshWorkerDomains } =
+  const { domains, loading: domainsLoading, refresh: refreshWorkerDomains } =
     useWorkerDomains();
 
   const [name, setName] = useState("");
   const [groupDomain, setGroupDomain] = useState<string | null>(null);
   const [defaultFrom, setDefaultFrom] = useState<string | null>(null);
-  const { domainAddresses, loading: addressesLoading } = useDomainAddresses(groupDomain);
   const [useDataSource, setUseDataSource] = useState(false);
   const [endpointUrl, setEndpointUrl] = useState("");
   const [credential, setCredential] = useState("");
@@ -98,12 +98,24 @@ export function AudienceGroupSettingsView() {
     void refreshWorkerDomains();
   }, [refreshWorkerDomains]);
 
-  const domainOptionValues = useMemo(() => {
-    const values = new Set(readyDomainNames);
+  const domainOptions = useMemo(() => {
+    const byName = new Map(
+      domains.map((d) => [
+        d.domain,
+        {
+          value: d.domain,
+          label: d.domain,
+          disabled:
+            Boolean(d.onboarding) && d.onboarding?.status !== "ready",
+        },
+      ]),
+    );
     const pinned = (groupDomain ?? detail?.group.domain)?.trim();
-    if (pinned) values.add(pinned);
-    return [...values].sort((a, b) => a.localeCompare(b));
-  }, [readyDomainNames, groupDomain, detail?.group.domain]);
+    if (pinned && !byName.has(pinned)) {
+      byName.set(pinned, { value: pinned, label: pinned, disabled: false });
+    }
+    return [...byName.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [domains, groupDomain, detail?.group.domain]);
 
   useEffect(() => {
     if (!detail) return;
@@ -252,9 +264,19 @@ export function AudienceGroupSettingsView() {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Domain</Label>
-            <Select
+            <Label htmlFor="audience-group-domain" className="text-xs">
+              Domain
+            </Label>
+            <CmdDropdown
+              triggerId="audience-group-domain"
+              triggerClassName="min-w-0"
               value={groupDomain}
+              options={domainOptions}
+              placeholder={
+                domainsLoading ? "Loading domains…" : "Select sending domain"
+              }
+              searchPlaceholder="Search domains…"
+              disabled={domainsLoading && domainOptions.length === 0}
               onValueChange={(next) => {
                 if (!next) {
                   setGroupDomain(null);
@@ -268,59 +290,31 @@ export function AudienceGroupSettingsView() {
                   setDefaultFrom(null);
                 }
               }}
-              disabled={domainsLoading && domainOptionValues.length === 0}
-            >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue
-                  placeholder={
-                    domainsLoading ? "Loading domains…" : "Select sending domain"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {domainOptionValues.map((domain) => (
-                  <SelectItem key={domain} value={domain}>
-                    {domain}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
             <p className="text-xs text-muted-foreground">
-              Sending domain from your Worker catalog (same as newsletter create). Subscriber
-              contact addresses are unrelated.
+              Relaybase catalog, Cloudflare zones on your connected account, and Console
+              senders/keys. Zones not yet added in Console → Domains may need onboarding before
+              send. Subscriber contact addresses are unrelated.
             </p>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Default sender</Label>
-            <Select
+            <Label htmlFor="audience-group-default-sender" className="text-xs">
+              Default sender
+            </Label>
+            <AccountCmdDropdown
+              triggerId="audience-group-default-sender"
+              triggerClassName="min-w-0"
               value={defaultFrom}
-              onValueChange={(v) => setDefaultFrom(v)}
-              disabled={!groupDomain || addressesLoading || domainAddresses.length === 0}
-            >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue
-                  placeholder={
-                    !groupDomain
-                      ? "Select a domain first"
-                      : addressesLoading
-                        ? "Loading accounts…"
-                        : "Select sender"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {domainAddresses.map((a) => (
-                  <SelectItem key={a.email} value={a.email}>
-                    {a.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              domainFilter={groupDomain}
+              pinnedEmails={defaultFrom ? [defaultFrom] : []}
+              disabled={!groupDomain}
+              placeholder={
+                !groupDomain ? "Select a domain first" : "Select sender"
+              }
+              onValueChange={(email) => setDefaultFrom(email ?? null)}
+            />
             <p className="text-xs text-muted-foreground">
               From address on the selected domain when sending newsletters to this group.
-              {domainAddresses.length === 0 && groupDomain && !addressesLoading
-                ? " Add a sender on this domain in Console → Accounts."
-                : null}
             </p>
           </div>
           <Button size="sm" disabled={!canSave || saving} onClick={save}>

@@ -17,6 +17,7 @@ import { studioTriggerTracking } from "./routes/trigger-tracking";
 import { studioOverview } from "./routes/overview";
 import { studioApiAuthMiddleware } from "./lib/auth/studio-api-auth";
 import { hqAuth } from "./routes/auth";
+import { studioWorkerCatalog } from "./routes/worker-catalog";
 
 const app = new Hono();
 
@@ -34,6 +35,7 @@ app.get("/health", (c) => c.json({ ok: true, service: "relaybase-studio" }));
 app.route("/auth", hqAuth);
 
 app.route("/studio/account-link", studioAccountLink);
+app.route("/studio/worker-catalog", studioWorkerCatalog);
 app.route("/studio/compliance-identities", studioComplianceIdentities);
 app.route("/studio/overview", studioOverview);
 app.route("/studio/newsletters", studioNewsletters);

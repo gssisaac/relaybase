@@ -1,50 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { HqCloudLoginView } from "@/console/components/setup/HqCloudLoginView";
-import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
-
-function CloudLoginInner() {
+/** Legacy `/cloud/login` → `/studio/login`. */
+export default function CloudLoginRedirectPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next");
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
-    let active = true;
-
-    async function boot() {
-      if (hasHqSession()) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      const hqOk = await hqRefreshSession();
-      if (!active) return;
-      if (hqOk) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      setReady(true);
-    }
-
-    void boot();
-    return () => {
-      active = false;
-    };
-  }, [next, router]);
-
-  if (!ready) return <AppLoadingScreen />;
-  return <HqCloudLoginView />;
-}
-
-/** HQ Cloud / Studio sign-in — separate URL so Chrome autofill stays distinct from Worker login. */
-export default function CloudLoginPage() {
-  return (
-    <Suspense fallback={<AppLoadingScreen />}>
-      <CloudLoginInner />
-    </Suspense>
-  );
+    router.replace(`/studio/login${window.location.search}`);
+  }, [router]);
+  return null;
 }

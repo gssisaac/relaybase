@@ -5,7 +5,7 @@ import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 export type SignupWorkerRole = "owner" | "team";
 
 /** Step 1 — client-side Worker proof (same checks as signup; no session stored). */
-export async function verifyWorkerForCloudSignup(input: {
+export async function verifyWorkerForStudioSignup(input: {
   role: SignupWorkerRole;
   workerUrl: string;
   passtoken?: string;

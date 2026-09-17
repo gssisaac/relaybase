@@ -51,6 +51,7 @@ export function shouldProxyRequestToStudio(pathname: string, method: string, hea
   if (pathname.startsWith("/studio/webhooks")) return true;
   if (pathname.startsWith("/studio/audience-groups")) return true;
   if (pathname === "/studio/account-link") return true;
+  if (pathname.startsWith("/studio/worker-catalog")) return true;
   if (pathname.startsWith("/studio/compliance-identities")) return true;
   if (pathname.startsWith("/studio/brand/")) return true;
   if (pathname.startsWith("/studio/assets/")) return true;

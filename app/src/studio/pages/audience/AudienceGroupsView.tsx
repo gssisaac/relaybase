@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { AudienceDataSourceGuide } from "@/studio/pages/audience/AudienceDataSourceGuide";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
 import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
@@ -92,7 +93,7 @@ export function AudienceGroupsView() {
   const verifiedStore = useVerifiedAccounts();
   const { audienceDetailHref } = useAudienceRoutes();
   const {
-    readyDomains,
+    domains: workerDomains,
     loading: workerDomainsLoading,
     refresh: refreshWorkerDomains,
   } = useWorkerDomains();
@@ -205,9 +206,24 @@ export function AudienceGroupsView() {
     );
   }, [groups, search]);
 
+  const createDomainOptions = useMemo(
+    () =>
+      [...workerDomains]
+        .map((d) => ({
+          value: d.domain,
+          label: d.domain,
+          disabled: Boolean(d.onboarding) && d.onboarding?.status !== "ready",
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [workerDomains],
+  );
+
   function resetAddForm() {
     setName("");
-    setDomain(readyDomains[0]?.domain ?? null);
+    const firstReady =
+      workerDomains.find((d) => !d.onboarding || d.onboarding.status === "ready")
+        ?.domain ?? workerDomains[0]?.domain ?? null;
+    setDomain(firstReady);
     setUseDataSource(false);
     setEndpointUrl("");
     setCredential("");
@@ -341,22 +357,22 @@ export function AudienceGroupsView() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Domain</Label>
-              <Select value={domain} onValueChange={(v) => v && setDomain(v)}>
-                <SelectTrigger className="h-9 w-full">
-                  <SelectValue placeholder="Select domain" />
-                </SelectTrigger>
-                <SelectContent>
-                  {readyDomains.map((d) => (
-                    <SelectItem key={d.domain} value={d.domain}>
-                      {d.domain}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="add-audience-group-domain" className="text-xs">
+                Domain
+              </Label>
+              <CmdDropdown
+                triggerId="add-audience-group-domain"
+                triggerClassName="min-w-0"
+                value={domain}
+                options={createDomainOptions}
+                placeholder="Select domain"
+                searchPlaceholder="Search domains…"
+                disabled={workerDomainsLoading && createDomainOptions.length === 0}
+                onValueChange={(v) => setDomain(v ?? null)}
+              />
               {workerDomainsLoading ? (
                 <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
-              ) : readyDomains.length === 0 ? (
+              ) : workerDomains.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   No domains on your Worker — add one in Console → Domains.
                 </p>

@@ -450,6 +450,9 @@ export type StudioAccountLink = {
 };
 
 export const studioApi = {
+  listWorkerCatalogDomains: () =>
+    studioFetch<{ domains: string[] }>("/studio/worker-catalog/domains"),
+
   getAccountLink: () => studioFetch<StudioAccountLink>("/studio/account-link"),
   updateAccountLink: (input: {
     domain?: string | null;

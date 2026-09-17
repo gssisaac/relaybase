@@ -1,50 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { HqCloudSignupView } from "@/console/components/setup/HqCloudSignupView";
-import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
-
-function CloudSignupInner() {
+/** Legacy `/cloud/signup` → `/studio/signup`. */
+export default function CloudSignupRedirectPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next");
-  const [ready, setReady] = useState(false);
-
   useEffect(() => {
-    let active = true;
-
-    async function boot() {
-      if (hasHqSession()) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      const hqOk = await hqRefreshSession();
-      if (!active) return;
-      if (hqOk) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      setReady(true);
-    }
-
-    void boot();
-    return () => {
-      active = false;
-    };
-  }, [next, router]);
-
-  if (!ready) return <AppLoadingScreen />;
-  return <HqCloudSignupView />;
-}
-
-/** HQ Cloud sign-up — `/cloud/signup` (no shared tab UI with login). */
-export default function CloudSignupPage() {
-  return (
-    <Suspense fallback={<AppLoadingScreen />}>
-      <CloudSignupInner />
-    </Suspense>
-  );
+    router.replace(`/studio/signup${window.location.search}`);
+  }, [router]);
+  return null;
 }

@@ -16,7 +16,7 @@ function LoginRedirectInner() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("mode");
     const qs = params.toString();
-    const base = mode === "worker" ? "/worker/login" : "/cloud/login";
+    const base = mode === "worker" ? "/worker/login" : "/studio/login";
     router.replace(qs ? `${base}?${qs}` : base);
   }, [router, searchParams]);
 
@@ -24,7 +24,7 @@ function LoginRedirectInner() {
 }
 
 /**
- * Legacy `/login` — redirects to `/cloud/login` or `/worker/login` so browsers
+ * Legacy `/login` — redirects to `/studio/login` or `/worker/login` so browsers
  * store autofill credentials per origin path.
  */
 export default function LoginPage() {

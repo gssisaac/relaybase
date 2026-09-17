@@ -210,8 +210,8 @@ export function AccountLoginView({
 
         <p className="text-center text-xs text-muted-foreground">
           Studio in the browser?{" "}
-          <Link href="/cloud/login" className="hover:underline">
-            Relaybase Cloud sign in
+          <Link href="/studio/login" className="hover:underline">
+            Relaybase Studio sign in
           </Link>
           {" · "}
           <Link href="/setup" className="hover:underline">

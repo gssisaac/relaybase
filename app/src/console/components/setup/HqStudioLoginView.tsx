@@ -18,8 +18,8 @@ function redirectAfterAuth(router: ReturnType<typeof useRouter>, next: string | 
   router.push("/studio/dashboard");
 }
 
-/** HQ Cloud sign-in only — `/cloud/login`. */
-export function HqCloudLoginView() {
+/** Relaybase Studio sign-in — `/studio/login`. */
+export function HqStudioLoginView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
@@ -46,22 +46,20 @@ export function HqCloudLoginView() {
   }
 
   const signupHref = next
-    ? `/cloud/signup?next=${encodeURIComponent(next)}`
-    : "/cloud/signup";
+    ? `/studio/signup?next=${encodeURIComponent(next)}`
+    : "/studio/signup";
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Relaybase Cloud</h1>
-          <p className="text-sm text-muted-foreground">
-            Sign in to Studio and cloud features.
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">Relaybase Studio</h1>
+          <p className="text-sm text-muted-foreground">Sign in to your Studio account.</p>
         </div>
 
         <form
           className="space-y-4"
-          name="relaybase-cloud-signin"
+          name="relaybase-studio-signin"
           autoComplete="on"
           onSubmit={handleSubmit}
         >
@@ -72,7 +70,7 @@ export function HqCloudLoginView() {
               name="email"
               type="email"
               inputMode="email"
-              autoComplete="section-relaybase-cloud email"
+              autoComplete="section-relaybase-studio email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -85,7 +83,7 @@ export function HqCloudLoginView() {
               id="hq-login-password"
               name="password"
               type="password"
-              autoComplete="section-relaybase-cloud current-password"
+              autoComplete="section-relaybase-studio current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -106,14 +104,14 @@ export function HqCloudLoginView() {
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          New to Relaybase Cloud?{" "}
+          New to Relaybase Studio?{" "}
           <Link href={signupHref} className="font-medium text-foreground hover:underline">
             Create an account
           </Link>
         </p>
 
         <p className="text-center text-xs text-muted-foreground">
-          Mailbox &amp; Console without Cloud?{" "}
+          Mailbox &amp; Console on your Worker?{" "}
           <Link href="/worker/login" className="hover:underline">
             Connect your Worker
           </Link>

@@ -10,7 +10,7 @@ import { hasHqSession, hqRefreshSession } from "./session";
 
 type GateState = "loading" | "allowed" | "redirect";
 
-/** Web-only: Studio routes require an HQ Cloud session (30-day cookie + access JWT). */
+/** Web-only: Studio routes require a Studio session (30-day cookie + access JWT). */
 export function HqStudioGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,7 +40,7 @@ export function HqStudioGate({ children }: { children: ReactNode }) {
     if (state !== "redirect") return;
     const qs = searchParams.toString();
     const next = `${pathname}${qs ? `?${qs}` : ""}`;
-    router.replace(`/cloud/login?next=${encodeURIComponent(next)}`);
+    router.replace(`/studio/login?next=${encodeURIComponent(next)}`);
   }, [state, pathname, router, searchParams]);
 
   if (state === "loading" || state === "redirect") {

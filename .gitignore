@@ -25,3 +25,6 @@ server/pnpm-lock.yaml
 hq/studio/data/*
 !hq/studio/data/.gitkeep
 # Sharded store lives in hq/studio/data/store/*.json (ignored by rule above)
+
+# Local dated archives of hq/studio/data (may include auth.json)
+hq/studio/.backup/*.tar.gz

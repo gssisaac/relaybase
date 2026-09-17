@@ -1,50 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TemplatesCatalogDialog } from "@/studio/components/templates/TemplatesCatalogDialog";
 import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
+import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { useTemplatesCatalog } from "@/studio/stores/templates-catalog";
 import { useStudioPaths } from "@/studio/lib/paths";
 
-const DASHBOARD_TEMPLATE_LIMIT = 5;
-
 export function DashboardTemplatesSection({
-  refreshKey,
+  templates,
+  layouts,
+  loading,
 }: {
-  refreshKey?: string;
+  templates: StudioTemplate[];
+  layouts: StudioLayout[];
+  loading?: boolean;
 }) {
   const { newsletters } = useStudioPaths();
   const templatesCatalog = useTemplatesCatalog();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogInitialTemplateId, setCatalogInitialTemplateId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (refreshKey) {
-      void templatesCatalog.refreshCatalog({ force: true }).catch(() => {
-        toast.error("Could not load templates");
-      });
-      return;
-    }
-    templatesCatalog.ensureCatalogLoaded();
-  }, [refreshKey, templatesCatalog]);
-
-  const { templates, resolvedLayouts: layouts } = templatesCatalog;
-  const loading = templatesCatalog.catalogShowPlaceholder;
-
-  const sorted = useMemo(
-    () => [...templates].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
-    [templates],
-  );
-
-  const visible = sorted.slice(0, DASHBOARD_TEMPLATE_LIMIT);
-  const remaining = Math.max(0, sorted.length - DASHBOARD_TEMPLATE_LIMIT);
+  const remaining = Math.max(0, templatesCatalog.templates.length - templates.length);
 
   function openCatalog(initialTemplateId?: string) {
+    templatesCatalog.ensureCatalogLoaded();
     setCatalogInitialTemplateId(initialTemplateId ?? null);
     setCatalogOpen(true);
   }
@@ -60,13 +44,8 @@ export function DashboardTemplatesSection({
               : "Choose a pre-built template or curated layout to draft and send emails faster."}
           </CardDescription>
         </div>
-        {sorted.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => openCatalog()}
-          >
+        {templates.length > 0 ? (
+          <Button type="button" variant="ghost" size="sm" onClick={() => openCatalog()}>
             {remaining > 0 ? `View more (${remaining})` : "Browse templates"}
           </Button>
         ) : null}
@@ -74,7 +53,7 @@ export function DashboardTemplatesSection({
       <CardContent>
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading templates…</p>
-        ) : sorted.length === 0 ? (
+        ) : templates.length === 0 ? (
           <div className="flex flex-col items-start gap-2 py-4">
             <p className="text-sm text-muted-foreground">
               No message templates yet. Create your first template or explore presets.
@@ -88,7 +67,7 @@ export function DashboardTemplatesSection({
           </div>
         ) : (
           <TemplateThumbnailGrid
-            templates={visible}
+            templates={templates}
             layouts={layouts}
             onTemplateSelect={(template) => openCatalog(template.id)}
           />

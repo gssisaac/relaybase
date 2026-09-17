@@ -1,17 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { studioApi, type InProgressOverview } from "@/studio/api";
+import type { StudioDashboardSendingAggregate } from "@/studio/api";
 import { formatInMinutes } from "@/studio/lib/newsletters/newsletter-dispatch-display";
 import { useStudioPaths } from "@/studio/lib/paths";
-import { buildDashboardSendingAggregate } from "@/studio/pages/overview/dashboard-sending-aggregate";
 import { cn } from "@/lib/utils";
-
-const POLL_MS = 5_000;
 
 function Metric({
   label,
@@ -33,32 +29,12 @@ function Metric({
   );
 }
 
-export function DashboardSendingNewslettersSection() {
+export function DashboardSendingNewslettersSection({
+  aggregate,
+}: {
+  aggregate: StudioDashboardSendingAggregate;
+}) {
   const { newslettersInProgress } = useStudioPaths();
-  const [data, setData] = useState<InProgressOverview | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setData(await studioApi.getInProgressOverview());
-    } catch {
-      /* dashboard still usable without this block */
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!data?.sending.length) return;
-    const id = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(id);
-  }, [data?.sending.length, load]);
-
-  const sending = data?.sending ?? [];
-  const aggregate = useMemo(() => buildDashboardSendingAggregate(sending), [sending]);
-
-  if (sending.length === 0) return null;
 
   const etaLabel = formatInMinutes(aggregate.latestEtaIso);
 

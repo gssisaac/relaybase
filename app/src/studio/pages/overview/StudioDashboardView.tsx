@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -11,8 +11,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
-import { studioApi, type StudioOverview } from "@/studio/api";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
+import { useDashboard } from "@/studio/stores/dashboard";
 import { cn } from "@/lib/utils";
 
 import { DashboardSendingNewslettersSection } from "./DashboardSendingNewslettersSection";
@@ -23,30 +23,22 @@ import {
   overviewInsetHighlightClassName,
   overviewInsetItemClassName,
 } from "./overview-inset-styles";
+import { StudioDashboardSkeleton } from "./StudioDashboardSkeleton";
 import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 
 export function StudioDashboardView() {
   const { schedule, newsletters, subscribers } = useStudioPaths();
-  const [data, setData] = useState<StudioOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    else setLoading(true);
-    try {
-      setData(await studioApi.getOverview());
-    } catch {
-      toast.error("Could not load Studio dashboard — is hq/studio running on port 32832?");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const dashboard = useDashboard();
+  const data = dashboard.data;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    dashboard.ensureLoaded().catch(() => {
+      toast.error(
+        dashboard.loadError ??
+          "Could not load Studio dashboard — is hq/studio running on port 32832?",
+      );
+    });
+  }, [dashboard]);
 
   const scheduledUpcoming =
     data?.schedule.upcomingList.filter((row) => row.status === "scheduled") ?? [];
@@ -65,10 +57,20 @@ export function StudioDashboardView() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void load(true)}
-              disabled={refreshing || loading}
+              onClick={() => {
+                void dashboard.refresh({ force: true }).catch(() => {
+                  toast.error(
+                    dashboard.loadError ??
+                      "Could not load Studio dashboard — is hq/studio running on port 32832?",
+                  );
+                });
+              }}
+              disabled={dashboard.fetching && !data}
             >
-              <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden />
+              <RefreshCw
+                className={cn("size-3.5", dashboard.isRefreshing && "animate-spin")}
+                aria-hidden
+              />
               Refresh
             </Button>
           </div>
@@ -86,15 +88,17 @@ export function StudioDashboardView() {
       </DesktopTitleBar>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
-          {loading && !data ? (
-            <p className="text-sm text-muted-foreground">Loading dashboard…</p>
-          ) : null}
+          {dashboard.showPlaceholder ? <StudioDashboardSkeleton /> : null}
 
           {data ? (
             <>
-              <DashboardSendingNewslettersSection />
+              {data.sending ? <DashboardSendingNewslettersSection aggregate={data.sending} /> : null}
 
-              <DashboardTemplatesSection refreshKey={data.generatedAt} />
+              <DashboardTemplatesSection
+                templates={data.templates}
+                layouts={data.layouts}
+                loading={dashboard.showPlaceholder}
+              />
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card>
@@ -158,7 +162,8 @@ export function StudioDashboardView() {
                     <div>
                       <CardTitle className="text-base">Subscriber groups</CardTitle>
                       <CardDescription>
-                        {data.subscribers.groupCount} {data.subscribers.groupCount === 1 ? "subscriber group" : "subscriber groups"} ready
+                        {data.subscribers.groupCount}{" "}
+                        {data.subscribers.groupCount === 1 ? "subscriber group" : "subscriber groups"} ready
                         {data.subscribers.recentSyncStatus.failedGroupsCount > 0
                           ? ` · ${data.subscribers.recentSyncStatus.failedGroupsCount} sync errors`
                           : ""}
@@ -211,7 +216,7 @@ export function StudioDashboardView() {
             </>
           ) : null}
 
-          {!loading && !data ? (
+          {!dashboard.fetching && !data ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 Dashboard unavailable. Start hq/studio and refresh.

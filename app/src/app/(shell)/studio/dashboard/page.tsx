@@ -1,5 +1,10 @@
 import { StudioDashboardView } from "@/studio/pages/overview/StudioDashboardView";
+import { DashboardProvider } from "@/studio/stores/dashboard";
 
 export default function StudioDashboardPage() {
-  return <StudioDashboardView />;
+  return (
+    <DashboardProvider>
+      <StudioDashboardView />
+    </DashboardProvider>
+  );
 }

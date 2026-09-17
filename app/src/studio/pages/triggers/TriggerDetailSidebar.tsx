@@ -41,10 +41,8 @@ import {
   triggerListRelativeDate,
   triggerSourceSummary,
 } from "@/studio/lib/triggers/trigger-label";
-import {
-  getTriggerSidebarListSnapshot,
-  removeTriggerSidebarListRow,
-} from "@/studio/lib/triggers/trigger-sidebar-list";
+import { getTriggerSidebarListSnapshot } from "@/studio/lib/triggers/trigger-sidebar-list";
+import { triggersHubStore } from "@/studio/stores/triggers-hub";
 import { NewTriggerDialog } from "@/studio/pages/triggers/NewTriggerDialog";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
 import { useTriggerSidebarList } from "@/studio/pages/triggers/use-trigger-sidebar-list";
@@ -239,7 +237,7 @@ function TriggerDetailSidebarInner() {
     setDeleting(true);
     try {
       await studioApi.updateTrigger(deleteTarget.id, { listStatus: "archived" });
-      removeTriggerSidebarListRow(deleteTarget.id);
+      triggersHubStore.removeTrigger(deleteTarget.id);
 
       if (triggerId === deleteTarget.id) {
         const remaining = getTriggerSidebarListSnapshot()

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { TriggerDetailProvider } from "@/studio/pages/triggers/TriggerDetailContext";
+import { TriggersHubProvider } from "@/studio/stores/triggers-hub";
 
 export function generateStaticParams() {
   return [];
@@ -22,10 +23,12 @@ export default async function AutomationIdLayout({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <TriggerDetailProvider key={triggerId} triggerId={triggerId}>
-        {children}
-      </TriggerDetailProvider>
-    </div>
+    <TriggersHubProvider>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <TriggerDetailProvider key={triggerId} triggerId={triggerId}>
+          {children}
+        </TriggerDetailProvider>
+      </div>
+    </TriggersHubProvider>
   );
 }

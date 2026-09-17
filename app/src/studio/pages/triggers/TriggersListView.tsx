@@ -2,7 +2,7 @@
 
 import { Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -28,15 +28,13 @@ import {
   triggerStatsLine,
   triggerSourceSummary,
 } from "@/studio/lib/triggers/trigger-label";
-import {
-  replaceTriggerSidebarList,
-  removeTriggerSidebarListRow,
-} from "@/studio/lib/triggers/trigger-sidebar-list";
 import { triggerDetailHref } from "@/studio/lib/paths";
 import { NewTriggerDialog } from "@/studio/pages/triggers/NewTriggerDialog";
+import { TriggersListSkeleton } from "@/studio/pages/triggers/TriggersListSkeleton";
 import { TriggersOverviewTopSection } from "@/studio/pages/triggers/TriggersOverviewTopSection";
 import { studioApi, StudioApiError, type Trigger, type TriggerStatus } from "@/studio/api";
 import { useAnalyticsSession } from "@/studio/stores/analytics";
+import { useTriggersHub } from "@/studio/stores/triggers-hub";
 import { cn } from "@/lib/utils";
 import {
   EmailListContainer,
@@ -62,42 +60,26 @@ function triggerRowLabel(row: Trigger): string {
 export function TriggersListView() {
   const router = useRouter();
   const analytics = useAnalyticsSession();
-  const [rows, setRows] = useState<Trigger[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const triggersHub = useTriggersHub();
+  const rows = triggersHub.triggers;
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TriggerFilter>("all");
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Trigger | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    else setLoading(true);
-
-    const [listResult, analyticsResult] = await Promise.allSettled([
-      studioApi.listTriggers(),
-      force ? analytics.refresh({ force: true }) : analytics.ensureLoaded(),
-    ]);
-
-    if (listResult.status === "fulfilled") {
-      setRows(listResult.value.triggers);
-      replaceTriggerSidebarList(listResult.value.triggers);
-    } else {
-      toast.error("Could not load triggers");
-    }
-
-    if (analyticsResult.status === "rejected" && !force && !analytics.data) {
-      toast.error("Could not load analytics stats — is hq/studio running on port 32832?");
-    }
-
-    setLoading(false);
-    setRefreshing(false);
-  }, [analytics]);
+  useEffect(() => {
+    triggersHub.ensureLoaded().catch(() => {
+      toast.error(triggersHub.loadError ?? "Could not load triggers");
+    });
+  }, [triggersHub]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void (analytics.ensureLoaded().catch(() => {
+      toast.error("Could not load analytics stats — is hq/studio running on port 32832?");
+    }));
+  }, [analytics]);
 
   const counts = useMemo(() => {
     const visible = rows.filter((r) => r.listStatus !== "archived");
@@ -130,8 +112,7 @@ export function TriggersListView() {
     setDeleting(true);
     try {
       await studioApi.updateTrigger(deleteTarget.id, { listStatus: "archived" });
-      removeTriggerSidebarListRow(deleteTarget.id);
-      setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      triggersHub.removeTrigger(deleteTarget.id);
       toast.success(`Deleted “${triggerRowLabel(deleteTarget)}”`);
       setDeleteTarget(null);
     } catch (err) {
@@ -161,10 +142,18 @@ export function TriggersListView() {
             <Button
               variant="outline"
               size="sm"
-              disabled={refreshing || loading}
-              onClick={() => void load(true)}
+              disabled={triggersHub.fetching || analytics.fetching}
+              onClick={() => {
+                void triggersHub.refresh({ force: true });
+                void analytics.refresh({ force: true });
+              }}
             >
-              <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={cn(
+                  "size-4",
+                  (triggersHub.isRefreshing || analytics.isRefreshing) && "animate-spin",
+                )}
+              />
             </Button>
           </div>
         }
@@ -179,124 +168,128 @@ export function TriggersListView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
-          {analytics.showPlaceholder && !analytics.data ? (
-            <p className="text-sm text-muted-foreground">Loading stats…</p>
-          ) : null}
-          {analytics.data ? (
-            <TriggersOverviewTopSection
-              data={analytics.data}
-              filter={filter}
-              onFilterChange={setFilter}
-            />
-          ) : null}
+          {triggersHub.showPlaceholder ? <TriggersListSkeleton /> : null}
 
-          <EmailListContainer>
-            <ListToolbar
-              search={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="Search triggers…"
-              trailing={
-                <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
-                  {FILTER_OPTIONS.map((opt) => {
-                    const count = counts[opt.value];
-                    const isSelected = filter === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setFilter(opt.value)}
-                        className={cn(
-                          "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors",
-                          isSelected
-                            ? "bg-background font-medium text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        <span>{opt.label}</span>
-                        <span className="text-[10px] tabular-nums text-muted-foreground/70">
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              }
-            />
-            {loading ? (
-              <div className="min-h-[200px]" />
-            ) : filtered.length === 0 ? (
-              <EmptyListState
-                icon={Zap}
-                title={
-                  rows.filter((r) => r.listStatus !== "archived").length === 0
-                    ? "No triggers yet"
-                    : "No matching triggers"
-                }
-                description={
-                  rows.filter((r) => r.listStatus !== "archived").length === 0
-                    ? "Create a trigger for verify email, contact forms, or inbox replies."
-                    : "Try a different filter or search term."
-                }
-                action={
-                  rows.filter((r) => r.listStatus !== "archived").length === 0 ? (
-                    <Button size="sm" onClick={() => setAddOpen(true)}>
-                      New trigger
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSearch("");
-                        setFilter("all");
-                      }}
-                    >
-                      Reset filters
-                    </Button>
-                  )
-                }
-              />
-            ) : (
-              <>
-                <EmailTableHeader>
-                  <span>Trigger</span>
-                  <span className="hidden sm:block">Stats</span>
-                  <span className="hidden sm:block">Updated</span>
-                  <span className="text-right">Status</span>
-                </EmailTableHeader>
-                <div>
-                  {filtered.map((row) => (
-                    <ContextMenu key={row.id}>
-                      <ContextMenuTrigger render={<div className="contents" />}>
-                        <EmailTableRow
-                          href={triggerDetailHref(row.id, undefined, row.status)}
-                          primary={row.name}
-                          subject={triggerStatsLine(row)}
-                          preview={triggerSourceSummary(row.source)}
-                          date={triggerListRelativeDate(row)}
-                          status={
-                            <TriggerStatusBadge
-                              status={row.status}
-                              listStatus={row.listStatus}
-                            />
-                          }
-                        />
-                      </ContextMenuTrigger>
-                      <ContextMenuContent className="min-w-44">
-                        <ContextMenuItem
-                          variant="destructive"
-                          onClick={() => setDeleteTarget(row)}
+          {!triggersHub.showPlaceholder ? (
+            <>
+              {analytics.showPlaceholder && !analytics.data ? (
+                <p className="text-sm text-muted-foreground">Loading stats…</p>
+              ) : null}
+              {analytics.data ? (
+                <TriggersOverviewTopSection
+                  data={analytics.data}
+                  filter={filter}
+                  onFilterChange={setFilter}
+                />
+              ) : null}
+
+              <EmailListContainer>
+                <ListToolbar
+                  search={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Search triggers…"
+                  trailing={
+                    <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
+                      {FILTER_OPTIONS.map((opt) => {
+                        const count = counts[opt.value];
+                        const isSelected = filter === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setFilter(opt.value)}
+                            className={cn(
+                              "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors",
+                              isSelected
+                                ? "bg-background font-medium text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            <span>{opt.label}</span>
+                            <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  }
+                />
+                {filtered.length === 0 ? (
+                  <EmptyListState
+                    icon={Zap}
+                    title={
+                      rows.filter((r) => r.listStatus !== "archived").length === 0
+                        ? "No triggers yet"
+                        : "No matching triggers"
+                    }
+                    description={
+                      rows.filter((r) => r.listStatus !== "archived").length === 0
+                        ? "Create a trigger for verify email, contact forms, or inbox replies."
+                        : "Try a different filter or search term."
+                    }
+                    action={
+                      rows.filter((r) => r.listStatus !== "archived").length === 0 ? (
+                        <Button size="sm" onClick={() => setAddOpen(true)}>
+                          New trigger
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSearch("");
+                            setFilter("all");
+                          }}
                         >
-                          <Trash2 className="size-4" />
-                          Delete trigger
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
-                  ))}
-                </div>
-              </>
-            )}
-          </EmailListContainer>
+                          Reset filters
+                        </Button>
+                      )
+                    }
+                  />
+                ) : (
+                  <>
+                    <EmailTableHeader>
+                      <span>Trigger</span>
+                      <span className="hidden sm:block">Stats</span>
+                      <span className="hidden sm:block">Updated</span>
+                      <span className="text-right">Status</span>
+                    </EmailTableHeader>
+                    <div>
+                      {filtered.map((row) => (
+                        <ContextMenu key={row.id}>
+                          <ContextMenuTrigger render={<div className="contents" />}>
+                            <EmailTableRow
+                              href={triggerDetailHref(row.id, undefined, row.status)}
+                              primary={row.name}
+                              subject={triggerStatsLine(row)}
+                              preview={triggerSourceSummary(row.source)}
+                              date={triggerListRelativeDate(row)}
+                              status={
+                                <TriggerStatusBadge
+                                  status={row.status}
+                                  listStatus={row.listStatus}
+                                />
+                              }
+                            />
+                          </ContextMenuTrigger>
+                          <ContextMenuContent className="min-w-44">
+                            <ContextMenuItem
+                              variant="destructive"
+                              onClick={() => setDeleteTarget(row)}
+                            >
+                              <Trash2 className="size-4" />
+                              Delete trigger
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </EmailListContainer>
+            </>
+          ) : null}
         </div>
       </div>
 

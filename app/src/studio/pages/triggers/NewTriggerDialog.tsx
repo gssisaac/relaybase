@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { upsertTriggerSidebarListRow } from "@/studio/lib/triggers/trigger-sidebar-list";
+import { triggersHubStore } from "@/studio/stores/triggers-hub";
 import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 
@@ -66,7 +66,7 @@ export function NewTriggerDialog({
         purpose: newPurpose,
         sourceType: newSourceType,
       });
-      upsertTriggerSidebarListRow(created);
+      triggersHubStore.upsertTrigger(created);
       onOpenChange(false);
       resetForm();
       onCreated(created.id);

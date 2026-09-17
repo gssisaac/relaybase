@@ -2,7 +2,8 @@
 
 import { Plus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { SubscriberDataSourceGuide } from "@/studio/pages/subscribers/SubscriberDataSourceGuide";
@@ -21,6 +22,8 @@ import {
 import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { StudioApiError, studioSubscriberApi } from "@/studio/api";
+import { useSubscriberGroups } from "@/studio/stores/subscriber-groups";
+import { SubscriberGroupsListSkeleton } from "@/studio/pages/subscribers/SubscriberGroupsListSkeleton";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,6 +94,7 @@ function friendlyCrmError(e: unknown, fallback: string): string {
 export function SubscriberGroupsView() {
   const router = useRouter();
   const verifiedStore = useVerifiedAccounts();
+  const groupsStore = useSubscriberGroups();
   const { subscriberDetailHref } = useSubscriberRoutes();
   const {
     domains: workerDomains,
@@ -98,10 +102,8 @@ export function SubscriberGroupsView() {
     refresh: refreshWorkerDomains,
   } = useWorkerDomains();
 
-  const [groups, setGroups] = useState<SubscriberGroupSummary[]>([]);
+  const groups = groupsStore.groups;
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -114,62 +116,14 @@ export function SubscriberGroupsView() {
   const [credentialHeader, setCredentialHeader] = useState("");
   const [testState, setTestState] = useState<TestState>({ status: "idle" });
   const [registering, setRegistering] = useState(false);
-  const [emailsByGroupId, setEmailsByGroupId] = useState<Record<string, string[]>>({});
-  const [emailsLoading, setEmailsLoading] = useState(false);
-
-  const groupsRef = useRef(groups);
-  groupsRef.current = groups;
-
-  const refresh = useCallback(async (_force?: boolean) => {
-    const hasData = groupsRef.current.length > 0;
-    if (!hasData) setLoading(true);
-    setRefreshing(true);
-    setError(null);
-    try {
-      const result = await studioSubscriberApi.listGroups();
-      setGroups(result.groups ?? []);
-    } catch (e) {
-      setError(friendlyCrmError(e, "Refresh failed"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    groupsStore.ensureLoaded().catch(() => {
+      toast.error(groupsStore.loadError ?? "Could not load subscriber groups");
+    });
+  }, [groupsStore]);
 
-  useEffect(() => {
-    if (groups.length === 0) {
-      setEmailsByGroupId({});
-      return;
-    }
-    let cancelled = false;
-    setEmailsLoading(true);
-    void (async () => {
-      const entries = await Promise.all(
-        groups.map(async (g) => {
-          try {
-            const detail = await studioSubscriberApi.getGroup(g.id);
-            return [
-              g.id,
-              detail.contacts.map((c) => c.email.trim().toLowerCase()).filter(Boolean),
-            ] as const;
-          } catch {
-            return [g.id, [] as string[]] as const;
-          }
-        }),
-      );
-      if (!cancelled) {
-        setEmailsByGroupId(Object.fromEntries(entries));
-        setEmailsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [groups]);
+  const emailsByGroupId = groupsStore.contactEmailsByGroupId;
+  const emailsLoading = groupsStore.emailsFetching;
 
   const allRecipientEmails = useMemo(() => {
     const unique = new Set<string>();
@@ -281,7 +235,7 @@ export function SubscriberGroupsView() {
       });
       setAddOpen(false);
       setMessage(`Created "${data.group.name}"`);
-      await refresh(true);
+      await groupsStore.refresh({ force: true });
     } catch (e) {
       setError(friendlyCrmError(e, "Failed to create group"));
     } finally {
@@ -318,13 +272,13 @@ export function SubscriberGroupsView() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  void refresh(true);
+                  void groupsStore.refresh({ force: true });
                   void verifiedStore.refreshDestinations();
                 }}
-                disabled={refreshing || verifiedStore.loadingDestinations}
+                disabled={groupsStore.fetching || verifiedStore.loadingDestinations}
               >
                 <RefreshCw
-                  className={refreshing ? "size-4 animate-spin" : "size-4"}
+                  className={groupsStore.isRefreshing ? "size-4 animate-spin" : "size-4"}
                 />
               </Button>
             </>
@@ -540,6 +494,10 @@ export function SubscriberGroupsView() {
             <p className="text-xs text-destructive">{verifiedStore.destinationError}</p>
           ) : null}
 
+          {groupsStore.showPlaceholder ? <SubscriberGroupsListSkeleton /> : null}
+
+          {!groupsStore.showPlaceholder ? (
+          <>
           <div className="grid gap-3 sm:grid-cols-2">
             <OverviewKpiCard
               icon={ShieldCheck}
@@ -647,7 +605,7 @@ export function SubscriberGroupsView() {
                   </TableBody>
                 </Table>
                 </DashboardTableScroll>
-              ) : !loading ? (
+              ) : (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <Users
                     className="size-8 text-muted-foreground"
@@ -663,11 +621,11 @@ export function SubscriberGroupsView() {
                     Add subscriber group
                   </Button>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Loading…</p>
               )}
             </CardContent>
           </Card>
+          </>
+          ) : null}
         </div>
       </div>
     </div>

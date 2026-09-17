@@ -1,36 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect } from "react";
 
-import {
-  fetchTriggerSidebarList,
-  getTriggerSidebarListSnapshot,
-  getCachedTriggerSidebarList,
-  subscribeTriggerSidebarList,
-} from "@/studio/lib/triggers/trigger-sidebar-list";
+import { useTriggersHubSession } from "@/studio/stores/triggers-hub";
 
 export function useTriggerSidebarList() {
-  const rows = useSyncExternalStore(
-    subscribeTriggerSidebarList,
-    getTriggerSidebarListSnapshot,
-    getTriggerSidebarListSnapshot,
-  );
-
-  const [hydrated, setHydrated] = useState(() => getCachedTriggerSidebarList() !== null);
+  const hub = useTriggersHubSession();
 
   useEffect(() => {
-    void fetchTriggerSidebarList(false).finally(() => setHydrated(true));
-  }, []);
+    void hub.ensureLoaded();
+  }, [hub]);
 
-  const loading = !hydrated;
+  const loading = hub.showPlaceholder;
 
   const refresh = useCallback(async (force = true) => {
-    return fetchTriggerSidebarList(force);
-  }, []);
+    await hub.refresh({ force });
+    return hub.sidebarRows;
+  }, [hub]);
 
   return {
-    rows,
-    /** True only before the first list is available. */
+    rows: hub.sidebarRows,
     loading,
     refresh,
   };

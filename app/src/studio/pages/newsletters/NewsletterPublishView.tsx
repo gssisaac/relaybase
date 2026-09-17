@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import type { SubscriberGroupContact, SubscriberGroupSummary } from "@/email/components/mailbox/types";
+import type { SubscriberGroupContact } from "@/email/components/mailbox/types";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,7 @@ import {
   useNewsletterDetailStore,
 } from "@/studio/stores/newsletter-detail";
 import { studioSubscriberApi } from "@/studio/api";
+import { useSubscriberGroupsSession } from "@/studio/stores/subscriber-groups";
 import { useEmailPaths } from "@/email/lib/paths";
 
 const PREVIEW_CONTACT_LIMIT = 40;
@@ -107,8 +108,7 @@ export function NewsletterPublishView() {
   const [testEmail, setTestEmail] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
-  const [subscriberGroups, setSubscriberGroups] = useState<SubscriberGroupSummary[]>([]);
-  const [subscriberGroupsLoading, setSubscriberGroupsLoading] = useState(false);
+  const subscriberGroupsStore = useSubscriberGroupsSession();
   const [subscriberContactsDialog, setSubscriberContactsDialog] =
     useState<SubscriberContactsDialog | null>(null);
   const [dialogContacts, setDialogContacts] = useState<SubscriberGroupContact[]>([]);
@@ -123,13 +123,14 @@ export function NewsletterPublishView() {
     const canPickSubscriberGroup =
       newsletter.status === "draft" || newsletter.status === "scheduled";
     if (!canPickSubscriberGroup || !sendDomain) return;
-    setSubscriberGroupsLoading(true);
-    studioSubscriberApi
-      .listGroups()
-      .then(({ groups }) => setSubscriberGroups(groups))
-      .catch(() => toast.error("Could not load subscriber groups"))
-      .finally(() => setSubscriberGroupsLoading(false));
-  }, [newsletter, sendDomain]);
+    void subscriberGroupsStore.ensureLoaded().catch(() => {
+      toast.error("Could not load subscriber groups");
+    });
+  }, [newsletter, sendDomain, subscriberGroupsStore]);
+
+  const subscriberGroups = subscriberGroupsStore.groups;
+  const subscriberGroupsLoading =
+    subscriberGroupsStore.showPlaceholder || subscriberGroupsStore.fetching;
 
   const groupsForDomain = useMemo(() => {
     const d = sendDomain?.toLowerCase();

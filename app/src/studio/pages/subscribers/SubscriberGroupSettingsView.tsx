@@ -9,6 +9,7 @@ import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useSubscriberRoutes } from "@/studio/pages/subscribers/SubscriberRouteContext";
 import { StudioApiError, studioSubscriberApi } from "@/studio/api";
+import { subscriberGroupsStore } from "@/studio/stores/subscriber-groups";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { SubscriberDataSourceGuide } from "@/studio/pages/subscribers/SubscriberDataSourceGuide";
 import {
@@ -220,6 +221,7 @@ export function SubscriberGroupSettingsView() {
     try {
       await studioSubscriberApi.deleteGroup(groupId);
       clearSubscriberGroupDetailCache(productId, groupId);
+      subscriberGroupsStore.removeGroup(groupId);
       router.push(subscribersRoot);
     } catch (e) {
       setError(

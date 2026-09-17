@@ -27,7 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
-import { studioSubscriberApi } from "@/studio/api";
+import { useSubscriberGroupsSession } from "@/studio/stores/subscriber-groups";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { SubscriberGroupCmdDropdown } from "@/studio/components/SubscriberGroupCmdDropdown";
 import { newsletterDetailHref, triggerDetailHref } from "@/studio/lib/paths";
@@ -108,18 +108,15 @@ export function HubTemplateUseMenu({
   const [testMergeTagFields, setTestMergeTagFields] = useState<BroadcastMergeTag[]>([]);
   const [testMergeValues, setTestMergeValues] = useState<Record<string, string>>({});
 
-  const [subscriberGroups, setSubscriberGroups] = useState<SubscriberGroupSummary[]>([]);
-  const [subscriberGroupsLoading, setSubscriberGroupsLoading] = useState(false);
+  const subscriberGroupsStore = useSubscriberGroupsSession();
+  const subscriberGroups = subscriberGroupsStore.groups;
+  const subscriberGroupsLoading =
+    subscriberGroupsStore.showPlaceholder || subscriberGroupsStore.fetching;
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSubscriberGroupsLoading(true);
-    studioSubscriberApi
-      .listGroups()
-      .then(({ groups }) => setSubscriberGroups(groups))
-      .catch(() => {})
-      .finally(() => setSubscriberGroupsLoading(false));
-  }, []);
+    void subscriberGroupsStore.ensureLoaded().catch(() => {});
+  }, [subscriberGroupsStore]);
 
   function resetNewsletterForm(mode: NewsletterDialogMode) {
     setNewsletterMode(mode);

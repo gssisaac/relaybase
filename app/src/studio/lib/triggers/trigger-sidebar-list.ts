@@ -1,87 +1,40 @@
-import { studioApi, type Trigger } from "@/studio/api";
-
-let cachedRows: Trigger[] | null = null;
-let inflight: Promise<Trigger[]> | null = null;
-const listeners = new Set<() => void>();
+import type { Trigger } from "@/studio/api";
+import { triggersHubStore } from "@/studio/stores/triggers-hub/triggers-hub-store";
 
 /** Stable snapshot when the list has not loaded yet (required for useSyncExternalStore). */
 const EMPTY_SIDEBAR_ROWS: Trigger[] = [];
 
-function filterSidebarRows(automations: Trigger[]): Trigger[] {
-  return automations.filter((row) => row.listStatus !== "archived");
-}
-
-function emitSidebarListChange() {
-  for (const listener of listeners) listener();
-}
-
 export function subscribeTriggerSidebarList(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  return triggersHubStore.subscribeSidebar(listener);
 }
 
 export function getTriggerSidebarListSnapshot(): Trigger[] {
-  return cachedRows ?? EMPTY_SIDEBAR_ROWS;
+  const rows = triggersHubStore.sidebarRows;
+  return rows.length > 0 ? rows : EMPTY_SIDEBAR_ROWS;
 }
 
 export function getCachedTriggerSidebarList(): Trigger[] | null {
-  return cachedRows;
+  return triggersHubStore.triggers.length > 0 ? triggersHubStore.sidebarRows : null;
 }
 
 export function invalidateTriggerSidebarList() {
-  cachedRows = null;
-  inflight = null;
-  emitSidebarListChange();
+  void triggersHubStore.refresh({ force: true });
 }
 
 export function replaceTriggerSidebarList(automations: Trigger[]) {
-  cachedRows = filterSidebarRows(automations);
-  inflight = null;
-  emitSidebarListChange();
+  triggersHubStore.replaceAll(automations);
 }
 
 export function removeTriggerSidebarListRow(triggerId: string) {
-  if (!cachedRows) return;
-  const next = cachedRows.filter((r) => r.id !== triggerId);
-  if (next.length === cachedRows.length) return;
-  cachedRows = next;
-  emitSidebarListChange();
+  triggersHubStore.removeTrigger(triggerId);
 }
 
 export function upsertTriggerSidebarListRow(row: Trigger) {
-  if (!cachedRows) return;
-  const idx = cachedRows.findIndex((r) => r.id === row.id);
-  if (row.listStatus === "archived") {
-    if (idx >= 0) {
-      cachedRows = cachedRows.filter((r) => r.id !== row.id);
-      emitSidebarListChange();
-    }
-    return;
-  }
-  if (idx >= 0) {
-    cachedRows = cachedRows.map((r) => (r.id === row.id ? row : r));
-  } else {
-    cachedRows = [row, ...cachedRows];
-  }
-  emitSidebarListChange();
+  triggersHubStore.upsertTrigger(row);
 }
 
 export async function fetchTriggerSidebarList(force = false): Promise<Trigger[]> {
-  if (!force && cachedRows) return cachedRows;
-  if (!force && inflight) return inflight;
-
-  inflight = studioApi
-    .listTriggers()
-    .then((res) => {
-      cachedRows = filterSidebarRows(res.triggers);
-      inflight = null;
-      emitSidebarListChange();
-      return cachedRows;
-    })
-    .catch(() => {
-      inflight = null;
-      return cachedRows ?? [];
-    });
-
-  return inflight;
+  if (force) await triggersHubStore.refresh({ force: true });
+  else await triggersHubStore.ensureLoaded();
+  return getTriggerSidebarListSnapshot();
 }

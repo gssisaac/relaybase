@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { studioSubscriberApi } from "@/studio/api";
+import { subscriberGroupsStore } from "@/studio/stores/subscriber-groups";
 import type {
   SubscriberGroupContact,
   SubscriberGroupSummary,
@@ -60,6 +61,8 @@ export function SubscriberGroupDetailProvider({
     try {
       const data = await studioSubscriberApi.getGroup(groupId);
       setDetail(data);
+      subscriberGroupsStore.upsertGroupSummary(data.group);
+      void subscriberGroupsStore.refreshContactEmails();
       setNotFound(false);
     } catch (e) {
       const status = e && typeof e === "object" && "status" in e ? e.status : null;

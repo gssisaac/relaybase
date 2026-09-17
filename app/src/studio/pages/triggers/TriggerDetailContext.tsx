@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { upsertTriggerSidebarListRow } from "@/studio/lib/triggers/trigger-sidebar-list";
+import { triggersHubStore } from "@/studio/stores/triggers-hub";
 import { studioApi, type Trigger, type StudioLayout } from "@/studio/api";
 
 type DraftFields = {
@@ -83,7 +83,7 @@ export function TriggerDetailProvider({
         studioApi.listLayouts(),
       ]);
       setTrigger(row);
-      upsertTriggerSidebarListRow(row);
+      triggersHubStore.upsertTrigger(row);
       setTemplates(t.layouts);
       setNotFound(false);
       const fields: DraftFields = {
@@ -150,7 +150,7 @@ export function TriggerDetailProvider({
       .then((updated) => {
         lastSaved.current = next;
         setTrigger(updated);
-        upsertTriggerSidebarListRow(updated);
+        triggersHubStore.upsertTrigger(updated);
         return true;
       })
       .catch(() => false)
@@ -171,7 +171,7 @@ export function TriggerDetailProvider({
         notFound,
         setTrigger: (next) => {
           setTrigger(next);
-          upsertTriggerSidebarListRow(next);
+          triggersHubStore.upsertTrigger(next);
         },
         refresh,
         refreshTemplates,

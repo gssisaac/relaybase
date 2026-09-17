@@ -208,6 +208,31 @@ export function normalizeEntryPath(path: string): string {
   if (pathname === "/broadcasts/new") {
     return "/studio/newsletters?new=1";
   }
+
+  if (pathname === "/studio/newsletters") {
+    const newsletterId = params.get("id")?.trim();
+    if (newsletterId) {
+      const tabRaw = params.get("tab")?.trim().toLowerCase();
+      params.delete("id");
+      params.delete("tab");
+      let tabPath = "";
+      if (tabRaw === "audience" || tabRaw === "recipients") {
+        tabPath = "/recipients";
+      } else if (
+        tabRaw &&
+        tabRaw !== "content" &&
+        (tabRaw === "publish" ||
+          tabRaw === "stats" ||
+          tabRaw === "settings")
+      ) {
+        tabPath = `/${tabRaw}`;
+      }
+      const qs = params.toString();
+      const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+      return qs ? `${base}?${qs}` : base;
+    }
+  }
+
   const studioNewsletterSection = pathname.match(/^\/studio\/newsletters\/(sent|in-progress)\/?$/);
   if (studioNewsletterSection) {
     return `/studio/newsletters/${studioNewsletterSection[1]}`;
@@ -225,20 +250,21 @@ export function normalizeEntryPath(path: string): string {
       } catch {
         /* keep raw */
       }
-      const next = new URLSearchParams();
-      next.set("id", newsletterId);
       const tabSeg = studioNewsletterMatch[2];
+      let tabPath = "";
       if (tabSeg === "audience" || tabSeg === "recipients") {
-        next.set("tab", "recipients");
+        tabPath = "/recipients";
       } else if (
         tabSeg === "content" ||
         tabSeg === "publish" ||
         tabSeg === "stats" ||
         tabSeg === "settings"
       ) {
-        next.set("tab", tabSeg);
+        tabPath = `/${tabSeg}`;
       }
-      return `/studio/newsletters?${next.toString()}`;
+      const qs = params.toString();
+      const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+      return qs ? `${base}?${qs}` : base;
     }
   }
 
@@ -310,15 +336,18 @@ export function normalizeEntryPath(path: string): string {
     } catch {
       /* keep raw */
     }
-    const next = new URLSearchParams();
-    next.set("id", newsletterId);
     const tabSeg = broadcastMatch[2];
+    let tabPath = "";
     if (tabSeg === "audience" || tabSeg === "recipients") {
-      next.set("tab", "recipients");
-    } else if (tabSeg === "content" || tabSeg === "progress") {
-      next.set("tab", tabSeg === "progress" ? "stats" : tabSeg);
+      tabPath = "/recipients";
+    } else if (tabSeg === "content") {
+      tabPath = "/content";
+    } else if (tabSeg === "progress") {
+      tabPath = "/stats";
     }
-    return `/studio/newsletters?${next.toString()}`;
+    const qs = params.toString();
+    const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+    return qs ? `${base}?${qs}` : base;
   }
 
   const studioBroadcastMatch = pathname.match(
@@ -331,20 +360,21 @@ export function normalizeEntryPath(path: string): string {
     } catch {
       /* keep raw */
     }
-    const next = new URLSearchParams();
-    next.set("id", newsletterId);
     const tabSeg = studioBroadcastMatch[2];
+    let tabPath = "";
     if (tabSeg === "audience" || tabSeg === "recipients") {
-      next.set("tab", "recipients");
+      tabPath = "/recipients";
     } else if (
       tabSeg === "content" ||
       tabSeg === "publish" ||
       tabSeg === "stats" ||
       tabSeg === "settings"
     ) {
-      next.set("tab", tabSeg);
+      tabPath = `/${tabSeg}`;
     }
-    return `/studio/newsletters?${next.toString()}`;
+    const qs = params.toString();
+    const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+    return qs ? `${base}?${qs}` : base;
   }
 
   const studioAutomationEditMatch = pathname.match(

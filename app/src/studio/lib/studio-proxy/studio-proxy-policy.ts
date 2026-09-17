@@ -31,6 +31,29 @@ const TRIGGER_UI_TAB_SEGMENTS = new Set([
   "content",
 ]);
 
+const NEWSLETTER_LIST_SECTIONS = new Set(["sent", "in-progress"]);
+
+const NEWSLETTER_UI_TAB_SEGMENTS = new Set([
+  "content",
+  "publish",
+  "recipients",
+  "stats",
+  "settings",
+  "audience",
+]);
+
+/** GET UI routes under `/studio/newsletters/{id}/{tab?}` — not the JSON API. */
+function isNewsletterUiGetPath(pathname: string): boolean {
+  if (STUDIO_UI_GET_PATHS.has(pathname)) return true;
+  const match = pathname.match(/^\/studio\/newsletters\/([^/]+)(?:\/([^/]+))?\/?$/);
+  if (!match) return false;
+  const id = match[1] ?? "";
+  if (!id || NEWSLETTER_LIST_SECTIONS.has(id)) return false;
+  const tab = match[2];
+  if (!tab) return true;
+  return NEWSLETTER_UI_TAB_SEGMENTS.has(tab);
+}
+
 /** GET UI routes under `/studio/triggers/{id}/{tab}` — not the JSON API. */
 function isTriggerUiGetPath(pathname: string): boolean {
   if (STUDIO_UI_GET_PATHS.has(pathname)) return true;
@@ -98,9 +121,9 @@ export function shouldProxyRequestToStudio(pathname: string, method: string, hea
 
   if (!pathname.startsWith("/studio/newsletters")) return false;
 
-  if (method !== "GET") return true;
+  if (method !== "GET" && method !== "HEAD") return true;
   if (isStudioApiRequest(headers)) return true;
   if (pathname === "/studio/newsletters/sent-stats") return true;
-  if (STUDIO_UI_GET_PATHS.has(pathname)) return false;
+  if (isNewsletterUiGetPath(pathname)) return false;
   return true;
 }

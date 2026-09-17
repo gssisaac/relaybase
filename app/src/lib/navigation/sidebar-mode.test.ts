@@ -79,14 +79,14 @@ describe("normalizeEntryPath", () => {
     );
   });
 
-  it("rewrites subscriber and broadcast path details into ?id=&tab=", () => {
+  it("rewrites subscriber and broadcast path details into nested studio routes", () => {
     assert.equal(
       normalizeEntryPath("/audience/grp1/settings"),
       "/studio/subscribers?id=grp1&tab=settings",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),
-      "/studio/newsletters?id=bc1&tab=stats",
+      "/studio/newsletters/bc1/stats",
     );
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/studio/newsletters?new=1");
     assert.equal(
@@ -134,7 +134,11 @@ describe("normalizeEntryPath", () => {
     );
     assert.equal(
       normalizeEntryPath("/studio/newsletters/broadcast_abc/stats"),
-      "/studio/newsletters?id=broadcast_abc&tab=stats",
+      "/studio/newsletters/broadcast_abc/stats",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/newsletters?id=broadcast_abc&tab=stats"),
+      "/studio/newsletters/broadcast_abc/stats",
     );
   });
 

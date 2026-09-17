@@ -586,9 +586,9 @@ export const studioApi = {
   getSentOverview: () => studioFetch<AccountSentOverview>("/studio/newsletters/sent-stats"),
   getInProgressOverview: () => studioFetch<InProgressOverview>("/studio/newsletters/in-progress"),
   createNewsletter: (input: {
-    name: string;
-    domain: string;
-    subscriberGroupId: string;
+    name?: string;
+    domain?: string;
+    subscriberGroupId?: string;
     workerUrl?: string;
     slug?: string;
     fromName?: string;

@@ -44,9 +44,39 @@ describe("shouldProxyRequestToStudio", () => {
     assert.equal(shouldProxyRequestToStudio("/studio/overview", "GET", headers(true)), true);
   });
 
-  it("proxies newsletter detail JSON", () => {
+  it("serves newsletter detail tab UI without API header", () => {
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/newsletters/broadcast_sent_july_recap", "GET", headers()),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/newsletters/broadcast_sent_july_recap/stats", "GET", headers()),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/newsletters/broadcast_sent_july_recap/publish", "GET", headers()),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/newsletters/broadcast_sent_july_recap/recipients", "GET", headers()),
+      false,
+    );
+  });
+
+  it("proxies newsletter detail JSON with Studio API header", () => {
     assert.equal(
       shouldProxyRequestToStudio("/studio/newsletters/newsletter_abc", "GET", headers(true)),
+      true,
+    );
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/newsletters/newsletter_abc/stats", "GET", headers(true)),
+      true,
+    );
+  });
+
+  it("proxies unknown newsletter subpaths to the API", () => {
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/newsletters/newsletter_abc/assets", "GET", headers()),
       true,
     );
   });

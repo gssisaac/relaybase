@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 
 import type { TriggerStatus, NewsletterStatus } from "@/studio/api";
+import {
+  defaultNewsletterDetailTab,
+  normalizeNewsletterDetailTab,
+} from "@/studio/lib/newsletters/newsletter-detail-nav";
 
 export type SubscriberDetailTab = "contacts" | "history" | "settings";
 
@@ -116,14 +120,44 @@ export function subscriberDetailFromSearch(searchParams: {
 /** Newsletter detail tabs — content, publish, recipients, stats, settings. */
 export type NewsletterDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
 
-function newsletterDetailTabQueryParam(
+const NEWSLETTER_LIST_SECTIONS = new Set(["sent", "in-progress"]);
+
+function encodeNewsletterPathId(id: string): string {
+  return encodeURIComponent(id.trim());
+}
+
+function decodeNewsletterPathId(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function parseNewsletterDetailTabSegment(raw: string | undefined): NewsletterDetailTab | null {
+  if (!raw) return null;
+  const seg = raw.trim().toLowerCase();
+  if (seg === "audience") return "recipients";
+  if (
+    seg === "content" ||
+    seg === "publish" ||
+    seg === "recipients" ||
+    seg === "stats" ||
+    seg === "settings"
+  ) {
+    return seg;
+  }
+  return "content";
+}
+
+function newsletterDetailPathSegment(
   tab: NewsletterDetailTab,
   status: NewsletterStatus | undefined,
-): NewsletterDetailTab | null {
-  if (!status || status === "draft") {
-    return tab === "content" ? null : tab;
-  }
-  return tab === "stats" ? null : tab;
+): string | null {
+  const normalized = normalizeNewsletterDetailTab(tab, status);
+  const defaultTab = defaultNewsletterDetailTab(status);
+  if (normalized === defaultTab) return null;
+  return normalized;
 }
 
 export function newsletterDetailHref(
@@ -131,13 +165,32 @@ export function newsletterDetailHref(
   tab: NewsletterDetailTab = "content",
   status?: NewsletterStatus,
 ): string {
-  const params = new URLSearchParams();
-  params.set("id", id.trim());
-  const tabParam = newsletterDetailTabQueryParam(tab, status);
-  if (tabParam) params.set("tab", tabParam);
-  return `/studio/newsletters?${params.toString()}`;
+  const base = `/studio/newsletters/${encodeNewsletterPathId(id)}`;
+  const segment = newsletterDetailPathSegment(tab, status);
+  return segment ? `${base}/${segment}` : base;
 }
 
+/** Nested `/studio/newsletters/{id}/{tab?}` — not list sections (`sent`, `in-progress`). */
+export function newsletterDetailFromPathname(
+  pathname: string,
+): { newsletterId: string; tab: NewsletterDetailTab | null } | null {
+  const match = pathname.match(/^\/studio\/newsletters\/([^/]+)(?:\/([^/]+))?\/?$/);
+  if (!match) return null;
+  const rawId = match[1] ?? "";
+  if (!rawId || NEWSLETTER_LIST_SECTIONS.has(rawId)) return null;
+  const newsletterId = decodeNewsletterPathId(rawId).trim();
+  if (!newsletterId) return null;
+  const tab = parseNewsletterDetailTabSegment(match[2]);
+  return { newsletterId, tab };
+}
+
+export function newsletterTabFromPathname(pathname: string): NewsletterDetailTab {
+  const detail = newsletterDetailFromPathname(pathname);
+  if (!detail || detail.tab === null) return "content";
+  return detail.tab;
+}
+
+/** Legacy `?id=&tab=` — use path routes for new links. */
 export function newsletterDetailFromSearch(searchParams: {
   get: (name: string) => string | null;
 }): { newsletterId: string; tab: NewsletterDetailTab | null } | null {
@@ -147,15 +200,7 @@ export function newsletterDetailFromSearch(searchParams: {
   if (!raw) {
     return { newsletterId, tab: null };
   }
-  let tab: NewsletterDetailTab = "content";
-  if (raw === "publish" || raw === "recipients" || raw === "stats" || raw === "settings") {
-    tab = raw;
-  } else if (raw === "content") {
-    tab = "content";
-  } else if (raw === "audience") {
-    tab = "recipients";
-  }
-  return { newsletterId, tab };
+  return { newsletterId, tab: parseNewsletterDetailTabSegment(raw) ?? "content" };
 }
 
 export const TRIGGER_DETAIL_TABS = ["config", "stats"] as const;

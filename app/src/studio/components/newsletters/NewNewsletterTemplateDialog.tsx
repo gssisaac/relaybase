@@ -15,24 +15,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
-import { SubscriberGroupCmdDropdown } from "@/studio/components/SubscriberGroupCmdDropdown";
 import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
 import { resolveTemplateLayout } from "@/studio/components/templates/TemplateThumbnailGrid";
 import { TemplateThumbnailPreview } from "@/studio/components/templates/TemplateThumbnailPreview";
-import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
-import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { catalogTemplateSnapshot } from "@/studio/lib/templates/catalog-template-snapshot";
 import { createNewsletterFromHubTemplate } from "@/studio/lib/templates/hub-template-launch";
 import { newslettersHubStore } from "@/studio/stores/newsletters-hub";
 import { useTemplatesCatalog } from "@/studio/stores/templates-catalog";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";
-import { studioApi, StudioApiError, studioSubscriberApi, type StudioTemplate } from "@/studio/api";
+import { studioApi, StudioApiError, type StudioTemplate } from "@/studio/api";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
 import { cn } from "@/lib/utils";
 
@@ -60,10 +55,6 @@ export function NewNewsletterTemplateDialog({
   const [previewHtml, setPreviewHtml] = useState("");
   const previewEditorRef = useRef(null);
 
-  const [newName, setNewName] = useState("");
-  const [subscriberGroupId, setSubscriberGroupId] = useState("");
-  const [subscriberGroups, setSubscriberGroups] = useState<SubscriberGroupSummary[]>([]);
-  const [subscriberGroupsLoading, setSubscriberGroupsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -81,8 +72,6 @@ export function NewNewsletterTemplateDialog({
     setSelection(null);
     setPreviewDevice("desktop");
     setPreviewHtml("");
-    setNewName("");
-    setSubscriberGroupId("");
     setFormError(null);
     setCreating(false);
   }
@@ -92,12 +81,6 @@ export function NewNewsletterTemplateDialog({
     setStep("preview");
     setPreviewHtml("");
     setFormError(null);
-    if (next !== "blank") {
-      setNewName((prev) => {
-        if (prev.trim()) return prev;
-        return next.name.trim() || next.subject.trim() || "Untitled newsletter";
-      });
-    }
   }
 
   function backToGallery() {
@@ -110,12 +93,6 @@ export function NewNewsletterTemplateDialog({
     if (!open) return;
     resetForm();
     templatesCatalog.ensureCatalogLoaded();
-    setSubscriberGroupsLoading(true);
-    studioSubscriberApi
-      .listGroups()
-      .then(({ groups }) => setSubscriberGroups(groups))
-      .catch(() => toast.error("Could not load subscriber groups"))
-      .finally(() => setSubscriberGroupsLoading(false));
   }, [open, templatesCatalog]);
 
   const { templates, resolvedLayouts: layouts } = templatesCatalog;
@@ -149,18 +126,6 @@ export function NewNewsletterTemplateDialog({
 
   async function handleCreate() {
     if (!selection) return;
-    const name = newName.trim();
-    const groupId = subscriberGroupId.trim();
-    const group = subscriberGroups.find((g) => g.id === groupId);
-    const domain = group?.domain.trim().toLowerCase();
-    if (!name) {
-      setFormError("Newsletter name is required");
-      return;
-    }
-    if (!groupId || !domain) {
-      setFormError("Select a subscriber group");
-      return;
-    }
 
     setCreating(true);
     setFormError(null);
@@ -168,12 +133,9 @@ export function NewNewsletterTemplateDialog({
       const workerUrl = resolveEmailApiBase();
       if (selection === "blank") {
         const created = await studioApi.createNewsletter({
-          name,
-          domain,
-          subscriberGroupId: groupId,
           ...(workerUrl ? { workerUrl } : {}),
         });
-        toast.success(`Newsletter "${created.name}" created`);
+        toast.success("Newsletter created");
         newslettersHubStore.upsertNewsletter(created);
         void newslettersHubStore.refreshList();
         onOpenChange(false);
@@ -182,13 +144,10 @@ export function NewNewsletterTemplateDialog({
       }
 
       const created = await createNewsletterFromHubTemplate({
-        name,
-        domain,
-        subscriberGroupId: groupId,
         hubTemplateId: selection.id,
         snapshot: catalogTemplateSnapshot(selection),
       });
-      toast.success(`Newsletter "${created.name}" created`);
+      toast.success("Newsletter created");
       newslettersHubStore.upsertNewsletter(created);
       void newslettersHubStore.refreshList();
       onOpenChange(false);
@@ -223,7 +182,7 @@ export function NewNewsletterTemplateDialog({
             <>
               <DialogTitle>New newsletter</DialogTitle>
               <DialogDescription>
-                Pick a template, then name the campaign and choose a subscriber group.
+                Pick a template to start. Name and audience can be set later in settings.
               </DialogDescription>
             </>
           ) : (
@@ -401,37 +360,12 @@ export function NewNewsletterTemplateDialog({
                   </div>
                 )}
               </div>
-
-              <div className="shrink-0 space-y-3 border-t bg-muted/20 px-4 py-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="new-newsletter-name">Name</Label>
-                    <Input
-                      id="new-newsletter-name"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      placeholder={examplePlaceholder("Engineering Updates")}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="new-newsletter-group">Subscriber group</Label>
-                    <SubscriberGroupCmdDropdown
-                      triggerId="new-newsletter-group"
-                      groups={subscriberGroups}
-                      loading={subscriberGroupsLoading}
-                      value={subscriberGroupId || null}
-                      onValueChange={(id) => setSubscriberGroupId(id ?? "")}
-                    />
-                  </div>
-                </div>
-                {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
-              </div>
             </div>
           )}
         </div>
 
-        <DialogFooter className="shrink-0 border-t px-4 py-3">
+        <DialogFooter className="shrink-0 flex-col items-stretch gap-2 border-t px-4 py-3 sm:flex-row sm:items-center">
+          {formError ? <p className="mr-auto text-xs text-destructive sm:mb-0">{formError}</p> : null}
           <Button
             type="button"
             variant="outline"

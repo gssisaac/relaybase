@@ -204,7 +204,10 @@ export function NewsletterComposeForm({
                 >
                   <Braces className="size-4" />
                 </PopoverTrigger>
-                <PopoverContent align="end" className="max-h-[min(420px,70vh)] w-72 overflow-y-auto p-2">
+                <PopoverContent
+                  align="end"
+                  className="max-h-[min(420px,70vh)] w-[420px] max-w-[min(420px,calc(100vw-2rem))] overflow-y-auto p-2"
+                >
                   <p className="mb-2 px-1 text-[11px] text-muted-foreground">
                     Inserts at the cursor in the subject or body field you last focused.
                   </p>

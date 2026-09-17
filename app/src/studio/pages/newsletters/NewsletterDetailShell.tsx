@@ -11,15 +11,27 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
-import { newsletterDetailNavTabs } from "@/studio/lib/newsletters/newsletter-detail-nav";
-import { newsletterDetailHref, useStudioPaths, type NewsletterDetailTab } from "@/studio/lib/paths";
+import {
+  defaultNewsletterDetailTab,
+  newsletterDetailNavTabs,
+} from "@/studio/lib/newsletters/newsletter-detail-nav";
+import {
+  newsletterDetailFromPathname,
+  newsletterDetailHref,
+  useStudioPaths,
+  type NewsletterDetailTab,
+} from "@/studio/lib/paths";
+import { NewsletterDetailShellSkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
+import type { NewsletterStatus } from "@/studio/api";
 import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
+import { useNewsletterContentChrome } from "@/studio/pages/newsletters/newsletter-content-chrome";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +55,8 @@ export function NewsletterDetailShell({
   const { newsletters } = useStudioPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { newsletterId, newsletter, notFound, refreshing } = useNewsletterDetail();
+  const { saveState, requestSave } = useNewsletterContentChrome();
+  const showContentSave = section === "content" && newsletter?.status === "draft";
 
   const title =
     newsletter?.name?.trim() ||
@@ -57,7 +71,20 @@ export function NewsletterDetailShell({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <DesktopTitleBar className="gap-2 px-4 py-3">
+      <DesktopTitleBar
+        className="gap-2 px-4 py-3"
+        end={
+          showContentSave ? (
+            <Button
+              size="sm"
+              disabled={saveState === "saving"}
+              onClick={() => void requestSave()}
+            >
+              {saveState === "saving" ? "Saving…" : "Save"}
+            </Button>
+          ) : null
+        }
+      >
         <div
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
@@ -135,5 +162,43 @@ export function NewsletterDetailShell({
         </div>
       </div>
     </div>
+  );
+}
+
+function resolveNewsletterDetailSection(
+  pathname: string,
+  status: NewsletterStatus | undefined,
+): NewsletterDetailTab {
+  const fromPath = newsletterDetailFromPathname(pathname);
+  if (!fromPath) return "content";
+  if (fromPath.tab === null) return defaultNewsletterDetailTab(status);
+  return fromPath.tab;
+}
+
+export function NewsletterDetailSectionLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const { newsletter, loading, notFound } = useNewsletterDetail();
+  const section = resolveNewsletterDetailSection(pathname, newsletter?.status);
+
+  if (loading && !newsletter) {
+    return <NewsletterDetailShellSkeleton />;
+  }
+  if (notFound || !newsletter) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <DesktopTitleBar className="px-4 py-3">
+          <h1 className="truncate text-sm font-semibold">Newsletter not found</h1>
+        </DesktopTitleBar>
+        <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
+          This newsletter does not exist or was removed.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <NewsletterDetailShell section={section} fill={section === "content"}>
+      {children}
+    </NewsletterDetailShell>
   );
 }

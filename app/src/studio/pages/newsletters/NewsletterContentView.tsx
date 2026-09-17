@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -23,10 +22,8 @@ import {
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
-import { MessagePicker } from "@/studio/components/messages/MessagePicker";
 import { NewsletterComposeForm } from "@/studio/pages/newsletters/NewsletterComposeForm";
-import { messageDetailHref } from "@/studio/lib/messages/message-paths";
-import type { StudioMessage } from "@/studio/api";
+import { useNewsletterContentChrome } from "@/studio/pages/newsletters/newsletter-content-chrome";
 import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import {
   complianceFromIdentity,
@@ -117,6 +114,11 @@ export function NewsletterContentView() {
   });
 
   const saveState = mapSaveStatus(saveStatus);
+  const { setSaveState, registerSave } = useNewsletterContentChrome();
+
+  useEffect(() => {
+    setSaveState(saveState);
+  }, [saveState, setSaveState]);
 
   useEffect(() => {
     setPreviewHtml("");
@@ -167,34 +169,6 @@ export function NewsletterContentView() {
       messageId,
     });
   }, [subject, bodyMarkdown, templateId, templateVariables, messageId, syncDraft]);
-
-  async function applySavedMessage(source: StudioMessage | null) {
-    if (!editable || !newsletter) return;
-    try {
-      if (!source) return;
-      setSubject(source.subject);
-      setBodyMarkdown(source.bodyMarkdown);
-      if (source.layoutId) setTemplateId(source.layoutId);
-      ingestBody(source.bodyMarkdown, newsletterId);
-      const updated = await studioApi.updateNewsletter(newsletterId, {
-        subject: source.subject,
-        bodyMarkdown: source.bodyMarkdown,
-        layoutId: source.layoutId ?? undefined,
-        templateVariables: source.templateVariables,
-      });
-      setNewsletter(updated);
-      syncDraft({
-        subject: source.subject,
-        bodyMarkdown: source.bodyMarkdown,
-        templateId: source.layoutId ?? templateId,
-        templateVariables: source.templateVariables,
-        messageId: newsletter.messageId,
-      });
-      toast.success(`Inserted “${source.name}”`);
-    } catch {
-      toast.error("Could not insert message");
-    }
-  }
 
   useEffect(() => {
     if (!newsletter || !editable) return;
@@ -290,12 +264,16 @@ export function NewsletterContentView() {
     resolvedTemplateVariables,
   ]);
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
     await checkpoint("manual-save");
     const saved = await persistDraft();
     if (saved) toast.success("Newsletter saved");
     else toast.error("Could not save newsletter");
-  }
+  }, [checkpoint, persistDraft]);
+
+  useEffect(() => {
+    registerSave(handleSave);
+  }, [registerSave, handleSave]);
 
   async function handleDuplicate() {
     setDuplicating(true);
@@ -328,19 +306,6 @@ export function NewsletterContentView() {
           </Button>
         </div>
       ) : null}
-      {editable ? (
-        <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-border px-4 py-3">
-          <div className="min-w-[220px] flex-1 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Saved message</p>
-            <MessagePicker value={messageId} onApplied={(m) => void applySavedMessage(m)} />
-          </div>
-          {messageId ? (
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={messageDetailHref(messageId)} />}>
-              Edit message
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
       <NewsletterComposeForm
         newsletterId={newsletterId}
         editorRef={editorRef}
@@ -370,6 +335,7 @@ export function NewsletterContentView() {
         editable={Boolean(editable)}
         saveState={saveState}
         onSave={() => void handleSave()}
+        hideSaveButton
         previewPersonaId={previewPersonaId}
         setPreviewPersonaId={setPreviewPersonaId}
         previewRecipient={previewRecipient}

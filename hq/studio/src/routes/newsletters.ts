@@ -95,20 +95,24 @@ studioNewsletters.post("/", async (c) => {
     /* empty */
   }
 
-  const name = body.name?.trim();
-  if (!name) return c.json({ error: "Newsletter name is required" }, 400);
-  const domain = body.domain?.trim().toLowerCase();
-  if (!domain) return c.json({ error: "Select a sending domain for this broadcast" }, 400);
-  const subscriberGroupId = body.subscriberGroupId?.trim();
-  if (!subscriberGroupId) return c.json({ error: "Select a subscriber group for this broadcast" }, 400);
-  const subscriberGroup = findSubscriberGroup(subscriberGroupId);
-  if (!subscriberGroup) return c.json({ error: "Subscriber group not found" }, 404);
-  if (subscriberGroup.domain.toLowerCase() !== domain) {
-    return c.json({ error: "Subscriber group must belong to the selected domain" }, 400);
+  const name = body.name?.trim() || "Untitled newsletter";
+  const subscriberGroupId = body.subscriberGroupId?.trim() || "";
+  let domain = body.domain?.trim().toLowerCase() || "";
+  let subscriberGroup = subscriberGroupId ? findSubscriberGroup(subscriberGroupId) : undefined;
+  if (subscriberGroupId && !subscriberGroup) {
+    return c.json({ error: "Subscriber group not found" }, 404);
+  }
+  if (subscriberGroup) {
+    if (!domain) domain = subscriberGroup.domain.toLowerCase();
+    if (subscriberGroup.domain.toLowerCase() !== domain) {
+      return c.json({ error: "Subscriber group must belong to the selected domain" }, 400);
+    }
+  } else if (!domain) {
+    domain = store.read().account.domain?.trim().toLowerCase() || "";
   }
   const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
   store.update((draft) => {
-    draft.account.domain = domain;
+    if (domain) draft.account.domain = domain;
     if (workerUrl) draft.account.workerUrl = workerUrl;
   });
   if (body.fromEmail && !isValidEmail(body.fromEmail)) {
@@ -147,7 +151,7 @@ studioNewsletters.post("/", async (c) => {
       subscriberGroupId,
       domain,
       fromName: body.fromName?.trim() || null,
-      fromEmail: body.fromEmail?.trim() || subscriberGroup.defaultFrom || null,
+      fromEmail: body.fromEmail?.trim() || subscriberGroup?.defaultFrom || null,
       replyTo: body.replyTo?.trim() || null,
       messageId: message.id,
       listStatus: "active",

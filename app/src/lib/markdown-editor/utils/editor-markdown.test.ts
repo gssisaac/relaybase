@@ -3,8 +3,12 @@ import { describe, it } from "node:test";
 
 import {
   applyGmailContentLinkStyles,
+  EMPTY_PARAGRAPH_MD,
+  EMPTY_PARAGRAPH_PARSE_TOKEN,
+  encodeEmptyParagraphsForParse,
   enhancePreviewHtml,
   isEmptyParagraphBlock,
+  restoreEmptyParagraphBlocks,
 } from "./editor-markdown.ts";
 
 describe("isEmptyParagraphBlock", () => {
@@ -19,9 +23,49 @@ describe("isEmptyParagraphBlock", () => {
       true,
     );
     assert.equal(
+      isEmptyParagraphBlock({
+        type: "paragraph",
+        content: [{ type: "text", text: EMPTY_PARAGRAPH_PARSE_TOKEN }],
+      }),
+      true,
+    );
+    assert.equal(
       isEmptyParagraphBlock({ type: "paragraph", content: [{ type: "text", text: "hello" }] }),
       false,
     );
+  });
+});
+
+describe("empty paragraph markdown round-trip", () => {
+  it("does not treat NBSP sentinels as blank after JS trim", () => {
+    assert.equal(EMPTY_PARAGRAPH_MD.trim(), "");
+    assert.notEqual(EMPTY_PARAGRAPH_PARSE_TOKEN.trim(), "");
+  });
+
+  it("encodes persisted empty paragraphs so the markdown parser keeps them", () => {
+    const saved = `a\n\n${EMPTY_PARAGRAPH_MD}\n\n${EMPTY_PARAGRAPH_MD}\n\nb\n`;
+    assert.equal(
+      encodeEmptyParagraphsForParse(saved),
+      `a\n\n${EMPTY_PARAGRAPH_PARSE_TOKEN}\n\n${EMPTY_PARAGRAPH_PARSE_TOKEN}\n\nb\n`,
+    );
+  });
+
+  it("leaves fenced code lines alone", () => {
+    const markdown = "```\n\u00a0\n```\n";
+    assert.equal(encodeEmptyParagraphsForParse(markdown), markdown);
+  });
+
+  it("restores parse-token paragraphs to empty blocks", () => {
+    const restored = restoreEmptyParagraphBlocks([
+      { type: "paragraph", content: [{ type: "text", text: "a" }] },
+      { type: "paragraph", content: [{ type: "text", text: EMPTY_PARAGRAPH_PARSE_TOKEN }] },
+      { type: "paragraph", content: [{ type: "text", text: "b" }] },
+    ]);
+    assert.deepEqual(restored, [
+      { type: "paragraph", content: [{ type: "text", text: "a" }] },
+      { type: "paragraph", content: [] },
+      { type: "paragraph", content: [{ type: "text", text: "b" }] },
+    ]);
   });
 });
 

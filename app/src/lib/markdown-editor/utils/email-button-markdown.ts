@@ -7,6 +7,10 @@ import {
   isEmailButtonMarkerHtml,
   type EmailButtonProps,
 } from "./email-button-html";
+import {
+  encodeEmptyParagraphsForParse,
+  restoreEmptyParagraphBlocks,
+} from "./empty-paragraph-markdown";
 import { promotePageMediaBlocks } from "./media-markdown";
 
 const EMAIL_BUTTON_MARKER_SPLIT =
@@ -81,13 +85,17 @@ export async function parseMarkdownToEditorBlocks(
   markdown: string,
   linkifyParsedBlocks: (blocks: unknown[]) => unknown[],
 ): Promise<unknown[]> {
-  if (!markdownContainsEmailButtonMarker(markdown)) {
-    return promoteEmailButtonBlocks(
-      promotePageMediaBlocks(linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(markdown))),
+  const encoded = encodeEmptyParagraphsForParse(markdown);
+
+  if (!markdownContainsEmailButtonMarker(encoded)) {
+    return restoreEmptyParagraphBlocks(
+      promoteEmailButtonBlocks(
+        promotePageMediaBlocks(linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(encoded))),
+      ),
     );
   }
 
-  const segments = markdown.split(EMAIL_BUTTON_MARKER_SPLIT);
+  const segments = encoded.split(EMAIL_BUTTON_MARKER_SPLIT);
   const blocks: unknown[] = [];
 
   for (const segment of segments) {
@@ -106,5 +114,6 @@ export async function parseMarkdownToEditorBlocks(
     blocks.push(...parsed);
   }
 
-  return blocks.length > 0 ? blocks : [{ type: "paragraph", content: "" }];
+  const restored = restoreEmptyParagraphBlocks(blocks);
+  return restored.length > 0 ? restored : [{ type: "paragraph", content: "" }];
 }

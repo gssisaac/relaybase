@@ -3,15 +3,9 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { MousePointerClick } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import {
   normalizeEmailButtonAlign,
@@ -60,18 +54,18 @@ function EmailButtonBlockRender(props: {
   };
   editor: NewsletterEditor;
 }) {
-  const blockProps = props.block?.props ?? ({} as Partial<EmailButtonBlockProps>);
-  const text = typeof blockProps.text === "string" ? blockProps.text : "Button";
-  const url = typeof blockProps.url === "string" ? blockProps.url : "https://";
-  const variant = normalizeEmailButtonVariant(blockProps.variant);
-  const alignment = normalizeEmailButtonAlign(blockProps.alignment);
-  const label = text.trim() || "Button";
+  const text = props.block.props?.text ?? "Button";
+  const url = props.block.props?.url ?? "https://";
+  const variant = normalizeEmailButtonVariant(props.block.props?.variant);
+  const alignment = normalizeEmailButtonAlign(props.block.props?.alignment);
+  const label = (typeof text === "string" ? text.trim() : "") || "Button";
   const editable = props.editor?.isEditable ?? true;
 
   const previewAlign =
     alignment === "left" ? "justify-start" : alignment === "full" ? "justify-stretch" : "justify-center";
 
   const updateProps = (patch: Partial<EmailButtonBlockProps>) => {
+    if (!props.editor || !props.block) return;
     props.editor.updateBlock(props.block, {
       props: {
         text,
@@ -102,6 +96,7 @@ function EmailButtonBlockRender(props: {
         <div
           className="grid gap-2 rounded-lg border border-border/80 bg-muted/40 p-3"
           onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="grid gap-1.5 sm:grid-cols-2">
             <div className="grid gap-1.5">
@@ -125,39 +120,44 @@ function EmailButtonBlockRender(props: {
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-1.5">
-              <Label>Style</Label>
-              <Select
-                value={variant}
-                onValueChange={(value) =>
-                  updateProps({ variant: normalizeEmailButtonVariant(value) })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="primary">Solid</SelectItem>
-                  <SelectItem value="outline">Outline</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Style</Label>
+              <div className="flex gap-1">
+                {(["primary", "outline"] as const).map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="xs"
+                    variant={variant === value ? "secondary" : "ghost"}
+                    className="flex-1 capitalize"
+                    onClick={() => updateProps({ variant: value })}
+                  >
+                    {value === "primary" ? "Solid" : "Outline"}
+                  </Button>
+                ))}
+              </div>
             </div>
             <div className="grid gap-1.5">
-              <Label>Alignment</Label>
-              <Select
-                value={alignment}
-                onValueChange={(value) =>
-                  updateProps({ alignment: normalizeEmailButtonAlign(value) })
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="left">Left</SelectItem>
-                  <SelectItem value="center">Center</SelectItem>
-                  <SelectItem value="full">Full width</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Alignment</Label>
+              <div className="flex gap-1">
+                {(
+                  [
+                    { value: "left" as const, label: "Left" },
+                    { value: "center" as const, label: "Center" },
+                    { value: "full" as const, label: "Full" },
+                  ] as const
+                ).map(({ value, label: alignLabel }) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="xs"
+                    variant={alignment === value ? "secondary" : "ghost"}
+                    className="flex-1"
+                    onClick={() => updateProps({ alignment: value })}
+                  >
+                    {alignLabel}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -181,16 +181,15 @@ export const EmailButtonBlockSpec = createReactBlockSpec(
             props: EmailButtonBlockProps;
           }
         }
-        editor={props.editor as NewsletterEditor}
+        editor={props.editor as unknown as NewsletterEditor}
       />
     ),
     parse: parseEmailButtonElement,
     toExternalHTML: (props) => {
-      const blockProps = props.block?.props ?? ({} as Partial<EmailButtonBlockProps>);
-      const text = typeof blockProps.text === "string" ? blockProps.text : "Button";
-      const url = typeof blockProps.url === "string" ? blockProps.url : "https://";
-      const variant = normalizeEmailButtonVariant(blockProps.variant);
-      const alignment = normalizeEmailButtonAlign(blockProps.alignment);
+      const text = props.block.props?.text ?? "Button";
+      const url = props.block.props?.url ?? "https://";
+      const variant = normalizeEmailButtonVariant(props.block.props?.variant);
+      const alignment = normalizeEmailButtonAlign(props.block.props?.alignment);
       return (
         <div
           data-rb-email-button=""
@@ -203,6 +202,9 @@ export const EmailButtonBlockSpec = createReactBlockSpec(
     },
   },
 );
+
+/** Single schema instance — call the factory once to avoid HMR / duplicate spec issues. */
+export const emailButtonBlockSpec = EmailButtonBlockSpec();
 
 export const emailButtonSlashMenuIcon = <MousePointerClick className="size-3.5 text-muted-foreground" />;
 

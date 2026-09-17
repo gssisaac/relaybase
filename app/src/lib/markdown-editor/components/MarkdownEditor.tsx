@@ -37,7 +37,9 @@ import {
 } from "@/lib/markdown-editor/utils/file-ingest";
 import { linkifyParsedBlocks } from "@/lib/markdown-editor/utils/linkify";
 import {
+  encodeEmptyParagraphsForParse,
   enhancePreviewHtml,
+  isEmptyParagraphMarkdownLine,
   serializeEditorMarkdown,
 } from "@/lib/markdown-editor/utils/editor-markdown";
 import { parseMarkdownToEditorBlocks } from "@/lib/markdown-editor/utils/email-button-markdown";
@@ -107,9 +109,18 @@ function insertIngestedPageFiles(
 }
 
 function plainBlocksFromMarkdown(markdown: string): { type: string; props?: { level: number }; content: string }[] {
-  const parts = markdown.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
-  if (parts.length === 0) return [{ type: "paragraph", content: "" }];
-  return parts.map((part) => ({ type: "paragraph", content: part.replace(/\n/g, " ") }));
+  const parts = encodeEmptyParagraphsForParse(markdown).split(/\n{2,}/);
+  const blocks: { type: string; content: string }[] = [];
+  for (const part of parts) {
+    if (isEmptyParagraphMarkdownLine(part)) {
+      blocks.push({ type: "paragraph", content: "" });
+      continue;
+    }
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    blocks.push({ type: "paragraph", content: part.replace(/\n/g, " ").trim() });
+  }
+  return blocks.length > 0 ? blocks : [{ type: "paragraph", content: "" }];
 }
 
 async function setEditorMarkdown(

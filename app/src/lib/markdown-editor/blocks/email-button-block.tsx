@@ -1,11 +1,19 @@
 "use client";
 
+import { useEffect, useId, useRef, useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { MousePointerClick } from "lucide-react";
+import { ExternalLink, MousePointerClick, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import {
   normalizeEmailButtonAlign,
@@ -47,6 +55,21 @@ export type EmailButtonBlockProps = {
   alignment: EmailButtonAlign;
 };
 
+function previewButtonClassName(
+  variant: EmailButtonVariant,
+  alignment: EmailButtonAlign,
+  extra?: string,
+) {
+  return cn(
+    "inline-flex min-h-10 items-center justify-center rounded-lg px-7 py-2.5 text-sm font-semibold shadow-sm transition-all",
+    alignment === "full" ? "w-full" : "max-w-full",
+    variant === "outline"
+      ? "border border-zinc-800 bg-white text-zinc-900 dark:border-zinc-200 dark:bg-zinc-950 dark:text-zinc-50"
+      : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900",
+    extra,
+  );
+}
+
 function EmailButtonBlockRender(props: {
   block: {
     id: string;
@@ -54,6 +77,11 @@ function EmailButtonBlockRender(props: {
   };
   editor: NewsletterEditor;
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const panelId = useId();
+
   const text = props.block.props?.text ?? "Button";
   const url = props.block.props?.url ?? "https://";
   const variant = normalizeEmailButtonVariant(props.block.props?.variant);
@@ -63,6 +91,13 @@ function EmailButtonBlockRender(props: {
 
   const previewAlign =
     alignment === "left" ? "justify-start" : alignment === "full" ? "justify-stretch" : "justify-center";
+
+  const panelAlignClass =
+    alignment === "left"
+      ? "left-0"
+      : alignment === "full"
+        ? "left-0 right-0"
+        : "left-1/2 -translate-x-1/2";
 
   const updateProps = (patch: Partial<EmailButtonBlockProps>) => {
     if (!props.editor || !props.block) return;
@@ -77,91 +112,236 @@ function EmailButtonBlockRender(props: {
     });
   };
 
-  return (
-    <div className="my-1 space-y-2" contentEditable={false}>
-      <div className={cn("flex", previewAlign)}>
-        <span
-          className={cn(
-            "inline-flex max-w-full min-h-10 items-center justify-center rounded-lg px-7 py-2.5 text-sm font-semibold shadow-sm",
-            alignment === "full" && "w-full",
-            variant === "outline"
-              ? "border border-zinc-800 bg-white text-zinc-900 dark:border-zinc-200 dark:bg-zinc-950 dark:text-zinc-50"
-              : "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900",
-          )}
-        >
-          {label}
-        </span>
-      </div>
-      {editable ? (
-        <div
-          className="grid gap-2 rounded-lg border border-border/80 bg-muted/40 p-3"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="grid gap-1.5 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor={`email-btn-text-${props.block?.id ?? "new"}`}>Button label</Label>
-              <Input
-                id={`email-btn-text-${props.block?.id ?? "new"}`}
-                value={text}
-                onChange={(e) => updateProps({ text: e.target.value })}
-                placeholder="Read more"
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={`email-btn-url-${props.block?.id ?? "new"}`}>Link URL</Label>
-              <Input
-                id={`email-btn-url-${props.block?.id ?? "new"}`}
-                value={url}
-                onChange={(e) => updateProps({ url: e.target.value })}
-                placeholder="https://"
-              />
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label className="text-xs">Style</Label>
-              <div className="flex gap-1">
-                {(["primary", "outline"] as const).map((value) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    size="xs"
-                    variant={variant === value ? "secondary" : "ghost"}
-                    className="flex-1 capitalize"
-                    onClick={() => updateProps({ variant: value })}
-                  >
-                    {value === "primary" ? "Solid" : "Outline"}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-xs">Alignment</Label>
-              <div className="flex gap-1">
-                {(
-                  [
-                    { value: "left" as const, label: "Left" },
-                    { value: "center" as const, label: "Center" },
-                    { value: "full" as const, label: "Full" },
-                  ] as const
-                ).map(({ value, label: alignLabel }) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    size="xs"
-                    variant={alignment === value ? "secondary" : "ghost"}
-                    className="flex-1"
-                    onClick={() => updateProps({ alignment: value })}
-                  >
-                    {alignLabel}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
+  const hasValidUrl =
+    typeof url === "string" &&
+    (url.startsWith("http://") || url.startsWith("https://")) &&
+    url.length > 8;
+
+  const toggleOpen = () => setOpen((prev) => !prev);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const focusTimer = window.setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 0);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+      }
+    };
+
+    const onPointerDown = (event: MouseEvent) => {
+      const root = rootRef.current;
+      if (!root || root.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("mousedown", onPointerDown, true);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("mousedown", onPointerDown, true);
+    };
+  }, [open]);
+
+  if (!editable) {
+    return (
+      <div className="my-2" contentEditable={false}>
+        <div className={cn("flex", previewAlign)}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={previewButtonClassName(variant, alignment)}
+          >
+            {label}
+          </a>
         </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className="my-2 select-none" contentEditable={false}>
+      <div className={cn("flex", previewAlign)}>
+        <div className={cn("group/btn relative inline-flex", alignment === "full" && "w-full")}>
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={open ? panelId : undefined}
+            aria-label="Edit email button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleOpen();
+            }}
+            className={cn(
+              previewButtonClassName(
+                variant,
+                alignment,
+                cn(
+                  "cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  variant === "outline"
+                    ? "hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                    : "hover:bg-zinc-800 dark:hover:bg-zinc-200",
+                  open && "ring-2 ring-primary/40 ring-offset-2",
+                ),
+              ),
+            )}
+          >
+            {label}
+          </button>
+
+          <button
+            type="button"
+            aria-label="Button settings"
+            title="Button settings"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleOpen();
+            }}
+            className={cn(
+              "absolute -top-2.5 -right-2.5 flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-xs transition-opacity hover:text-foreground",
+              open ? "opacity-100 text-foreground ring-1 ring-primary/50" : "opacity-0 group-hover/btn:opacity-100",
+            )}
+          >
+            <Settings2 className="size-3.5" />
+          </button>
+
+          {open ? (
+            <div
+              id={panelId}
+              role="dialog"
+              aria-label="Button settings"
+              className={cn(
+                "absolute top-full z-50 mt-2 w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-popover p-3.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10",
+                panelAlignClass,
+              )}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+                <span className="flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
+                  <MousePointerClick className="size-3.5 text-muted-foreground" />
+                  Button settings
+                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {hasValidUrl ? (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                      title="Test link in new tab"
+                    >
+                      <ExternalLink className="size-3" />
+                      Test link
+                    </a>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="secondary"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => setOpen(false)}
+                  >
+                    Done
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2.5">
+                <div className="space-y-1">
+                  <Label htmlFor={`email-btn-text-${props.block?.id ?? "new"}`} className="text-xs font-medium">
+                    Button text
+                  </Label>
+                  <Input
+                    ref={textInputRef}
+                    id={`email-btn-text-${props.block?.id ?? "new"}`}
+                    value={text}
+                    onChange={(e) => updateProps({ text: e.target.value })}
+                    placeholder="Read more"
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor={`email-btn-url-${props.block?.id ?? "new"}`} className="text-xs font-medium">
+                    Link URL
+                  </Label>
+                  <Input
+                    id={`email-btn-url-${props.block?.id ?? "new"}`}
+                    value={url}
+                    onChange={(e) => updateProps({ url: e.target.value })}
+                    placeholder="https://example.com"
+                    className="h-8 font-mono text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">Style</Label>
+                    <Select
+                      value={variant}
+                      onValueChange={(value) =>
+                        updateProps({ variant: normalizeEmailButtonVariant(value) })
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-full text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="primary" className="text-xs">
+                          Solid
+                        </SelectItem>
+                        <SelectItem value="outline" className="text-xs">
+                          Outline
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium">Alignment</Label>
+                    <Select
+                      value={alignment}
+                      onValueChange={(value) =>
+                        updateProps({ alignment: normalizeEmailButtonAlign(value) })
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-full text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="left" className="text-xs">
+                          Left
+                        </SelectItem>
+                        <SelectItem value="center" className="text-xs">
+                          Center
+                        </SelectItem>
+                        <SelectItem value="full" className="text-xs">
+                          Full width
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-2 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
+                Press Esc or click outside to close
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

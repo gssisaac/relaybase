@@ -7,14 +7,14 @@ import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
 import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
-import { StudioApiError, studioAudienceApi } from "@/studio/api";
+import { useSubscriberRoutes } from "@/studio/pages/subscribers/SubscriberRouteContext";
+import { StudioApiError, studioSubscriberApi } from "@/studio/api";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
-import { AudienceDataSourceGuide } from "@/studio/pages/audience/AudienceDataSourceGuide";
+import { SubscriberDataSourceGuide } from "@/studio/pages/subscribers/SubscriberDataSourceGuide";
 import {
-  clearAudienceGroupDetailCache,
-  useAudienceGroupDetail,
-} from "@/studio/pages/audience/AudienceGroupDetailContext";
+  clearSubscriberGroupDetailCache,
+  useSubscriberGroupDetail,
+} from "@/studio/pages/subscribers/SubscriberGroupDetailContext";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 
 import { Button } from "@/components/ui/button";
@@ -66,11 +66,11 @@ const CRON_INTERVALS = [
   { value: "1440", label: "Every day" },
 ];
 
-export function AudienceGroupSettingsView() {
+export function SubscriberGroupSettingsView() {
   const productId = useProductId();
-  const { audienceRoot } = useAudienceRoutes();
+  const { subscribersRoot } = useSubscriberRoutes();
   const router = useRouter();
-  const { groupId, detail, refresh } = useAudienceGroupDetail();
+  const { groupId, detail, refresh } = useSubscriberGroupDetail();
   const { domains, loading: domainsLoading, refresh: refreshWorkerDomains } =
     useWorkerDomains();
 
@@ -139,7 +139,7 @@ export function AudienceGroupSettingsView() {
   async function testConnection() {
     setTestState({ status: "testing" });
     try {
-      const data = await studioAudienceApi.testConnection({
+      const data = await studioSubscriberApi.testConnection({
         endpointUrl,
         groupId,
         ...(credential.trim() ? { credential: credential.trim() } : {}),
@@ -187,7 +187,7 @@ export function AudienceGroupSettingsView() {
         return;
       }
       const workerUrl = resolveEmailApiBase();
-      await studioAudienceApi.updateGroup(groupId, {
+      await studioSubscriberApi.updateGroup(groupId, {
         name,
         domain: groupDomain,
         ...(workerUrl ? { workerUrl } : {}),
@@ -199,7 +199,7 @@ export function AudienceGroupSettingsView() {
       setMessage("Settings saved");
       setDataSourceEdited(false);
       if (credential.trim()) setHasStoredCredential(true);
-      clearAudienceGroupDetailCache(productId, groupId);
+      clearSubscriberGroupDetailCache(productId, groupId);
       await refresh(true);
     } catch (e) {
       setError(
@@ -218,9 +218,9 @@ export function AudienceGroupSettingsView() {
     setDeleting(true);
     setError(null);
     try {
-      await studioAudienceApi.deleteGroup(groupId);
-      clearAudienceGroupDetailCache(productId, groupId);
-      router.push(audienceRoot);
+      await studioSubscriberApi.deleteGroup(groupId);
+      clearSubscriberGroupDetailCache(productId, groupId);
+      router.push(subscribersRoot);
     } catch (e) {
       setError(
         e instanceof StudioApiError
@@ -365,7 +365,7 @@ export function AudienceGroupSettingsView() {
                   }}
                   placeholder="https://api.example.com/contacts"
                 />
-                <AudienceDataSourceGuide />
+                <SubscriberDataSourceGuide />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">API key / token</Label>

@@ -110,7 +110,7 @@ export function NewsletterInProgressView() {
                             <div className="min-w-0">
                               <CardTitle className="truncate text-sm">{row.newsletter.name}</CardTitle>
                               <CardDescription className="truncate">
-                                {row.newsletter.audienceGroupName ?? "No audience"} ·{" "}
+                                {row.newsletter.subscriberGroupName ?? "No subscriber group"} ·{" "}
                                 {row.newsletter.subject || "No subject"}
                               </CardDescription>
                             </div>
@@ -189,7 +189,7 @@ export function NewsletterInProgressView() {
                         <div className="min-w-0">
                           <p className="truncate font-medium">{row.name}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {row.audienceGroupName ?? "No audience"} · {row.audienceActiveCount.toLocaleString()}{" "}
+                            {row.subscriberGroupName ?? "No subscriber group"} · {row.subscriberActiveCount.toLocaleString()}{" "}
                             recipients
                           </p>
                         </div>

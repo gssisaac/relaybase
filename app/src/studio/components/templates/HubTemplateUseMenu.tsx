@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
+import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import { useEmailPaths } from "@/email/lib/paths";
 import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { studioApi, StudioApiError, type TriggerPurpose } from "@/studio/api";
-import { studioAudienceApi } from "@/studio/api";
+import { studioSubscriberApi } from "@/studio/api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { AudienceGroupCmdDropdown } from "@/studio/components/AudienceGroupCmdDropdown";
+import { SubscriberGroupCmdDropdown } from "@/studio/components/SubscriberGroupCmdDropdown";
 import { newsletterDetailHref, triggerDetailHref } from "@/studio/lib/paths";
 import {
   createNewsletterFromHubTemplate,
@@ -60,7 +60,7 @@ const TRIGGER_PURPOSE_OPTIONS: { value: TriggerPurpose; label: string }[] = [
 ];
 
 function resolveGroupDomain(
-  groups: AudienceGroupSummary[],
+  groups: SubscriberGroupSummary[],
   groupId: string,
 ): string | null {
   const group = groups.find((g) => g.id === groupId);
@@ -96,7 +96,7 @@ export function HubTemplateUseMenu({
   const [busy, setBusy] = useState(false);
 
   const [newsletterName, setNewsletterName] = useState("");
-  const [newsletterAudienceId, setNewsletterAudienceId] = useState("");
+  const [newsletterSubscriberGroupId, setNewsletterSubscriberGroupId] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
 
   const [triggerName, setTriggerName] = useState("");
@@ -109,23 +109,23 @@ export function HubTemplateUseMenu({
   const [testMergeTagFields, setTestMergeTagFields] = useState<BroadcastMergeTag[]>([]);
   const [testMergeValues, setTestMergeValues] = useState<Record<string, string>>({});
 
-  const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
-  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [subscriberGroups, setSubscriberGroups] = useState<SubscriberGroupSummary[]>([]);
+  const [subscriberGroupsLoading, setSubscriberGroupsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    setAudienceLoading(true);
-    studioAudienceApi
+    setSubscriberGroupsLoading(true);
+    studioSubscriberApi
       .listGroups()
-      .then(({ groups }) => setAudienceGroups(groups))
+      .then(({ groups }) => setSubscriberGroups(groups))
       .catch(() => {})
-      .finally(() => setAudienceLoading(false));
+      .finally(() => setSubscriberGroupsLoading(false));
   }, []);
 
   function resetNewsletterForm(mode: NewsletterDialogMode) {
     setNewsletterMode(mode);
     setNewsletterName(defaultTitle);
-    setNewsletterAudienceId("");
+    setNewsletterSubscriberGroupId("");
     setScheduleAt("");
     setFormError(null);
   }
@@ -166,13 +166,13 @@ export function HubTemplateUseMenu({
 
   async function handleCreateNewsletter() {
     const name = newsletterName.trim();
-    const audienceGroupId = newsletterAudienceId.trim();
-    const domain = resolveGroupDomain(audienceGroups, audienceGroupId);
+    const subscriberGroupId = newsletterSubscriberGroupId.trim();
+    const domain = resolveGroupDomain(subscriberGroups, subscriberGroupId);
     if (!name) {
       setFormError("Newsletter name is required");
       return;
     }
-    if (!audienceGroupId || !domain) {
+    if (!subscriberGroupId || !domain) {
       setFormError("Select a subscriber group");
       return;
     }
@@ -192,7 +192,7 @@ export function HubTemplateUseMenu({
       const newsletter = await createNewsletterFromHubTemplate({
         name,
         domain,
-        audienceGroupId,
+        subscriberGroupId,
         hubTemplateId,
         snapshot,
       });
@@ -415,7 +415,7 @@ export function HubTemplateUseMenu({
             </DialogTitle>
             <DialogDescription>
               {newsletterMode === "schedule"
-                ? "New newsletter from this template, scheduled to send to the linked audience."
+                ? "New newsletter from this template, scheduled to send to the linked subscriber group."
                 : "New draft newsletter with this template’s subject and body."}
             </DialogDescription>
           </DialogHeader>
@@ -431,12 +431,12 @@ export function HubTemplateUseMenu({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="hub-template-newsletter-audience">Subscriber group</Label>
-              <AudienceGroupCmdDropdown
+              <SubscriberGroupCmdDropdown
                 triggerId="hub-template-newsletter-audience"
-                groups={audienceGroups}
-                loading={audienceLoading}
-                value={newsletterAudienceId || null}
-                onValueChange={(id) => setNewsletterAudienceId(id ?? "")}
+                groups={subscriberGroups}
+                loading={subscriberGroupsLoading}
+                value={newsletterSubscriberGroupId || null}
+                onValueChange={(id) => setNewsletterSubscriberGroupId(id ?? "")}
               />
             </div>
             {newsletterMode === "schedule" ? (

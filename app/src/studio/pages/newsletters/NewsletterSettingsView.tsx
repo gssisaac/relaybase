@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/select";
 import Link from "next/link";
 
-import { studioAudienceDetailHref } from "@/studio/lib/paths";
+import { studioSubscriberDetailHref } from "@/studio/lib/paths";
 import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { ComplianceIdentityEditor } from "@/studio/components/ComplianceIdentityEditor";
@@ -69,7 +69,7 @@ export function NewsletterSettingsView() {
     if (!newsletter) return;
     setFromName(newsletter.fromName ?? null);
     setFromEmail(newsletter.fromEmail ?? null);
-    setSendDomain(newsletter.domain ?? newsletter.audienceGroupDomain ?? null);
+    setSendDomain(newsletter.domain ?? newsletter.subscriberGroupDomain ?? null);
   }, [newsletter]);
 
   useEffect(() => {
@@ -85,10 +85,10 @@ export function NewsletterSettingsView() {
     void refreshAddresses();
   }, [refreshAddresses]);
 
-  const audienceDomain = newsletter?.audienceGroupDomain?.trim().toLowerCase() ?? null;
+  const subscriberGroupDomain = newsletter?.subscriberGroupDomain?.trim().toLowerCase() ?? null;
 
   const domainMismatch =
-    Boolean(sendDomain && audienceDomain) && sendDomain!.toLowerCase() !== audienceDomain;
+    Boolean(sendDomain && subscriberGroupDomain) && sendDomain!.toLowerCase() !== subscriberGroupDomain;
 
   const domainLocked = newsletter?.status !== "draft";
 
@@ -120,9 +120,9 @@ export function NewsletterSettingsView() {
       setFromEmailError("Select a sender account");
       return;
     }
-    if (audienceDomain && resolvedDomain !== audienceDomain) {
+    if (subscriberGroupDomain && resolvedDomain !== subscriberGroupDomain) {
       setFromEmailError(
-        `Subscriber group is on ${newsletter?.audienceGroupDomain}. Pick a sender on that domain.`,
+        `Subscriber group is on ${newsletter?.subscriberGroupDomain}. Pick a sender on that domain.`,
       );
       return;
     }
@@ -202,17 +202,17 @@ export function NewsletterSettingsView() {
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {newsletter.audienceGroupName ?? "No subscriber group linked"}
+              {newsletter.subscriberGroupName ?? "No subscriber group linked"}
             </p>
-            {newsletter.audienceGroupDomain ? (
-              <p className="truncate text-xs text-muted-foreground">{newsletter.audienceGroupDomain}</p>
+            {newsletter.subscriberGroupDomain ? (
+              <p className="truncate text-xs text-muted-foreground">{newsletter.subscriberGroupDomain}</p>
             ) : null}
           </div>
-          {newsletter.audienceGroupId ? (
+          {newsletter.subscriberGroupId ? (
             <Button
               size="sm"
               variant="outline"
-              render={<Link href={studioAudienceDetailHref(newsletter.audienceGroupId)} />}
+              render={<Link href={studioSubscriberDetailHref(newsletter.subscriberGroupId)} />}
             >
               Open subscribers
             </Button>
@@ -232,7 +232,7 @@ export function NewsletterSettingsView() {
               triggerId="from-email"
               triggerClassName="min-w-0"
               value={fromEmail}
-              domainFilter={audienceDomain}
+              domainFilter={subscriberGroupDomain}
               pinnedEmails={fromEmail ? [fromEmail] : []}
               disabled={domainLocked || addressesLoading}
               onValueChange={(email, ctx) => {
@@ -251,10 +251,10 @@ export function NewsletterSettingsView() {
                 Sender can only be changed while the newsletter is a draft (current status:{" "}
                 {newsletter.status}).
               </p>
-            ) : audienceDomain ? (
+            ) : subscriberGroupDomain ? (
               <p className="text-xs text-muted-foreground">
-                Sending domain is set from the account you pick (must match audience on{" "}
-                {newsletter.audienceGroupDomain}).
+                Sending domain is set from the account you pick (must match subscriber group on{" "}
+                {newsletter.subscriberGroupDomain}).
               </p>
             ) : sendDomain ? (
               <p className="text-xs text-muted-foreground">Sending domain: {sendDomain}</p>
@@ -265,7 +265,7 @@ export function NewsletterSettingsView() {
             )}
             {domainMismatch ? (
               <p className="text-xs text-destructive">
-                Subscriber group is on {newsletter.audienceGroupDomain}. Pick a sender on that domain.
+                Subscriber group is on {newsletter.subscriberGroupDomain}. Pick a sender on that domain.
               </p>
             ) : null}
             {fromEmailError ? <p className="text-xs text-destructive">{fromEmailError}</p> : null}

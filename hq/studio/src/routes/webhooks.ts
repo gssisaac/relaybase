@@ -33,13 +33,13 @@ studioWebhooks.post("/bounce", async (c) => {
   store.update((draft) => {
     if (body.newsletterId) {
       const broadcast = draft.newsletters.find((b) => b.id === body.newsletterId);
-      if (broadcast?.audienceGroupId) {
-        const gIdx = draft.audienceGroups.findIndex((g) => g.id === broadcast.audienceGroupId);
+      if (broadcast?.subscriberGroupId) {
+        const gIdx = draft.subscriberGroups.findIndex((g) => g.id === broadcast.subscriberGroupId);
         if (gIdx >= 0) {
-          const cIdx = draft.audienceGroups[gIdx]!.contacts.findIndex((c) => c.email === email);
+          const cIdx = draft.subscriberGroups[gIdx]!.contacts.findIndex((c) => c.email === email);
           if (cIdx >= 0) {
-            draft.audienceGroups[gIdx]!.contacts[cIdx] = {
-              ...draft.audienceGroups[gIdx]!.contacts[cIdx]!,
+            draft.subscriberGroups[gIdx]!.contacts[cIdx] = {
+              ...draft.subscriberGroups[gIdx]!.contacts[cIdx]!,
               sendStatus: "bounced",
               bouncedAt: now,
               bounceReason: body.detail ?? reason,
@@ -70,13 +70,13 @@ studioWebhooks.post("/bounce", async (c) => {
 
     const groupId =
       body.newsletterId ?
-        draft.newsletters.find((b) => b.id === body.newsletterId)?.audienceGroupId ?? null
+        draft.newsletters.find((b) => b.id === body.newsletterId)?.subscriberGroupId ?? null
       : null;
     const exists = draft.accountSuppressions.some(
       (s) =>
         s.accountLinkId === DEV_ACCOUNT_LINK_ID &&
         s.email === email &&
-        s.audienceGroupId === null &&
+        s.subscriberGroupId === null &&
         s.reason === reason,
     );
     if (!exists) {
@@ -85,7 +85,7 @@ studioWebhooks.post("/bounce", async (c) => {
         accountLinkId: DEV_ACCOUNT_LINK_ID,
         email,
         reason,
-        audienceGroupId: null,
+        subscriberGroupId: null,
         sourceNewsletterId: body.newsletterId ?? null,
         createdAt: now,
       });

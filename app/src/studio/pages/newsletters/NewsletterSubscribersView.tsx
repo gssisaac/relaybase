@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { studioAudienceDetailHref, useStudioPaths } from "@/studio/lib/paths";
+import { studioSubscriberDetailHref, useStudioPaths } from "@/studio/lib/paths";
 import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 import { studioApi, type NewsletterMemberStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ function StatusBadge({ status }: { status: NewsletterMemberStatus }) {
 }
 
 export function NewsletterSubscribersView() {
-  const { newsletterId, newsletter, audienceMembers, refreshAudience, refresh } = useNewsletterDetail();
+  const { newsletterId, newsletter, subscriberMembers, refreshSubscribers, refresh } = useNewsletterDetail();
   const { subscribers: subscribersHref } = useStudioPaths();
   const [syncing, setSyncing] = useState(false);
 
@@ -37,11 +37,11 @@ export function NewsletterSubscribersView() {
   async function handleSync() {
     setSyncing(true);
     try {
-      const result = await studioApi.syncNewsletterAudience(newsletterId);
+      const result = await studioApi.syncNewsletterSubscribers(newsletterId);
       toast.success(
         `Subscribers refreshed: ${result.contactCount ?? 0} contacts (${result.activeCount ?? 0} active)`,
       );
-      await Promise.all([refreshAudience(), refresh()]);
+      await Promise.all([refreshSubscribers(), refresh()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
     } finally {
@@ -49,9 +49,9 @@ export function NewsletterSubscribersView() {
     }
   }
 
-  const activeCount = audienceMembers.filter((m) => m.status === "active").length;
-  const groupId = newsletter.audienceGroupId;
-  const groupLabel = newsletter.audienceGroupName ?? "Subscriber group";
+  const activeCount = subscriberMembers.filter((m) => m.status === "active").length;
+  const groupId = newsletter.subscriberGroupId;
+  const groupLabel = newsletter.subscriberGroupName ?? "Subscriber group";
 
   return (
     <div className="space-y-4">
@@ -68,9 +68,9 @@ export function NewsletterSubscribersView() {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{groupLabel}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {newsletter.audienceGroupDomain ?? "—"}
-                {newsletter.audienceContactCount != null
-                  ? ` · ${newsletter.audienceContactCount.toLocaleString()} contacts`
+                {newsletter.subscriberGroupDomain ?? "—"}
+                {newsletter.subscriberContactCount != null
+                  ? ` · ${newsletter.subscriberContactCount.toLocaleString()} contacts`
                   : null}
               </p>
             </div>
@@ -82,7 +82,7 @@ export function NewsletterSubscribersView() {
               size="sm"
               variant="outline"
               render={
-                <Link href={groupId ? studioAudienceDetailHref(groupId) : subscribersHref} />
+                <Link href={groupId ? studioSubscriberDetailHref(groupId) : subscribersHref} />
               }
             >
               Manage subscribers
@@ -105,7 +105,7 @@ export function NewsletterSubscribersView() {
         </div>
       </div>
 
-      {audienceMembers.length === 0 ? (
+      {subscriberMembers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Users className="size-8 text-muted-foreground" />
@@ -121,7 +121,7 @@ export function NewsletterSubscribersView() {
       ) : (
         <Card>
           <CardContent className="divide-y divide-border p-0">
-            {audienceMembers.map((m) => (
+            {subscriberMembers.map((m) => (
               <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{m.name || m.email}</p>

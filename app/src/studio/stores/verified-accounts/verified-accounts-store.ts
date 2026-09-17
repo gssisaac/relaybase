@@ -2,7 +2,7 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { studioAudienceApi } from "@/studio/api/audience-api";
+import { studioSubscriberApi } from "@/studio/api/subscriber-api";
 import {
   VerifiedDestinationApiError,
   verifiedDestinationApi,
@@ -164,7 +164,7 @@ export class VerifiedAccountsStore {
   }
 
   /**
-   * Add a Studio audience contact and start Cloudflare destination verification.
+   * Add a Studio subscriber contact and start Cloudflare destination verification.
    */
   async addVerifiedAccount(input: {
     groupId: string;
@@ -176,7 +176,7 @@ export class VerifiedAccountsStore {
     this.actionPhase = "adding_contact";
     this.actionError = null;
     try {
-      const { contact } = await studioAudienceApi.addContact(input.groupId, {
+      const { contact } = await studioSubscriberApi.addContact(input.groupId, {
         email,
         name: input.name?.trim() || undefined,
       });

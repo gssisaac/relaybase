@@ -19,13 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { AudienceGroupCmdDropdown } from "@/studio/components/AudienceGroupCmdDropdown";
+import { SubscriberGroupCmdDropdown } from "@/studio/components/SubscriberGroupCmdDropdown";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { NewsletterCloudflareSendingLimitsCard } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
-import { studioAudienceApi } from "@/studio/api";
-import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
+import { studioSubscriberApi } from "@/studio/api";
+import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import {
   EmailListContainer,
   EmailTableHeader,
@@ -85,12 +85,12 @@ function formatWhen(value?: string | null): string {
 
 function statsLine(b: Newsletter): string {
   if (b.status === "sending") {
-    const total = b.audienceActiveCount || (b.stats.sent + b.stats.failed);
+    const total = b.subscriberActiveCount || (b.stats.sent + b.stats.failed);
     const inFlight = b.stats.sent;
     return `Sending… · ${inFlight} of ${total} sent`;
   }
   if (b.status === "scheduled") {
-    return `Scheduled for ${formatWhen(b.scheduledAt)} · ${b.audienceActiveCount.toLocaleString()} recipient${b.audienceActiveCount === 1 ? "" : "s"}`;
+    return `Scheduled for ${formatWhen(b.scheduledAt)} · ${b.subscriberActiveCount.toLocaleString()} recipient${b.subscriberActiveCount === 1 ? "" : "s"}`;
   }
   if (b.status === "sent") {
     const totalSent = b.stats.sent;
@@ -111,10 +111,10 @@ function statsLine(b: Newsletter): string {
     return parts.join(" · ");
   }
   if (b.status === "failed") {
-    return `Send failed · ${b.stats.failed} failed of ${b.audienceActiveCount.toLocaleString()} recipients`;
+    return `Send failed · ${b.stats.failed} failed of ${b.subscriberActiveCount.toLocaleString()} recipients`;
   }
   // draft
-  const count = b.audienceActiveCount;
+  const count = b.subscriberActiveCount;
   return `${count.toLocaleString()} recipient${count === 1 ? "" : "s"}`;
 }
 
@@ -128,9 +128,9 @@ export function NewslettersListView() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newAudienceGroupId, setNewAudienceGroupId] = useState<string>("");
-  const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
-  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [newSubscriberGroupId, setNewSubscriberGroupId] = useState<string>("");
+  const [subscriberGroups, setSubscriberGroups] = useState<SubscriberGroupSummary[]>([]);
+  const [subscriberGroupsLoading, setSubscriberGroupsLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const load = useCallback(async (force?: boolean) => {
@@ -166,12 +166,12 @@ export function NewslettersListView() {
 
   useEffect(() => {
     if (!createOpen) return;
-    setAudienceLoading(true);
-    studioAudienceApi
+    setSubscriberGroupsLoading(true);
+    studioSubscriberApi
       .listGroups()
-      .then(({ groups }) => setAudienceGroups(groups))
+      .then(({ groups }) => setSubscriberGroups(groups))
       .catch(() => toast.error("Could not load subscriber groups"))
-      .finally(() => setAudienceLoading(false));
+      .finally(() => setSubscriberGroupsLoading(false));
   }, [createOpen]);
 
   const counts = useMemo(() => {
@@ -197,28 +197,28 @@ export function NewslettersListView() {
         b.name.toLowerCase().includes(q) ||
         b.slug.toLowerCase().includes(q) ||
         b.subject.toLowerCase().includes(q) ||
-        (b.audienceGroupName && b.audienceGroupName.toLowerCase().includes(q))
+        (b.subscriberGroupName && b.subscriberGroupName.toLowerCase().includes(q))
       );
     });
   }, [newsletters, filter, search]);
 
   function resetCreate() {
     setNewName("");
-    setNewAudienceGroupId("");
+    setNewSubscriberGroupId("");
     setCreateError(null);
     setCreating(false);
   }
 
   async function handleCreate() {
     const name = newName.trim();
-    const audienceGroupId = newAudienceGroupId.trim();
-    const group = audienceGroups.find((g) => g.id === audienceGroupId);
+    const subscriberGroupId = newSubscriberGroupId.trim();
+    const group = subscriberGroups.find((g) => g.id === subscriberGroupId);
     const domain = group?.domain.trim().toLowerCase();
     if (!name) {
       setCreateError("Newsletter name is required");
       return;
     }
-    if (!audienceGroupId || !domain) {
+    if (!subscriberGroupId || !domain) {
       setCreateError("Select a subscriber group");
       return;
     }
@@ -229,7 +229,7 @@ export function NewslettersListView() {
       const created = await studioApi.createNewsletter({
         name,
         domain,
-        audienceGroupId,
+        subscriberGroupId,
         ...(workerUrl ? { workerUrl } : {}),
       });
       toast.success(`Newsletter '${created.name}' created`);
@@ -280,7 +280,7 @@ export function NewslettersListView() {
             <div>
               <h1 className="truncate text-lg font-semibold tracking-tight">Newsletters</h1>
               <p className="text-sm text-muted-foreground">
-                Email newsletters with linked audience and send lifecycle
+                Email newsletters with linked subscriber group and send lifecycle
               </p>
             </div>
             <NewslettersSectionNav active="list" />
@@ -308,12 +308,12 @@ export function NewslettersListView() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="newsletter-audience">Subscriber group</Label>
-              <AudienceGroupCmdDropdown
+              <SubscriberGroupCmdDropdown
                 triggerId="newsletter-audience"
-                groups={audienceGroups}
-                loading={audienceLoading}
-                value={newAudienceGroupId || null}
-                onValueChange={(id) => setNewAudienceGroupId(id ?? "")}
+                groups={subscriberGroups}
+                loading={subscriberGroupsLoading}
+                value={newSubscriberGroupId || null}
+                onValueChange={(id) => setNewSubscriberGroupId(id ?? "")}
               />
               {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
             </div>
@@ -331,7 +331,7 @@ export function NewslettersListView() {
             <Button
               type="button"
               size="sm"
-              disabled={creating || !newName.trim() || !newAudienceGroupId.trim()}
+              disabled={creating || !newName.trim() || !newSubscriberGroupId.trim()}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creating…" : "Create newsletter"}
@@ -397,7 +397,7 @@ export function NewslettersListView() {
                       href={newsletterDetailHref(b.id)}
                       primary={b.name}
                       subject={statsLine(b)}
-                      preview={b.audienceGroupName ?? b.fromEmail ?? undefined}
+                      preview={b.subscriberGroupName ?? b.fromEmail ?? undefined}
                       date={new Date(b.updatedAt).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",
@@ -417,7 +417,7 @@ export function NewslettersListView() {
                 <EmptyListState
                   icon={Mail}
                   title="No newsletters yet"
-                  description="Create a newsletter to sync an audience and send email."
+                  description="Create a newsletter to link a subscriber group and send email."
                   action={
                     <Button
                       size="sm"

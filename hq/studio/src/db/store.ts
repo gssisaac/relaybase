@@ -82,8 +82,82 @@ function defaultStore(): StudioDataStore {
     newsletterAssets: [],
     triggerAssets: [],
     messageAssets: [],
-    audienceGroups: [],
+    subscriberGroups: [],
   };
+}
+
+function mapLegacySubscriberGroupId(id: string): string {
+  return id.startsWith("audience_") ? `subscriber_${id.slice("audience_".length)}` : id;
+}
+
+/** Renamed audience → subscriber on load (shards, fields, id prefixes). */
+function migrateLegacyAudienceNaming(store: StudioDataStore): boolean {
+  let touched = false;
+  const legacy = store as StudioDataStore & { audienceGroups?: StudioDataStore["subscriberGroups"] };
+  if ((!store.subscriberGroups || store.subscriberGroups.length === 0) && legacy.audienceGroups?.length) {
+    store.subscriberGroups = legacy.audienceGroups;
+    touched = true;
+  }
+  if (legacy.audienceGroups) {
+    delete legacy.audienceGroups;
+    touched = true;
+  }
+  if (!store.subscriberGroups) store.subscriberGroups = [];
+
+  for (const group of store.subscriberGroups) {
+    if (group.id.startsWith("audience_")) {
+      group.id = mapLegacySubscriberGroupId(group.id);
+      touched = true;
+    }
+  }
+
+  const patchGroupId = (row: { subscriberGroupId?: string | null; audienceGroupId?: string | null }) => {
+    if (row.subscriberGroupId === undefined && row.audienceGroupId !== undefined) {
+      row.subscriberGroupId = row.audienceGroupId;
+      touched = true;
+    }
+    if (row.audienceGroupId !== undefined) {
+      delete row.audienceGroupId;
+      touched = true;
+    }
+    if (row.subscriberGroupId) {
+      const next = mapLegacySubscriberGroupId(row.subscriberGroupId);
+      if (next !== row.subscriberGroupId) {
+        row.subscriberGroupId = next;
+        touched = true;
+      }
+    }
+  };
+
+  for (const row of store.newsletters) patchGroupId(row as typeof row & { audienceGroupId?: string });
+  for (const row of store.triggers) patchGroupId(row);
+  for (const row of store.accountSuppressions) patchGroupId(row);
+
+  for (const row of store.recipients) {
+    const legacyRow = row as typeof row & { audienceMemberId?: string };
+    if (legacyRow.audienceMemberId !== undefined && !row.subscriberMemberId) {
+      row.subscriberMemberId = legacyRow.audienceMemberId;
+      touched = true;
+    }
+    if (legacyRow.audienceMemberId !== undefined) {
+      delete legacyRow.audienceMemberId;
+      touched = true;
+    }
+  }
+
+  for (const row of store.triggerSends) {
+    const legacyRow = row as typeof row & { audienceMemberId?: string | null };
+    if (legacyRow.audienceMemberId !== undefined && row.subscriberMemberId === undefined) {
+      row.subscriberMemberId = legacyRow.audienceMemberId;
+      touched = true;
+    }
+    if (legacyRow.audienceMemberId !== undefined) {
+      delete legacyRow.audienceMemberId;
+      touched = true;
+    }
+  }
+
+  return touched;
 }
 
 function normalizeStore(store: StudioDataStore): StudioDataStore {
@@ -128,7 +202,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   }
 
   for (const row of store.accountSuppressions) {
-    if (row.audienceGroupId === undefined) row.audienceGroupId = null;
+    if (row.subscriberGroupId === undefined) row.subscriberGroupId = null;
     if (row.sourceNewsletterId === undefined) row.sourceNewsletterId = null;
   }
 
@@ -137,9 +211,9 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
     if (!row.messageId) {
       row.messageId = legacy.templateId ?? messageIdForOwner(row.id);
     }
-    if (!row.audienceGroupId) row.audienceGroupId = "";
+    if (!row.subscriberGroupId) row.subscriberGroupId = "";
     if (!row.domain) {
-      const group = store.audienceGroups.find((g) => g.id === row.audienceGroupId);
+      const group = store.subscriberGroups.find((g) => g.id === row.subscriberGroupId);
       row.domain = group?.domain ?? "";
     }
     row.stats = normalizeNewsletterStats(row.stats);
@@ -153,7 +227,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
     }
   }
 
-  for (const row of store.audienceGroups) {
+  for (const row of store.subscriberGroups) {
     for (const contact of row.contacts) {
       if (!contact.sendStatus) contact.sendStatus = "active";
       if (contact.unsubscribedAt === undefined) contact.unsubscribedAt = null;
@@ -173,7 +247,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
           (s) =>
             s.accountLinkId === row.accountLinkId &&
             s.email === email &&
-            s.audienceGroupId === row.id &&
+            s.subscriberGroupId === row.id &&
             s.reason === "unsubscribe",
         );
         if (!exists) {
@@ -182,7 +256,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
             accountLinkId: row.accountLinkId,
             email,
             reason: "unsubscribe",
-            audienceGroupId: row.id,
+            subscriberGroupId: row.id,
             sourceNewsletterId: null,
             createdAt: contact.unsubscribedAt ?? now,
           });
@@ -236,7 +310,7 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
     if (row.applyMarketingSuppression === undefined) {
       row.applyMarketingSuppression = row.purpose !== "transactional";
     }
-    if (row.audienceGroupId === undefined) row.audienceGroupId = null;
+    if (row.subscriberGroupId === undefined) row.subscriberGroupId = null;
     if (row.lastTriggeredAt === undefined) row.lastTriggeredAt = null;
     if (row.lastSentAt === undefined) row.lastSentAt = null;
     row.stats = normalizeTriggerStats(row.stats);
@@ -300,10 +374,16 @@ function readStore(): StudioDataStore {
       delete (parsed as { templates?: Template[] }).templates;
       migratedLegacyTemplates = true;
     }
+    const legacyAudienceMigrated = migrateLegacyAudienceNaming(parsed);
     const normalized = normalizeStore(parsed);
     const repairedOwnerMessages = ensureOwnerMessageFiles(normalized);
     const store = hydrateTemplates(normalized);
-    if (migratedLegacyTemplates || ensureDevScheduleFixtures(store) || repairedOwnerMessages) {
+    if (
+      migratedLegacyTemplates ||
+      legacyAudienceMigrated ||
+      ensureDevScheduleFixtures(store) ||
+      repairedOwnerMessages
+    ) {
       writeStore(store);
     }
     return store;

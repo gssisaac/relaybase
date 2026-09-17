@@ -24,10 +24,10 @@ const EXAMPLE_WRAPPED = `{
 }`;
 
 const EXAMPLE_CURL = `curl -sS -H "Authorization: Bearer YOUR_TOKEN" \\
-  https://your-api.example.com/audience`;
+  https://your-api.example.com/subscribers`;
 
 /** Full markdown guide — also what "Copy guide" puts on the clipboard. */
-export const AUDIENCE_DATA_SOURCE_GUIDE_MARKDOWN = `# Relaybase audience data source API
+export const SUBSCRIBER_DATA_SOURCE_GUIDE_MARKDOWN = `# Relaybase subscriber data source API
 
 Build an HTTPS endpoint that returns your contact list as JSON.
 Relaybase calls this URL on **Test connection**, **Refresh now**, and scheduled sync.
@@ -189,12 +189,12 @@ function CodeBlock({ children }: { children: string }) {
   );
 }
 
-export function AudienceDataSourceGuide() {
+export function SubscriberDataSourceGuide() {
   const [copiedGuide, setCopiedGuide] = useState(false);
   const [copiedExample, setCopiedExample] = useState(false);
 
   async function copyGuide() {
-    await navigator.clipboard.writeText(AUDIENCE_DATA_SOURCE_GUIDE_MARKDOWN);
+    await navigator.clipboard.writeText(SUBSCRIBER_DATA_SOURCE_GUIDE_MARKDOWN);
     setCopiedGuide(true);
     window.setTimeout(() => setCopiedGuide(false), 2000);
   }
@@ -214,7 +214,7 @@ export function AudienceDataSourceGuide() {
         <AccordionContent className="mt-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 pt-3 pb-3 text-xs text-muted-foreground [&_p:not(:last-child)]:mb-0">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
             <p className="text-[11px] text-muted-foreground">
-              Full spec for building a compatible audience API.
+              Full spec for building a compatible subscriber API.
             </p>
             <Button
               type="button"

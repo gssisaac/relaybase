@@ -10,20 +10,20 @@ import {
   type ReactNode,
 } from "react";
 
-import { studioAudienceApi } from "@/studio/api";
+import { studioSubscriberApi } from "@/studio/api";
 import type {
-  AudienceGroupContact,
-  AudienceGroupSummary,
+  SubscriberGroupContact,
+  SubscriberGroupSummary,
 } from "@/email/components/mailbox/types";
 
-export type AudienceGroupDetail = {
-  group: AudienceGroupSummary;
-  contacts: AudienceGroupContact[];
+export type SubscriberGroupDetail = {
+  group: SubscriberGroupSummary;
+  contacts: SubscriberGroupContact[];
 };
 
 type Ctx = {
   groupId: string;
-  detail: AudienceGroupDetail | null;
+  detail: SubscriberGroupDetail | null;
   loading: boolean;
   refreshing: boolean;
   notFound: boolean;
@@ -31,20 +31,20 @@ type Ctx = {
   refresh: (force?: boolean) => Promise<void>;
 };
 
-const AudienceGroupDetailCtx = createContext<Ctx | null>(null);
+const SubscriberGroupDetailCtx = createContext<Ctx | null>(null);
 
-export function clearAudienceGroupDetailCache(_productId: string, _groupId: string): void {
-  /* Studio audience is server-backed — no email cache to clear. */
+export function clearSubscriberGroupDetailCache(_productId: string, _groupId: string): void {
+  /* Studio subscribers are server-backed — no email cache to clear. */
 }
 
-export function AudienceGroupDetailProvider({
+export function SubscriberGroupDetailProvider({
   groupId,
   children,
 }: {
   groupId: string;
   children: ReactNode;
 }) {
-  const [detail, setDetail] = useState<AudienceGroupDetail | null>(null);
+  const [detail, setDetail] = useState<SubscriberGroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -58,7 +58,7 @@ export function AudienceGroupDetailProvider({
     setRefreshing(true);
     setError(null);
     try {
-      const data = await studioAudienceApi.getGroup(groupId);
+      const data = await studioSubscriberApi.getGroup(groupId);
       setDetail(data);
       setNotFound(false);
     } catch (e) {
@@ -80,16 +80,16 @@ export function AudienceGroupDetailProvider({
   }, [refresh]);
 
   return (
-    <AudienceGroupDetailCtx.Provider
+    <SubscriberGroupDetailCtx.Provider
       value={{ groupId, detail, loading, refreshing, notFound, error, refresh }}
     >
       {children}
-    </AudienceGroupDetailCtx.Provider>
+    </SubscriberGroupDetailCtx.Provider>
   );
 }
 
-export function useAudienceGroupDetail(): Ctx {
-  const ctx = useContext(AudienceGroupDetailCtx);
-  if (!ctx) throw new Error("AudienceGroupDetailProvider required");
+export function useSubscriberGroupDetail(): Ctx {
+  const ctx = useContext(SubscriberGroupDetailCtx);
+  if (!ctx) throw new Error("SubscriberGroupDetailProvider required");
   return ctx;
 }

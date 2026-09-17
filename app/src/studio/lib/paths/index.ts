@@ -14,7 +14,7 @@ import {
 
 import type { TriggerStatus, NewsletterStatus } from "@/studio/api";
 
-export type AudienceDetailTab = "contacts" | "history" | "settings";
+export type SubscriberDetailTab = "contacts" | "history" | "settings";
 
 export type NewslettersSection = "list" | "sent" | "in-progress";
 
@@ -92,9 +92,9 @@ export function newslettersSectionFromLocation(
   return "list";
 }
 
-export function studioAudienceDetailHref(
+export function studioSubscriberDetailHref(
   groupId: string,
-  tab: AudienceDetailTab = "contacts",
+  tab: SubscriberDetailTab = "contacts",
 ): string {
   const params = new URLSearchParams();
   params.set("id", groupId.trim());
@@ -102,13 +102,13 @@ export function studioAudienceDetailHref(
   return `${STUDIO_SUBSCRIBERS_PATH}?${params.toString()}`;
 }
 
-export function audienceDetailFromSearch(searchParams: {
+export function subscriberDetailFromSearch(searchParams: {
   get: (name: string) => string | null;
-}): { groupId: string; tab: AudienceDetailTab } | null {
+}): { groupId: string; tab: SubscriberDetailTab } | null {
   const groupId = searchParams.get("id")?.trim() ?? "";
   if (!groupId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
-  const tab: AudienceDetailTab =
+  const tab: SubscriberDetailTab =
     raw === "history" || raw === "settings" ? raw : "contacts";
   return { groupId, tab };
 }

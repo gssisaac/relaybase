@@ -10,8 +10,8 @@ export function isEmailSuppressedForTrigger(
   const data = store.read();
   return data.accountSuppressions.some((s) => {
     if (s.accountLinkId !== DEV_ACCOUNT_LINK_ID || s.email !== normalized) return false;
-    if (!s.audienceGroupId) return true;
-    if (automation.audienceGroupId && s.audienceGroupId === automation.audienceGroupId) {
+    if (!s.subscriberGroupId) return true;
+    if (automation.subscriberGroupId && s.subscriberGroupId === automation.subscriberGroupId) {
       return true;
     }
     return false;

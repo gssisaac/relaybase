@@ -7,7 +7,7 @@ import type { StudioOverview } from "@/studio/api";
 
 import { formatOverviewCompact, OverviewKpiCard } from "./OverviewKpiCard";
 import {
-  StudioOverviewAudienceChart,
+  StudioOverviewSubscriberHealthChart,
   StudioOverviewEngagementChart,
   StudioOverviewSendsChart,
   StudioOverviewTriggersChart,
@@ -112,7 +112,7 @@ export function StudioOverviewTopSection({
             <CardDescription className="text-xs">Active, unsubscribed, bounced</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
-            <StudioOverviewAudienceChart data={data.charts.audienceHealth} />
+            <StudioOverviewSubscriberHealthChart data={data.charts.subscriberHealth} />
           </CardContent>
         </Card>
       </div>

@@ -27,7 +27,7 @@ function newsletter(id: string): Newsletter {
     name: id,
     slug: id,
     description: null,
-    audienceGroupId: "audience_x",
+    subscriberGroupId: "subscriber_x",
     domain: "relaybase.xyz",
     fromName: null,
     fromEmail: "a@relaybase.xyz",
@@ -96,7 +96,7 @@ describe("ensureDevScheduleFixtures", () => {
       trackingEvents: [],
       newsletterAssets: [],
       triggerAssets: [],
-      audienceGroups: [],
+      subscriberGroups: [],
     };
 
     const now = new Date("2026-09-15T12:00:00.000Z");

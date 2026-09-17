@@ -46,13 +46,13 @@ type NewsletterDetailHookValue = {
   newsletterId: string;
   newsletter: Newsletter | null;
   templates: StudioLayout[];
-  audienceMembers: NewsletterMember[];
+  subscriberMembers: NewsletterMember[];
   loading: boolean;
   notFound: boolean;
   setNewsletter: (newsletter: Newsletter) => void;
   refresh: () => Promise<void>;
   refreshTemplates: () => Promise<void>;
-  refreshAudience: () => Promise<void>;
+  refreshSubscribers: () => Promise<void>;
   syncDraft: (fields: NewsletterDraftFields) => void;
   persistDraft: () => Promise<boolean>;
   getLastSavedDraft: () => NewsletterDraftFields;
@@ -71,7 +71,7 @@ export function useNewsletterDetail(): NewsletterDetailHookValue {
         newsletterId: store.newsletterId,
         newsletter: store.newsletter,
         templates: store.templates,
-        audienceMembers: store.audienceMembers,
+        subscriberMembers: store.subscriberMembers,
         loading: store.loading,
         notFound: store.notFound,
         sendInFlight: store.sendInFlight,
@@ -85,13 +85,13 @@ export function useNewsletterDetail(): NewsletterDetailHookValue {
     newsletterId: store.newsletterId,
     newsletter: store.newsletter,
     templates: store.templates,
-    audienceMembers: store.audienceMembers,
+    subscriberMembers: store.subscriberMembers,
     loading: store.loading,
     notFound: store.notFound,
     setNewsletter: store.setNewsletter,
     refresh: store.refresh,
     refreshTemplates: store.refreshTemplates,
-    refreshAudience: store.refreshAudience,
+    refreshSubscribers: store.refreshSubscribers,
     syncDraft: store.syncDraft,
     persistDraft: store.persistDraft,
     getLastSavedDraft: store.getLastSavedDraft,

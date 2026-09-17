@@ -6,25 +6,25 @@ export function normalizeSuppressionEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-/** True if this email must not receive mail for the given audience group. */
+/** True if this email must not receive mail for the given subscriber group. */
 export function isEmailSuppressedForGroup(
   email: string,
-  audienceGroupId: string,
+  subscriberGroupId: string,
   accountLinkId: string = DEV_ACCOUNT_LINK_ID,
 ): boolean {
   const normalized = normalizeSuppressionEmail(email);
   return store.read().accountSuppressions.some((s) => {
     if (s.accountLinkId !== accountLinkId) return false;
     if (s.email !== normalized) return false;
-    if (s.audienceGroupId === null) return true;
-    return s.audienceGroupId === audienceGroupId;
+    if (s.subscriberGroupId === null) return true;
+    return s.subscriberGroupId === subscriberGroupId;
   });
 }
 
 export function upsertAccountSuppression(input: {
   email: string;
   reason: AccountSuppressionReason;
-  audienceGroupId: string | null;
+  subscriberGroupId: string | null;
   sourceNewsletterId?: string | null;
   accountLinkId?: string;
 }): void {
@@ -37,7 +37,7 @@ export function upsertAccountSuppression(input: {
       (s) =>
         s.accountLinkId === accountLinkId &&
         s.email === email &&
-        s.audienceGroupId === input.audienceGroupId &&
+        s.subscriberGroupId === input.subscriberGroupId &&
         s.reason === input.reason,
     );
     if (existing) return;
@@ -47,7 +47,7 @@ export function upsertAccountSuppression(input: {
       accountLinkId,
       email,
       reason: input.reason,
-      audienceGroupId: input.audienceGroupId,
+      subscriberGroupId: input.subscriberGroupId,
       sourceNewsletterId: input.sourceNewsletterId ?? null,
       createdAt: now,
     });
@@ -56,14 +56,14 @@ export function upsertAccountSuppression(input: {
 
 /** Record group unsubscribe + durable suppression ledger entry. */
 export function recordGroupUnsubscribe(input: {
-  audienceGroupId: string;
+  subscriberGroupId: string;
   email: string;
   sourceNewsletterId?: string | null;
 }): void {
   upsertAccountSuppression({
     email: input.email,
     reason: "unsubscribe",
-    audienceGroupId: input.audienceGroupId,
+    subscriberGroupId: input.subscriberGroupId,
     sourceNewsletterId: input.sourceNewsletterId ?? null,
   });
 }

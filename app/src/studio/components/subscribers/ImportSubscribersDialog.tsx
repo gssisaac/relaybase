@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StudioApiError, studioAudienceApi } from "@/studio/api";
+import { StudioApiError, studioSubscriberApi } from "@/studio/api";
 import {
   NONE_COLUMN,
   guessEmailColumnIndex,
@@ -32,7 +32,7 @@ import {
   selectValueFromColumnIndex,
   columnIndexFromSelectValue,
   type ParsedCsvTable,
-} from "@/studio/lib/audience/parse-csv-contacts";
+} from "@/studio/lib/subscribers/parse-csv-contacts";
 
 type Step = "choose-file" | "map-columns" | "done";
 
@@ -125,7 +125,7 @@ export function ImportSubscribersDialog({
 
     for (const contact of contacts) {
       try {
-        await studioAudienceApi.addContact(groupId, contact);
+        await studioSubscriberApi.addContact(groupId, contact);
         imported++;
       } catch (e) {
         if (e instanceof StudioApiError && e.status === 409) {

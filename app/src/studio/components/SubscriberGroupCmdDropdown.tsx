@@ -3,18 +3,18 @@
 import { useMemo } from "react";
 
 import { CmdDropdown, type CmdDropdownProps } from "@/components/ui/cmd-dropdown";
-import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
+import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import {
-  audienceGroupCmdGroups,
-  filterAudienceGroupsByDomain,
-} from "@/studio/lib/audience/audience-group-cmd-groups";
+  subscriberGroupCmdGroups,
+  filterSubscriberGroupsByDomain,
+} from "@/studio/lib/subscribers/subscriber-group-cmd-groups";
 
-export type AudienceGroupCmdDropdownProps = {
-  groups: AudienceGroupSummary[];
+export type SubscriberGroupCmdDropdownProps = {
+  groups: SubscriberGroupSummary[];
   value?: string | null;
   onValueChange?: (
     groupId: string | undefined,
-    group?: AudienceGroupSummary,
+    group?: SubscriberGroupSummary,
   ) => void;
   loading?: boolean;
   pinnedGroupIds?: string[];
@@ -33,7 +33,7 @@ export type AudienceGroupCmdDropdownProps = {
   | "contentAlign"
 >;
 
-export function AudienceGroupCmdDropdown({
+export function SubscriberGroupCmdDropdown({
   groups,
   value,
   onValueChange,
@@ -44,9 +44,9 @@ export function AudienceGroupCmdDropdown({
   searchPlaceholder = "Search subscriber groups by name or domain…",
   disabled,
   ...cmdProps
-}: AudienceGroupCmdDropdownProps) {
+}: SubscriberGroupCmdDropdownProps) {
   const filtered = useMemo(
-    () => filterAudienceGroupsByDomain(groups, domainFilter),
+    () => filterSubscriberGroupsByDomain(groups, domainFilter),
     [groups, domainFilter],
   );
 
@@ -56,7 +56,7 @@ export function AudienceGroupCmdDropdown({
   );
 
   const cmdGroups = useMemo(
-    () => audienceGroupCmdGroups(filtered, pinList),
+    () => subscriberGroupCmdGroups(filtered, pinList),
     [filtered, pinList],
   );
 

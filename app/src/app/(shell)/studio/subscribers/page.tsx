@@ -1,13 +1,13 @@
 import { VerifiedAccountsProvider } from "@/studio/stores/verified-accounts";
-import { AudienceRouteProvider } from "@/studio/pages/audience/AudienceRouteContext";
-import { AudienceView } from "@/studio/pages/audience/AudienceView";
+import { SubscriberRouteProvider } from "@/studio/pages/subscribers/SubscriberRouteContext";
+import { SubscribersView } from "@/studio/pages/subscribers/SubscribersView";
 
 export default function Page() {
   return (
     <VerifiedAccountsProvider>
-      <AudienceRouteProvider audienceRoot="/studio/subscribers">
-        <AudienceView />
-      </AudienceRouteProvider>
+      <SubscriberRouteProvider subscribersRoot="/studio/subscribers">
+        <SubscribersView />
+      </SubscriberRouteProvider>
     </VerifiedAccountsProvider>
   );
 }

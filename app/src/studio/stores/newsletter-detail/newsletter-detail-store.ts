@@ -37,7 +37,7 @@ export class NewsletterDetailStore {
   newsletterId = "";
   newsletter: Newsletter | null = null;
   templates: StudioLayout[] = [];
-  audienceMembers: NewsletterMember[] = [];
+  subscriberMembers: NewsletterMember[] = [];
   loading = true;
   notFound = false;
 
@@ -113,7 +113,7 @@ export class NewsletterDetailStore {
 
     void this.refresh();
     void this.refreshTemplates();
-    void this.refreshAudience();
+    void this.refreshSubscribers();
   }
 
   unmount() {
@@ -220,29 +220,35 @@ export class NewsletterDetailStore {
     }
   }
 
-  async refreshAudience(): Promise<void> {
+  async refreshSubscribers(): Promise<void> {
     if (!this.newsletterId) return;
     try {
-      const { members } = await studioApi.listNewsletterAudience(this.newsletterId);
+      const { members } = await studioApi.listNewsletterSubscribers(this.newsletterId);
       runInAction(() => {
-        this.audienceMembers = members;
+        this.subscriberMembers = members.map((member) => ({
+          ...member,
+          newsletterId:
+            member.newsletterId ??
+            (member as NewsletterMember & { broadcastId?: string }).broadcastId ??
+            this.newsletterId,
+        }));
       });
     } catch {
       // Non-fatal
     }
   }
 
-  async updateAudienceGroup(groupId: string): Promise<{ ok: boolean; error?: string }> {
+  async updateSubscriberGroup(groupId: string): Promise<{ ok: boolean; error?: string }> {
     if (!this.newsletterId) return { ok: false, error: "No newsletter loaded" };
     try {
-      const updated = await studioApi.updateNewsletter(this.newsletterId, { audienceGroupId: groupId });
+      const updated = await studioApi.updateNewsletter(this.newsletterId, { subscriberGroupId: groupId });
       runInAction(() => {
         this.newsletter = updated;
       });
-      await this.refreshAudience();
+      await this.refreshSubscribers();
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : "Failed to update audience group" };
+      return { ok: false, error: err instanceof Error ? err.message : "Failed to update subscriber group" };
     }
   }
 

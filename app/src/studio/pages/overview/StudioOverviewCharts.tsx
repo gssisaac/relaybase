@@ -20,7 +20,7 @@ const sendsChartConfig = {
   clicked: { label: "Clicked", color: "var(--chart-5)" },
 } satisfies ChartConfig;
 
-const audienceChartConfig = {
+const subscriberHealthChartConfig = {
   count: { label: "Contacts", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
@@ -78,7 +78,7 @@ export function StudioOverviewSendsChart({ data }: { data: StudioOverview["chart
   );
 }
 
-export function StudioOverviewAudienceChart({ data }: { data: StudioOverview["charts"]["audienceHealth"] }) {
+export function StudioOverviewSubscriberHealthChart({ data }: { data: StudioOverview["charts"]["subscriberHealth"] }) {
   const chartData = data.map((row, index) => ({
     label: row.label,
     count: row.count,
@@ -90,7 +90,7 @@ export function StudioOverviewAudienceChart({ data }: { data: StudioOverview["ch
   }
 
   return (
-    <ChartContainer config={audienceChartConfig} className={miniChartClassName}>
+    <ChartContainer config={subscriberHealthChartConfig} className={miniChartClassName}>
       <BarChart
         accessibilityLayer
         data={chartData}

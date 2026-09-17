@@ -48,7 +48,7 @@ def curl(method: str, path: str, body: dict | None = None, token: str | None = N
 
 def collect_emails(data: dict) -> dict[str, str]:
     emails: dict[str, str] = {}
-    for g in data.get("audienceGroups", []):
+    for g in data.get("subscriberGroups", []):
         for c in g.get("contacts", []):
             e = (c.get("email") or "").strip().lower()
             if e.endswith(f"@{DOMAIN}"):

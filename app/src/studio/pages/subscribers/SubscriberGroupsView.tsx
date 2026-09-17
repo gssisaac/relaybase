@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { AudienceDataSourceGuide } from "@/studio/pages/audience/AudienceDataSourceGuide";
+import { SubscriberDataSourceGuide } from "@/studio/pages/subscribers/SubscriberDataSourceGuide";
 import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { useWorkerDomains } from "@/studio/lib/domains/use-worker-domains";
-import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
+import { useSubscriberRoutes } from "@/studio/pages/subscribers/SubscriberRouteContext";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
@@ -18,9 +18,9 @@ import {
   formatOverviewCompact,
   OverviewKpiCard,
 } from "@/studio/pages/overview/OverviewKpiCard";
-import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
+import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { StudioApiError, studioAudienceApi } from "@/studio/api";
+import { StudioApiError, studioSubscriberApi } from "@/studio/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ type TestState =
     }
   | { status: "error"; message: string };
 
-function lastSyncLabel(group: AudienceGroupSummary): string {
+function lastSyncLabel(group: SubscriberGroupSummary): string {
   if (!group.dataSource) return "—";
   if (!group.lastSyncAt) return "Not synced yet";
   const when = new Date(group.lastSyncAt).toLocaleString(undefined, {
@@ -88,17 +88,17 @@ function friendlyCrmError(e: unknown, fallback: string): string {
   return fallback;
 }
 
-export function AudienceGroupsView() {
+export function SubscriberGroupsView() {
   const router = useRouter();
   const verifiedStore = useVerifiedAccounts();
-  const { audienceDetailHref } = useAudienceRoutes();
+  const { subscriberDetailHref } = useSubscriberRoutes();
   const {
     domains: workerDomains,
     loading: workerDomainsLoading,
     refresh: refreshWorkerDomains,
   } = useWorkerDomains();
 
-  const [groups, setGroups] = useState<AudienceGroupSummary[]>([]);
+  const [groups, setGroups] = useState<SubscriberGroupSummary[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,7 +126,7 @@ export function AudienceGroupsView() {
     setRefreshing(true);
     setError(null);
     try {
-      const result = await studioAudienceApi.listGroups();
+      const result = await studioSubscriberApi.listGroups();
       setGroups(result.groups ?? []);
     } catch (e) {
       setError(friendlyCrmError(e, "Refresh failed"));
@@ -151,7 +151,7 @@ export function AudienceGroupsView() {
       const entries = await Promise.all(
         groups.map(async (g) => {
           try {
-            const detail = await studioAudienceApi.getGroup(g.id);
+            const detail = await studioSubscriberApi.getGroup(g.id);
             return [
               g.id,
               detail.contacts.map((c) => c.email.trim().toLowerCase()).filter(Boolean),
@@ -234,7 +234,7 @@ export function AudienceGroupsView() {
   async function testConnection() {
     setTestState({ status: "testing" });
     try {
-      const data = await studioAudienceApi.testConnection({
+      const data = await studioSubscriberApi.testConnection({
         endpointUrl,
         credential,
         credentialHeader,
@@ -266,7 +266,7 @@ export function AudienceGroupsView() {
     setError(null);
     try {
       const workerUrl = resolveEmailApiBase();
-      const data = await studioAudienceApi.createGroup({
+      const data = await studioSubscriberApi.createGroup({
         name,
         domain,
         ...(workerUrl ? { workerUrl } : {}),
@@ -430,7 +430,7 @@ export function AudienceGroupsView() {
                       }}
                       placeholder="https://api.example.com/contacts"
                     />
-                    <AudienceDataSourceGuide />
+                    <SubscriberDataSourceGuide />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">API key / token</Label>
@@ -606,7 +606,7 @@ export function AudienceGroupsView() {
                         key={group.id}
                         className="cursor-pointer"
                         onClick={() =>
-                          router.push(audienceDetailHref(group.id))
+                          router.push(subscriberDetailHref(group.id))
                         }
                       >
                         <TableCell className="font-medium">

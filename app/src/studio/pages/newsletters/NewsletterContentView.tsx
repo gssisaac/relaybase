@@ -71,7 +71,7 @@ export function NewsletterContentView() {
     newsletterId,
     newsletter,
     templates,
-    audienceMembers,
+    subscriberMembers,
     syncDraft,
     persistDraft,
     getLastSavedDraft,
@@ -147,13 +147,13 @@ export function NewsletterContentView() {
   }, [refreshComplianceContext, newsletterId]);
 
   const personaOptions = useMemo(
-    () => previewPersonaOptions(audienceMembers),
-    [audienceMembers],
+    () => previewPersonaOptions(subscriberMembers),
+    [subscriberMembers],
   );
 
   const previewRecipient = useMemo(
-    () => resolvePreviewRecipient(previewPersonaId, audienceMembers),
-    [previewPersonaId, audienceMembers],
+    () => resolvePreviewRecipient(previewPersonaId, subscriberMembers),
+    [previewPersonaId, subscriberMembers],
   );
 
   const messageId = newsletter?.messageId ?? null;
@@ -208,7 +208,7 @@ export function NewsletterContentView() {
   const plainTextTemplate = isPlainTextTemplate(templateId);
   const previewMergeOptions = useMemo(
     () => ({
-      unsubscribeUrl: buildPreviewUnsubscribeUrl(newsletterId, previewPersonaId, audienceMembers),
+      unsubscribeUrl: buildPreviewUnsubscribeUrl(newsletterId, previewPersonaId, subscriberMembers),
       compliancePreviewPlaceholders: true,
       compliancePlaceholderFormat: (plainTextTemplate ? "plain" : "html") as "plain" | "html",
       compliance: {
@@ -217,7 +217,7 @@ export function NewsletterContentView() {
         complianceContactEmail: compliance?.contactEmail ?? null,
       },
     }),
-    [newsletterId, previewPersonaId, audienceMembers, compliance, plainTextTemplate],
+    [newsletterId, previewPersonaId, subscriberMembers, compliance, plainTextTemplate],
   );
 
   const resolvedTemplateVariables = useMemo(

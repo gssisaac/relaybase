@@ -1,5 +1,5 @@
 import { store } from "../../db/store";
-import type { AudienceMember, Newsletter } from "../../db/types";
+import type { SubscriberMember, Newsletter } from "../../db/types";
 import { sendMail } from "../mail/sender";
 import { resolveWorkerSendCredentials } from "../mail/credentials";
 import {
@@ -21,21 +21,21 @@ const dispatchInFlight = new Set<string>();
 
 function enqueueNewsletterRecipients(
   broadcast: Newsletter,
-  members: AudienceMember[],
+  members: SubscriberMember[],
   now: string,
 ): void {
   store.update((draft) => {
     const existing = new Set(
       draft.recipients
         .filter((r) => r.newsletterId === broadcast.id)
-        .map((r) => r.audienceMemberId),
+        .map((r) => r.subscriberMemberId),
     );
     for (const m of members) {
       if (existing.has(m.id)) continue;
       draft.recipients.push({
         id: newId("recipient"),
         newsletterId: broadcast.id,
-        audienceMemberId: m.id,
+        subscriberMemberId: m.id,
         email: m.email,
         name: m.name ?? null,
         status: "queued",
@@ -191,8 +191,8 @@ async function runBroadcastDispatchBatch(
 
     const member = store
       .read()
-      .audienceGroups.flatMap((g) => g.contacts)
-      .find((m) => m.id === recipient.audienceMemberId);
+      .subscriberGroups.flatMap((g) => g.contacts)
+      .find((m) => m.id === recipient.subscriberMemberId);
     if (!member || member.sendStatus !== "active") {
       skipped += 1;
       store.update((draft) => {
@@ -272,9 +272,9 @@ async function runBroadcastDispatchBatch(
   return { sent, failed, skipped, completed };
 }
 
-export async function dispatchNewsletterToAudience(
+export async function dispatchNewsletterToSubscribers(
   broadcast: Newsletter,
-  members: AudienceMember[],
+  members: SubscriberMember[],
 ): Promise<{ sent: number; failed: number; skipped: number; async?: boolean; queued?: number }> {
   const now = new Date().toISOString();
   enqueueNewsletterRecipients(broadcast, members, now);

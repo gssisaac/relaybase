@@ -4,18 +4,18 @@ import { History } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { useAudienceGroupDetail } from "@/studio/pages/audience/AudienceGroupDetailContext";
-import type { AudienceSyncRun } from "@/email/components/mailbox/types";
+import { useSubscriberGroupDetail } from "@/studio/pages/subscribers/SubscriberGroupDetailContext";
+import type { SubscriberSyncRun } from "@/email/components/mailbox/types";
 
 function syncStatusVariant(
-  status: AudienceSyncRun["status"],
+  status: SubscriberSyncRun["status"],
 ): "default" | "secondary" | "destructive" | "outline" {
   if (status === "success") return "default";
   if (status === "error") return "destructive";
   return "secondary";
 }
 
-function syncSummary(run: AudienceSyncRun): string | undefined {
+function syncSummary(run: SubscriberSyncRun): string | undefined {
   if (run.status === "running") return run.phase !== "idle" ? run.phase : "Running…";
   if (run.totalCount != null) {
     const skipped =
@@ -28,8 +28,8 @@ function syncSummary(run: AudienceSyncRun): string | undefined {
   return undefined;
 }
 
-export function AudienceGroupHistoryView() {
-  const { detail } = useAudienceGroupDetail();
+export function SubscriberGroupHistoryView() {
+  const { detail } = useSubscriberGroupDetail();
   const history = detail?.group.syncHistory ?? [];
 
   return (

@@ -195,29 +195,29 @@ export type AudienceContact = {
   name?: string;
 };
 
-export type AudienceDataSourceType = "generic_json";
+export type SubscriberDataSourceType = "generic_json";
 
-export type AudienceDataSource = {
-  type: AudienceDataSourceType;
+export type SubscriberDataSource = {
+  type: SubscriberDataSourceType;
   endpointUrl: string;
   credential?: string;
   credentialHeader?: string;
 };
 
-export type AudienceSyncPhase =
+export type SubscriberSyncPhase =
   | "idle"
   | "fetching"
   | "parsing"
   | "writing"
   | "done";
 
-export type AudienceSyncRunStatus = "running" | "success" | "error";
+export type SubscriberSyncRunStatus = "running" | "success" | "error";
 
-export type AudienceSyncRun = {
+export type SubscriberSyncRun = {
   id: string;
   trigger: "manual" | "cron";
-  status: AudienceSyncRunStatus;
-  phase: AudienceSyncPhase;
+  status: SubscriberSyncRunStatus;
+  phase: SubscriberSyncPhase;
   startedAt: string;
   finishedAt?: string;
   totalCount?: number;
@@ -229,35 +229,35 @@ export type AudienceSyncRun = {
   estimatedRemainingMs?: number;
 };
 
-export type AudienceGroupProgress = {
+export type SubscriberGroupProgress = {
   groupId: string;
   cronEnabled: boolean;
   cronIntervalMinutes?: number;
   nextDueAt: string | null;
   lastSyncAt?: string;
-  progress: AudienceSyncRun | null;
-  history: AudienceSyncRun[];
+  progress: SubscriberSyncRun | null;
+  history: SubscriberSyncRun[];
 };
 
-export type AudienceGroupSummary = {
+export type SubscriberGroupSummary = {
   id: string;
   name: string;
   domain: string;
   createdAt: string;
   contactCount: number;
   defaultFrom?: string;
-  dataSource?: AudienceDataSource;
+  dataSource?: SubscriberDataSource;
   cronEnabled?: boolean;
   cronIntervalMinutes?: number;
   lastSyncAt?: string;
   lastSyncStatus?: "success" | "error";
   lastSyncError?: string;
   lastSyncCount?: number;
-  syncProgress?: AudienceSyncRun;
-  syncHistory?: AudienceSyncRun[];
+  syncProgress?: SubscriberSyncRun;
+  syncHistory?: SubscriberSyncRun[];
 };
 
-export type AudienceGroupContact = {
+export type SubscriberGroupContact = {
   id: string;
   email: string;
   name?: string;
@@ -305,7 +305,7 @@ export type EmailBroadcast = {
 
 export type BroadcastDetail = {
   broadcast: EmailBroadcast;
-  groups: AudienceGroupSummary[];
+  groups: SubscriberGroupSummary[];
   recipientCount: number;
 };
 

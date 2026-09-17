@@ -38,7 +38,7 @@ function ScheduleItemPopoverContent({
   timeZone: string;
 }) {
   const href = newsletterDetailHref(item.newsletterId, "publish", item.status);
-  const audience = item.audienceLabel ?? "Subscriber group";
+  const subscriberGroup = item.subscriberGroupLabel ?? "Subscriber group";
 
   return (
     <>
@@ -69,7 +69,7 @@ function ScheduleItemPopoverContent({
         </div>
         <div className="flex justify-between gap-3">
           <dt>Subscriber group</dt>
-          <dd className="min-w-0 truncate text-right text-foreground">{audience}</dd>
+          <dd className="min-w-0 truncate text-right text-foreground">{subscriberGroup}</dd>
         </div>
         <div className="flex justify-between gap-3">
           <dt>Subscribers</dt>
@@ -92,7 +92,7 @@ function triggerLabel(
         <p className="font-medium">{item.title}</p>
         <p className="text-xs text-muted-foreground">{item.subject}</p>
         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-          {formatScheduleWhen(item.at, timeZone)} · {item.audienceLabel ?? "Subscriber group"} ·{" "}
+          {formatScheduleWhen(item.at, timeZone)} · {item.subscriberGroupLabel ?? "Subscriber group"} ·{" "}
           {item.recipientCount.toLocaleString()} recipients
         </p>
       </>

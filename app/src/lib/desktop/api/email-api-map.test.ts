@@ -61,7 +61,7 @@ describe("mapEmailApiToWorker", () => {
       mapEmailApiToWorker("/api/email/keys/abc/rotate"),
       "/console/keys/abc/rotate",
     );
-    assert.equal(mapEmailApiToWorker("/api/email/audience-groups"), null);
+    assert.equal(mapEmailApiToWorker("/api/email/subscriber-groups"), null);
     assert.equal(mapEmailApiToWorker("/api/email/broadcasts/x/send"), null);
     assert.equal(mapEmailApiToWorker("/api/email/stats"), "/console/stats");
     assert.equal(

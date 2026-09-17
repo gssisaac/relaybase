@@ -1,12 +1,12 @@
 import { store } from "../../db/store";
-import { findAudienceContactByUnsubscribeToken } from "../audience-groups/resolver";
-import { setAudienceContactSendStatus } from "../audience-groups/send-status";
+import { findSubscriberContactByUnsubscribeToken } from "../subscriber-groups/resolver";
+import { setSubscriberContactSendStatus } from "../subscriber-groups/send-status";
 
 function findContactForBroadcast(newsletterId: string, token: string) {
   const data = store.read();
   const broadcast = data.newsletters.find((b) => b.id === newsletterId);
-  if (!broadcast?.audienceGroupId) return { broadcast, contact: undefined };
-  const contact = findAudienceContactByUnsubscribeToken(broadcast.audienceGroupId, token);
+  if (!broadcast?.subscriberGroupId) return { broadcast, contact: undefined };
+  const contact = findSubscriberContactByUnsubscribeToken(broadcast.subscriberGroupId, token);
   return { broadcast, contact };
 }
 
@@ -43,7 +43,7 @@ export function performBroadcastUnsubscribe(
   if (!contact || !broadcast) return { ok: false };
 
   const now = new Date().toISOString();
-  setAudienceContactSendStatus(broadcast.audienceGroupId, contact.id, "unsubscribed", {
+  setSubscriberContactSendStatus(broadcast.subscriberGroupId, contact.id, "unsubscribed", {
     sourceNewsletterId: newsletterId,
   });
   recordUnsubscribeOnRecipients(newsletterId, contact.email, now);
@@ -58,6 +58,6 @@ export function performBroadcastUnsubscribe(
 export function resubscribeBroadcastContact(newsletterId: string, token: string): boolean {
   const { broadcast, contact } = findContactForBroadcast(newsletterId, token);
   if (!contact || !broadcast) return false;
-  setAudienceContactSendStatus(broadcast.audienceGroupId, contact.id, "active");
+  setSubscriberContactSendStatus(broadcast.subscriberGroupId, contact.id, "active");
   return true;
 }

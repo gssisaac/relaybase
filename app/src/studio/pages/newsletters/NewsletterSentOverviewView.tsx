@@ -172,16 +172,16 @@ export function NewsletterSentOverviewView() {
                 </Card>
               ) : null}
 
-              {data.byAudience.length > 0 ? (
+              {data.bySubscriberGroup.length > 0 ? (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-sm">By audience</CardTitle>
+                    <CardTitle className="text-sm">By subscriber group</CardTitle>
                     <CardDescription>Contribution of each linked group across finished sends.</CardDescription>
                   </CardHeader>
                   <CardContent className="divide-y divide-border p-0">
-                    {data.byAudience.map((row) => (
+                    {data.bySubscriberGroup.map((row) => (
                       <div
-                        key={row.audienceGroupId}
+                        key={row.subscriberGroupId}
                         className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
                       >
                         <p className="min-w-0 truncate font-medium">{row.name}</p>
@@ -212,7 +212,7 @@ export function NewsletterSentOverviewView() {
                           <NewsletterStatusBadge status={row.status} />
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
-                          {row.audienceGroupName ?? "No audience"} · {row.subject || "No subject"}
+                          {row.subscriberGroupName ?? "No subscriber group"} · {row.subject || "No subject"}
                         </p>
                       </div>
                       <div className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">

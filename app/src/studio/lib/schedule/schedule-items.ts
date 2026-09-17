@@ -9,7 +9,7 @@ export type ScheduleItem = {
   newsletterId: string;
   title: string;
   subject: string;
-  audienceLabel: string | null;
+  subscriberGroupLabel: string | null;
   recipientCount: number;
   at: Date;
   atIso: string;
@@ -56,8 +56,8 @@ export function upcomingNewsletterScheduleItems(
       newsletterId: b.id,
       title: b.name.trim() || "Untitled newsletter",
       subject: b.subject.trim() || "(No subject)",
-      audienceLabel: b.audienceGroupName,
-      recipientCount: b.audienceContactCount ?? b.audienceActiveCount,
+      subscriberGroupLabel: b.subscriberGroupName,
+      recipientCount: b.subscriberContactCount ?? b.subscriberActiveCount,
       at,
       atIso: b.scheduledAt,
       status: b.status,

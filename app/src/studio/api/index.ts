@@ -1,5 +1,5 @@
 /**
- * hq/studio client — Newsletter (audience + send) and Trigger models.
+ * hq/studio client — Newsletter (subscriber + send) and Trigger models.
  */
 import {
   getStudioApiBase,
@@ -8,7 +8,7 @@ import {
 } from "@/studio/lib/studio-origin";
 
 export { getStudioApiBase, STUDIO_PUBLIC_LINK_ORIGIN } from "@/studio/lib/studio-origin";
-export { studioAudienceApi } from "./audience-api";
+export { studioSubscriberApi } from "./subscriber-api";
 export {
   verifiedDestinationApi,
   VerifiedDestinationApiError,
@@ -104,11 +104,11 @@ export type Newsletter = {
   name: string;
   slug: string;
   description: string | null;
-  audienceGroupId: string | null;
-  audienceGroupName: string | null;
-  audienceGroupDomain: string | null;
+  subscriberGroupId: string | null;
+  subscriberGroupName: string | null;
+  subscriberGroupDomain: string | null;
   domain: string | null;
-  audienceContactCount: number | null;
+  subscriberContactCount: number | null;
   fromName: string | null;
   fromEmail: string | null;
   replyTo: string | null;
@@ -127,7 +127,7 @@ export type Newsletter = {
   startedAt: string | null;
   finishedAt: string | null;
   stats: NewsletterStats;
-  audienceActiveCount: number;
+  subscriberActiveCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -138,7 +138,7 @@ export type NewsletterMemberSource = "manual" | "synced";
 export type NewsletterMember = {
   id: string;
   newsletterId: string;
-  audienceMemberId: string;
+  subscriberMemberId: string;
   email: string;
   name: string | null;
   status: NewsletterMemberStatus;
@@ -187,8 +187,8 @@ export type AccountSentOverview = {
   totals: NewsletterStats & { newsletters: number };
   rates: { delivery: number; open: number; click: number; bounce: number };
   byWeek: { weekStart: string; sent: number; opened: number; clicked: number }[];
-  byAudience: {
-    audienceGroupId: string;
+  bySubscriberGroup: {
+    subscriberGroupId: string;
     name: string;
     sent: number;
     opened: number;
@@ -202,7 +202,7 @@ export type AccountSentOverview = {
     sentAt: string | null;
     finishedAt: string | null;
     stats: NewsletterStats;
-    audienceGroupName: string | null;
+    subscriberGroupName: string | null;
   }>;
   topLinks: { url: string; clicks: number; uniqueClicks: number; newsletterId: string }[];
 };
@@ -268,7 +268,7 @@ export type StudioOverview = {
       name: string;
       subject: string;
       scheduledAt: string;
-      audienceGroupName: string | null;
+      subscriberGroupName: string | null;
       recipientCount: number;
       status: NewsletterStatus;
     } | null;
@@ -279,7 +279,7 @@ export type StudioOverview = {
       subject: string;
       scheduledAt: string;
       status: "scheduled" | "sending";
-      audienceGroupName: string | null;
+      subscriberGroupName: string | null;
     }>;
   };
   triggers: {
@@ -316,7 +316,7 @@ export type StudioOverview = {
       percentUsed: number | null;
     };
   };
-  audience: {
+  subscribers: {
     groupCount: number;
     health: { active: number; unsubscribed: number; bounced: number };
     recentSyncStatus: { lastSyncAt: string | null; failedGroupsCount: number };
@@ -337,7 +337,7 @@ export type StudioOverview = {
       opened: number;
       clicked: number;
     }>;
-    audienceHealth: Array<{ key: string; label: string; count: number }>;
+    subscriberHealth: Array<{ key: string; label: string; count: number }>;
     automationTriggersByDay: Array<{ day: string; label: string; count: number }>;
     engagementRates: Array<{ key: string; label: string; value: number }>;
   };
@@ -363,7 +363,7 @@ export type InProgressOverview = {
 
 export type NewsletterRecipient = {
   id: string;
-  audienceMemberId: string;
+  subscriberMemberId: string;
   email: string;
   name: string | null;
   status: RecipientStatus;
@@ -588,7 +588,7 @@ export const studioApi = {
   createNewsletter: (input: {
     name: string;
     domain: string;
-    audienceGroupId: string;
+    subscriberGroupId: string;
     workerUrl?: string;
     slug?: string;
     fromName?: string;
@@ -617,7 +617,7 @@ export const studioApi = {
       layoutId: string | null;
       messageId: string | null;
       templateVariables: Record<string, string>;
-      audienceGroupId: string;
+      subscriberGroupId: string;
     }>,
   ) => studioFetch<Newsletter>(`/studio/newsletters/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   archiveNewsletter: (id: string) =>
@@ -631,23 +631,23 @@ export const studioApi = {
       body: JSON.stringify({ listStatus: "active" }),
     }),
 
-  listNewsletterAudience: (newsletterId: string, params?: { status?: string; q?: string }) => {
+  listNewsletterSubscribers: (newsletterId: string, params?: { status?: string; q?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.q) qs.set("q", params.q);
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     return studioFetch<{ members: NewsletterMember[] }>(
-      `/studio/newsletters/${newsletterId}/audience${suffix}`,
+      `/studio/newsletters/${newsletterId}/subscribers${suffix}`,
     );
   },
-  syncNewsletterAudience: (newsletterId: string) =>
+  syncNewsletterSubscribers: (newsletterId: string) =>
     studioFetch<{
       added: number;
       updated: number;
       skipped: number;
       contactCount: number;
       activeCount: number;
-    }>(`/studio/newsletters/${newsletterId}/audience/sync`, { method: "POST" }),
+    }>(`/studio/newsletters/${newsletterId}/subscribers/sync`, { method: "POST" }),
   testSendNewsletter: (newsletterId: string, to: string) =>
     studioFetch<{ ok: true }>(`/studio/newsletters/${newsletterId}/test-send`, {
       method: "POST",
@@ -716,7 +716,7 @@ export const studioApi = {
       listStatus: TriggerListStatus;
       purpose: TriggerPurpose;
       source: TriggerSource;
-      audienceGroupId: string | null;
+      subscriberGroupId: string | null;
       cooldownSeconds: number;
       applyMarketingSuppression: boolean;
       subject: string;
@@ -811,8 +811,8 @@ export type Trigger = {
   listStatus: TriggerListStatus;
   status: TriggerStatus;
   source: TriggerSource;
-  audienceGroupId: string | null;
-  audienceGroupName: string | null;
+  subscriberGroupId: string | null;
+  subscriberGroupName: string | null;
   cooldownSeconds: number;
   applyMarketingSuppression: boolean;
   subject: string;
@@ -861,7 +861,7 @@ export type TriggerSend = {
   id: string;
   triggerId: string;
   triggerEventId: string;
-  audienceMemberId: string | null;
+  subscriberMemberId: string | null;
   email: string;
   name: string | null;
   status: TriggerSendStatus;

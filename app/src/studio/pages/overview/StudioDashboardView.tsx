@@ -76,7 +76,7 @@ export function StudioDashboardView() {
           <div className="space-y-1">
             <h1 className="truncate text-lg font-semibold tracking-tight">Dashboard</h1>
             <p className="text-sm text-muted-foreground">
-              Create campaigns from templates, track scheduled sends, and manage your audience.
+              Create campaigns from templates, track scheduled sends, and manage your subscribers.
             </p>
           </div>
         </div>
@@ -115,7 +115,7 @@ export function StudioDashboardView() {
                           <p className="text-xs text-muted-foreground">{data.schedule.nextUpcoming.subject}</p>
                           <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                             {formatOverviewWhen(data.schedule.nextUpcoming.scheduledAt)} ·{" "}
-                            {data.schedule.nextUpcoming.audienceGroupName ?? "Subscriber group"} ·{" "}
+                            {data.schedule.nextUpcoming.subscriberGroupName ?? "Subscriber group"} ·{" "}
                             {data.schedule.nextUpcoming.recipientCount.toLocaleString()} subscribers
                           </p>
                         </div>
@@ -150,27 +150,27 @@ export function StudioDashboardView() {
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
-                      <CardTitle className="text-base">Audience & subscriber groups</CardTitle>
+                      <CardTitle className="text-base">Subscriber groups</CardTitle>
                       <CardDescription>
-                        {data.audience.groupCount} {data.audience.groupCount === 1 ? "audience group" : "audience groups"} ready
-                        {data.audience.recentSyncStatus.failedGroupsCount > 0
-                          ? ` · ${data.audience.recentSyncStatus.failedGroupsCount} sync errors`
+                        {data.subscribers.groupCount} {data.subscribers.groupCount === 1 ? "subscriber group" : "subscriber groups"} ready
+                        {data.subscribers.recentSyncStatus.failedGroupsCount > 0
+                          ? ` · ${data.subscribers.recentSyncStatus.failedGroupsCount} sync errors`
                           : ""}
                       </CardDescription>
                     </div>
                     <Link href={subscribers} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      Manage audience
+                      Manage subscribers
                     </Link>
                   </CardHeader>
                   <CardContent>
                     <OverviewExpandableBody>
-                      {data.audience.groups.length === 0 ? (
+                      {data.subscribers.groups.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          Create an audience group to start organizing and syncing your contacts.
+                          Create a subscriber group to start organizing and syncing your contacts.
                         </p>
                       ) : (
                         <ul className="space-y-2">
-                          {data.audience.groups.map((group) => (
+                          {data.subscribers.groups.map((group) => (
                             <li key={group.id}>
                               <Link
                                 href={`${subscribers}?id=${encodeURIComponent(group.id)}`}

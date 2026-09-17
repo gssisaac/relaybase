@@ -1,7 +1,7 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
 import type { Newsletter } from "../../db/types";
-import { findAudienceGroup } from "../audience-groups/group";
-import { audienceActiveCountForNewsletter } from "../audience-groups/resolver";
+import { findSubscriberGroup } from "../subscriber-groups/group";
+import { subscriberActiveCountForNewsletter } from "../subscriber-groups/resolver";
 import { getLayoutHtml, getLayoutSchema, resolveMessage, rowMessageId } from "../messages/resolve";
 
 export function findNewsletter(id: string): Newsletter | undefined {
@@ -18,18 +18,18 @@ export function getNewsletterLayoutSchema(layoutId: string | null | undefined) {
 
 export function serializeNewsletter(row: Newsletter) {
   const data = store.read();
-  const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
+  const group = row.subscriberGroupId ? findSubscriberGroup(row.subscriberGroupId) : undefined;
   const message = resolveMessage(data, rowMessageId(row));
   return {
     id: row.id,
     name: row.name,
     slug: row.slug,
     description: row.description ?? null,
-    audienceGroupId: row.audienceGroupId || null,
-    audienceGroupName: group?.name ?? null,
-    audienceGroupDomain: group?.domain ?? null,
+    subscriberGroupId: row.subscriberGroupId || null,
+    subscriberGroupName: group?.name ?? null,
+    subscriberGroupDomain: group?.domain ?? null,
     domain: row.domain || group?.domain || null,
-    audienceContactCount: group?.contacts.length ?? null,
+    subscriberContactCount: group?.contacts.length ?? null,
     fromName: row.fromName ?? null,
     fromEmail: row.fromEmail ?? null,
     replyTo: row.replyTo ?? null,
@@ -47,7 +47,7 @@ export function serializeNewsletter(row: Newsletter) {
     startedAt: row.startedAt ?? row.sentAt ?? null,
     finishedAt: row.finishedAt ?? null,
     stats: row.stats,
-    audienceActiveCount: audienceActiveCountForNewsletter(row),
+    subscriberActiveCount: subscriberActiveCountForNewsletter(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

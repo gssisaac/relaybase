@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import type { AudienceGroupContact, AudienceGroupSummary } from "@/email/components/mailbox/types";
+import type { SubscriberGroupContact, SubscriberGroupSummary } from "@/email/components/mailbox/types";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,28 +26,28 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AudienceGroupCmdDropdown } from "@/studio/components/AudienceGroupCmdDropdown";
+import { SubscriberGroupCmdDropdown } from "@/studio/components/SubscriberGroupCmdDropdown";
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
-import { studioAudienceDetailHref, newsletterDetailHref } from "@/studio/lib/paths";
+import { studioSubscriberDetailHref, newsletterDetailHref } from "@/studio/lib/paths";
 import {
   useNewsletterDetail,
   useNewsletterDetailStore,
 } from "@/studio/stores/newsletter-detail";
-import { studioAudienceApi } from "@/studio/api";
+import { studioSubscriberApi } from "@/studio/api";
 import { useEmailPaths } from "@/email/lib/paths";
 
 const PREVIEW_CONTACT_LIMIT = 40;
 
-type AudienceContactsDialog =
+type SubscriberContactsDialog =
   | { mode: "confirm"; groupId: string }
   | { mode: "view"; groupId: string };
 
-function AudienceContactsList({
+function SubscriberContactsList({
   contacts,
   loading,
 }: {
-  contacts: AudienceGroupContact[];
+  contacts: SubscriberGroupContact[];
   loading: boolean;
 }) {
   if (loading) {
@@ -106,109 +106,109 @@ export function NewsletterPublishView() {
   const [testEmail, setTestEmail] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
-  const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
-  const [audienceGroupsLoading, setAudienceGroupsLoading] = useState(false);
-  const [audienceContactsDialog, setAudienceContactsDialog] =
-    useState<AudienceContactsDialog | null>(null);
-  const [dialogContacts, setDialogContacts] = useState<AudienceGroupContact[]>([]);
+  const [subscriberGroups, setSubscriberGroups] = useState<SubscriberGroupSummary[]>([]);
+  const [subscriberGroupsLoading, setSubscriberGroupsLoading] = useState(false);
+  const [subscriberContactsDialog, setSubscriberContactsDialog] =
+    useState<SubscriberContactsDialog | null>(null);
+  const [dialogContacts, setDialogContacts] = useState<SubscriberGroupContact[]>([]);
   const [dialogContactsLoading, setDialogContactsLoading] = useState(false);
-  const [savingAudience, setSavingAudience] = useState(false);
+  const [savingSubscriberGroup, setSavingSubscriberGroup] = useState(false);
   const sendDispatch = detailStore.dispatch;
 
-  const sendDomain = newsletter?.domain ?? newsletter?.audienceGroupDomain ?? null;
+  const sendDomain = newsletter?.domain ?? newsletter?.subscriberGroupDomain ?? null;
 
   useEffect(() => {
     if (!newsletter) return;
-    const canPickAudience =
+    const canPickSubscriberGroup =
       newsletter.status === "draft" || newsletter.status === "scheduled";
-    if (!canPickAudience || !sendDomain) return;
-    setAudienceGroupsLoading(true);
-    studioAudienceApi
+    if (!canPickSubscriberGroup || !sendDomain) return;
+    setSubscriberGroupsLoading(true);
+    studioSubscriberApi
       .listGroups()
-      .then(({ groups }) => setAudienceGroups(groups))
+      .then(({ groups }) => setSubscriberGroups(groups))
       .catch(() => toast.error("Could not load subscriber groups"))
-      .finally(() => setAudienceGroupsLoading(false));
+      .finally(() => setSubscriberGroupsLoading(false));
   }, [newsletter, sendDomain]);
 
   const groupsForDomain = useMemo(() => {
     const d = sendDomain?.toLowerCase();
     if (!d) return [];
-    return audienceGroups.filter((g) => g.domain.toLowerCase() === d);
-  }, [audienceGroups, sendDomain]);
+    return subscriberGroups.filter((g) => g.domain.toLowerCase() === d);
+  }, [subscriberGroups, sendDomain]);
 
   if (!newsletter) return null;
 
-  const canChangeAudience =
+  const canChangeSubscriberGroup =
     newsletter.status === "draft" || newsletter.status === "scheduled";
-  const editable = canChangeAudience;
-  const recipientCount = newsletter.audienceActiveCount;
-  const hasLinkedAudience = Boolean(newsletter.audienceGroupId);
+  const editable = canChangeSubscriberGroup;
+  const recipientCount = newsletter.subscriberActiveCount;
+  const hasLinkedSubscriberGroup = Boolean(newsletter.subscriberGroupId);
   const canOpenSend =
     editable &&
     !sending &&
     Boolean(newsletter.subject.trim()) &&
-    hasLinkedAudience &&
+    hasLinkedSubscriberGroup &&
     recipientCount > 0;
 
   async function loadDialogContacts(groupId: string) {
     setDialogContactsLoading(true);
     setDialogContacts([]);
     try {
-      const detail = await studioAudienceApi.getGroup(groupId);
+      const detail = await studioSubscriberApi.getGroup(groupId);
       setDialogContacts(detail.contacts);
     } catch {
-      toast.error("Could not load audience contacts");
-      setAudienceContactsDialog(null);
+      toast.error("Could not load subscriber contacts");
+      setSubscriberContactsDialog(null);
     } finally {
       setDialogContactsLoading(false);
     }
   }
 
-  function openAudienceChangeConfirm(nextGroupId: string) {
-    if (nextGroupId === newsletter!.audienceGroupId) return;
-    setAudienceContactsDialog({ mode: "confirm", groupId: nextGroupId });
+  function openSubscriberGroupChangeConfirm(nextGroupId: string) {
+    if (nextGroupId === newsletter!.subscriberGroupId) return;
+    setSubscriberContactsDialog({ mode: "confirm", groupId: nextGroupId });
     void loadDialogContacts(nextGroupId);
   }
 
-  function openAudienceView() {
-    const groupId = newsletter!.audienceGroupId;
+  function openSubscribersView() {
+    const groupId = newsletter!.subscriberGroupId;
     if (!groupId) return;
-    setAudienceContactsDialog({ mode: "view", groupId });
+    setSubscriberContactsDialog({ mode: "view", groupId });
     void loadDialogContacts(groupId);
   }
 
-  function closeAudienceContactsDialog() {
-    if (savingAudience) return;
-    setAudienceContactsDialog(null);
+  function closeSubscriberContactsDialog() {
+    if (savingSubscriberGroup) return;
+    setSubscriberContactsDialog(null);
     setDialogContacts([]);
   }
 
-  async function confirmAudienceChange() {
-    if (!audienceContactsDialog || audienceContactsDialog.mode !== "confirm") return;
-    setSavingAudience(true);
+  async function confirmSubscriberGroupChange() {
+    if (!subscriberContactsDialog || subscriberContactsDialog.mode !== "confirm") return;
+    setSavingSubscriberGroup(true);
     try {
-      const result = await detailStore.updateAudienceGroup(audienceContactsDialog.groupId);
+      const result = await detailStore.updateSubscriberGroup(subscriberContactsDialog.groupId);
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      closeAudienceContactsDialog();
+      closeSubscriberContactsDialog();
       toast.success("Subscriber group updated for this newsletter");
     } finally {
-      setSavingAudience(false);
+      setSavingSubscriberGroup(false);
     }
   }
 
-  const dialogGroupId = audienceContactsDialog?.groupId;
+  const dialogGroupId = subscriberContactsDialog?.groupId;
   const dialogGroup =
     dialogGroupId != null
       ? (groupsForDomain.find((g) => g.id === dialogGroupId) ??
-        (newsletter.audienceGroupId === dialogGroupId
+        (newsletter.subscriberGroupId === dialogGroupId
           ? {
               id: dialogGroupId,
-              name: newsletter.audienceGroupName ?? "Subscriber group",
-              domain: newsletter.audienceGroupDomain ?? sendDomain ?? "",
-              contactCount: newsletter.audienceContactCount ?? dialogContacts.length,
+              name: newsletter.subscriberGroupName ?? "Subscriber group",
+              domain: newsletter.subscriberGroupDomain ?? sendDomain ?? "",
+              contactCount: newsletter.subscriberContactCount ?? dialogContacts.length,
               createdAt: "",
             }
           : undefined))
@@ -286,7 +286,7 @@ export function NewsletterPublishView() {
       <div>
         <h2 className="text-sm font-semibold">Publish</h2>
         <p className="text-xs text-muted-foreground">
-          Send to active newsletter audience members (late binding at send time).
+          Send to active subscriber group members (late binding at send time).
         </p>
       </div>
 
@@ -318,28 +318,28 @@ export function NewsletterPublishView() {
         <CardHeader>
           <CardTitle className="text-sm">Subscriber group</CardTitle>
           <CardDescription>
-            {canChangeAudience
+            {canChangeSubscriberGroup
               ? "Choose who receives this newsletter. Only groups on the same sending domain are listed."
               : "Linked subscriber group at send time (unsubscribed and bounced excluded)."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {canChangeAudience ? (
+          {canChangeSubscriberGroup ? (
             <div className="space-y-1.5">
-              <Label htmlFor="publish-audience">Subscriber group</Label>
+              <Label htmlFor="publish-subscriber-group">Subscriber group</Label>
               <div className="flex max-w-lg flex-wrap items-center gap-2">
-                <AudienceGroupCmdDropdown
-                  triggerId="publish-audience"
+                <SubscriberGroupCmdDropdown
+                  triggerId="publish-subscriber-group"
                   triggerClassName="min-w-0 flex-1"
-                  groups={audienceGroups}
-                  loading={audienceGroupsLoading}
+                  groups={subscriberGroups}
+                  loading={subscriberGroupsLoading}
                   domainFilter={sendDomain}
-                  value={newsletter.audienceGroupId || null}
+                  value={newsletter.subscriberGroupId || null}
                   pinnedGroupIds={
-                    newsletter.audienceGroupId ? [newsletter.audienceGroupId] : []
+                    newsletter.subscriberGroupId ? [newsletter.subscriberGroupId] : []
                   }
                   onValueChange={(value) => {
-                    if (value) openAudienceChangeConfirm(value);
+                    if (value) openSubscriberGroupChangeConfirm(value);
                   }}
                 />
                   <Button
@@ -347,8 +347,8 @@ export function NewsletterPublishView() {
                     size="sm"
                     variant="outline"
                     className="shrink-0"
-                    disabled={!hasLinkedAudience}
-                    onClick={() => openAudienceView()}
+                    disabled={!hasLinkedSubscriberGroup}
+                    onClick={() => openSubscribersView()}
                   >
                     <Users className="size-4" />
                     View contacts
@@ -365,20 +365,20 @@ export function NewsletterPublishView() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">
-                  {newsletter.audienceGroupName ?? "Subscriber group"}
+                  {newsletter.subscriberGroupName ?? "Subscriber group"}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {newsletter.audienceGroupDomain ?? sendDomain ?? "—"}
+                  {newsletter.subscriberGroupDomain ?? sendDomain ?? "—"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {newsletter.audienceGroupId ? (
+                {newsletter.subscriberGroupId ? (
                   <>
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => openAudienceView()}
+                      onClick={() => openSubscribersView()}
                     >
                       <Users className="size-4" />
                       View contacts
@@ -388,7 +388,7 @@ export function NewsletterPublishView() {
                       variant="outline"
                       nativeButton={false}
                       render={
-                        <Link href={studioAudienceDetailHref(newsletter.audienceGroupId)} />
+                        <Link href={studioSubscriberDetailHref(newsletter.subscriberGroupId)} />
                       }
                     >
                       <ExternalLink className="size-3.5" />
@@ -464,12 +464,12 @@ export function NewsletterPublishView() {
               Add a subject on the Content tab before sending.
             </p>
           ) : null}
-          {editable && newsletter.subject.trim() && !hasLinkedAudience ? (
+          {editable && newsletter.subject.trim() && !hasLinkedSubscriberGroup ? (
             <p className="w-full text-xs text-muted-foreground">
               Select a subscriber group above before sending.
             </p>
           ) : null}
-          {editable && hasLinkedAudience && recipientCount === 0 ? (
+          {editable && hasLinkedSubscriberGroup && recipientCount === 0 ? (
             <p className="w-full text-xs text-muted-foreground">
               Linked subscriber group has no active contacts — add subscribers in Subscribers or pick another
               group.
@@ -501,15 +501,15 @@ export function NewsletterPublishView() {
       ) : null}
 
       <Dialog
-        open={audienceContactsDialog !== null}
+        open={subscriberContactsDialog !== null}
         onOpenChange={(open) => {
-          if (!open) closeAudienceContactsDialog();
+          if (!open) closeSubscriberContactsDialog();
         }}
       >
         <DialogContent className="flex max-h-[min(90vh,640px)] flex-col sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {audienceContactsDialog?.mode === "confirm"
+              {subscriberContactsDialog?.mode === "confirm"
                 ? "Switch subscriber group for this newsletter?"
                 : dialogGroup
                   ? `Contacts in “${dialogGroup.name}”`
@@ -517,30 +517,30 @@ export function NewsletterPublishView() {
             </DialogTitle>
             <DialogDescription>
               {dialogGroup
-                ? audienceContactsDialog?.mode === "confirm"
+                ? subscriberContactsDialog?.mode === "confirm"
                   ? `Send to “${dialogGroup.name}” on ${dialogGroup.domain} — ${dialogGroup.contactCount.toLocaleString()} contacts in the group. Review the list before confirming.`
                   : `${recipientCount.toLocaleString()} active subscriber${recipientCount === 1 ? "" : "s"} at send time (unsubscribed excluded).`
                 : "Review subscribers in this group."}
             </DialogDescription>
           </DialogHeader>
-          <AudienceContactsList contacts={dialogContacts} loading={dialogContactsLoading} />
+          <SubscriberContactsList contacts={dialogContacts} loading={dialogContactsLoading} />
           <DialogFooter>
-            {audienceContactsDialog?.mode === "confirm" ? (
+            {subscriberContactsDialog?.mode === "confirm" ? (
               <>
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={savingAudience}
-                  onClick={() => closeAudienceContactsDialog()}
+                  disabled={savingSubscriberGroup}
+                  onClick={() => closeSubscriberContactsDialog()}
                 >
                   Cancel
                 </Button>
                 <Button
                   size="sm"
-                  disabled={savingAudience || dialogContactsLoading}
-                  onClick={() => void confirmAudienceChange()}
+                  disabled={savingSubscriberGroup || dialogContactsLoading}
+                  onClick={() => void confirmSubscriberGroupChange()}
                 >
-                  {savingAudience ? "Saving…" : "Use this group"}
+                  {savingSubscriberGroup ? "Saving…" : "Use this group"}
                 </Button>
               </>
             ) : (
@@ -550,12 +550,12 @@ export function NewsletterPublishView() {
                     variant="outline"
                     size="sm"
                     nativeButton={false}
-                    render={<Link href={studioAudienceDetailHref(dialogGroupId)} />}
+                    render={<Link href={studioSubscriberDetailHref(dialogGroupId)} />}
                   >
                     Open in Subscribers
                   </Button>
                 ) : null}
-                <Button size="sm" onClick={() => closeAudienceContactsDialog()}>
+                <Button size="sm" onClick={() => closeSubscriberContactsDialog()}>
                   Close
                 </Button>
               </>
@@ -572,7 +572,7 @@ export function NewsletterPublishView() {
             <DialogDescription>
               This will send to {recipientCount.toLocaleString()} active recipient
               {recipientCount === 1 ? "" : "s"} in &apos;
-              {newsletter.audienceGroupName ?? "the selected audience"}&apos;.
+              {newsletter.subscriberGroupName ?? "the selected subscriber group"}&apos;.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

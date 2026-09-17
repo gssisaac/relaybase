@@ -17,7 +17,7 @@ export const STORE_SHARD_KEYS = [
   "triggerEvents",
   "triggerSends",
   "scheduledJobs",
-  "audienceGroups",
+  "subscriberGroups",
 ];
 
 export const STORE_AUX_SHARD_KEYS = [

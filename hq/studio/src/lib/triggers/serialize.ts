@@ -1,6 +1,6 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
 import type { Trigger, TriggerSource } from "../../db/types";
-import { findAudienceGroup } from "../audience-groups/group";
+import { findSubscriberGroup } from "../subscriber-groups/group";
 import {
   getLayoutHtml,
   getLayoutSchema,
@@ -31,7 +31,7 @@ function maskTriggerSecret(source: TriggerSource): TriggerSource {
 
 export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?: boolean }) {
   const data = store.read();
-  const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
+  const group = row.subscriberGroupId ? findSubscriberGroup(row.subscriberGroupId) : undefined;
   const source = triggerSource(row);
   const sourceOut =
     options?.revealTriggerSecret || source.type !== "http_webhook"
@@ -53,8 +53,8 @@ export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?:
     listStatus: row.listStatus,
     status: row.status,
     source: sourceOut,
-    audienceGroupId: row.audienceGroupId ?? null,
-    audienceGroupName: group?.name ?? null,
+    subscriberGroupId: row.subscriberGroupId ?? null,
+    subscriberGroupName: group?.name ?? null,
     cooldownSeconds: row.cooldownSeconds,
     applyMarketingSuppression: row.applyMarketingSuppression,
     messageId: rowMessageId(row),
@@ -91,7 +91,7 @@ export function serializeTriggerSend(row: import("../../db/types").TriggerSend) 
     id: row.id,
     triggerId: row.triggerId,
     triggerEventId: row.triggerEventId,
-    audienceMemberId: row.audienceMemberId ?? null,
+    subscriberMemberId: row.subscriberMemberId ?? null,
     email: row.email,
     name: row.name ?? null,
     status: row.status,

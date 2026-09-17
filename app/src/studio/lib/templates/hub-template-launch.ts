@@ -22,7 +22,7 @@ export function patchBodyFromHubTemplate(_hubTemplateId: string, snapshot: HubTe
 export async function createNewsletterFromHubTemplate(input: {
   name: string;
   domain: string;
-  audienceGroupId: string;
+  subscriberGroupId: string;
   hubTemplateId: string;
   snapshot: HubTemplateSnapshot;
   fromEmail?: string | null;
@@ -31,7 +31,7 @@ export async function createNewsletterFromHubTemplate(input: {
   const created = await studioApi.createNewsletter({
     name: input.name.trim(),
     domain: input.domain,
-    audienceGroupId: input.audienceGroupId,
+    subscriberGroupId: input.subscriberGroupId,
     ...(workerUrl ? { workerUrl } : {}),
   });
   return studioApi.updateNewsletter(created.id, {

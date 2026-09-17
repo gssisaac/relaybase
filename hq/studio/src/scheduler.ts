@@ -1,7 +1,7 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
-import { syncAudienceGroupAsync } from "./lib/audience-groups/sync";
-import { resolveActiveAudienceContacts } from "./lib/audience-groups/resolver";
-import { dispatchNewsletterToAudience, processNewsletterDispatchBatch } from "./lib/newsletters/dispatch";
+import { syncSubscriberGroupAsync } from "./lib/subscriber-groups/sync";
+import { resolveActiveSubscriberContacts } from "./lib/subscriber-groups/resolver";
+import { dispatchNewsletterToSubscribers, processNewsletterDispatchBatch } from "./lib/newsletters/dispatch";
 import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "./lib/newsletters/dispatch-progress";
 import { rollupNewsletterStatsFromRecipients } from "./lib/newsletters/stats";
 
@@ -12,7 +12,7 @@ import { rollupNewsletterStatsFromRecipients } from "./lib/newsletters/stats";
 
 const SCHEDULE_POLL_MS = 10_000;
 const STATS_ROLLUP_MS = DISPATCH_QUEUE_POLL_MS;
-const AUDIENCE_CRON_MS = 60_000;
+const SUBSCRIBER_CRON_MS = 60_000;
 
 /** §5.1 — synchronous atomic claim on the document store guards against duplicate sends. */
 async function claimDueNewsletters(): Promise<void> {
@@ -53,8 +53,8 @@ async function claimDueNewsletters(): Promise<void> {
       // Late-binding resolution (§1.3): subscribers are resolved *now*, at
       // the exact dispatch moment — not frozen when the broadcast was scheduled.
       const broadcast = store.read().newsletters.find((b) => b.id === claimedBroadcastId)!;
-      const members = resolveActiveAudienceContacts(broadcast);
-      await dispatchNewsletterToAudience(broadcast, members);
+      const members = resolveActiveSubscriberContacts(broadcast);
+      await dispatchNewsletterToSubscribers(broadcast, members);
     } catch (err) {
       console.error(`[studio-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
       store.update((draft) => {
@@ -133,11 +133,11 @@ async function rollupStats(): Promise<void> {
   }
 }
 
-async function pollAudienceCron(): Promise<void> {
+async function pollSubscriberCron(): Promise<void> {
   const now = Date.now();
   const groups = store
     .read()
-    .audienceGroups.filter(
+    .subscriberGroups.filter(
       (g) =>
         g.accountLinkId === DEV_ACCOUNT_LINK_ID &&
         g.cronEnabled &&
@@ -148,7 +148,7 @@ async function pollAudienceCron(): Promise<void> {
     const intervalMs = Math.max(15, group.cronIntervalMinutes) * 60_000;
     const last = group.lastSyncAt ? new Date(group.lastSyncAt).getTime() : 0;
     if (last && now - last < intervalMs) continue;
-    await syncAudienceGroupAsync(group.id, "cron");
+    await syncSubscriberGroupAsync(group.id, "cron");
   }
 }
 
@@ -165,10 +165,10 @@ export function startScheduler(): void {
   }, STATS_ROLLUP_MS);
 
   setInterval(() => {
-    void pollAudienceCron().catch((err) => console.error("[studio-scheduler] audience cron failed", err));
-  }, AUDIENCE_CRON_MS);
+    void pollSubscriberCron().catch((err) => console.error("[studio-scheduler] subscriber cron failed", err));
+  }, SUBSCRIBER_CRON_MS);
 
   console.log(
-    `[studio-scheduler] polling scheduled sends every ${SCHEDULE_POLL_MS / 1000}s, stats every ${STATS_ROLLUP_MS / 1000}s, audience cron every ${AUDIENCE_CRON_MS / 1000}s`,
+    `[studio-scheduler] polling scheduled sends every ${SCHEDULE_POLL_MS / 1000}s, stats every ${STATS_ROLLUP_MS / 1000}s, subscriber cron every ${SUBSCRIBER_CRON_MS / 1000}s`,
   );
 }

@@ -146,7 +146,7 @@ export function NewsletterStatsView() {
           <CardTitle className="text-sm">No send data yet</CardTitle>
           <CardDescription>
             Stats appear after you send or schedule this newsletter. Compose content, then publish to
-            your audience.
+            your subscriber group.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -175,7 +175,7 @@ export function NewsletterStatsView() {
   } = stats;
 
   const processedCount = delivered + bounced + failed;
-  const totalRecipients = recipients.length || newsletter.audienceActiveCount || sent;
+  const totalRecipients = recipients.length || newsletter.subscriberActiveCount || sent;
 
   return (
     <div className="space-y-4">

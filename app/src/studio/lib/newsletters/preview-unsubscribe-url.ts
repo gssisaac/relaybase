@@ -11,7 +11,7 @@ export function buildPreviewUnsubscribeUrl(
   if (personaId.startsWith("member:")) {
     const memberId = personaId.slice("member:".length);
     const member = members.find(
-      (m) => m.audienceMemberId === memberId || m.id === memberId,
+      (m) => m.subscriberMemberId === memberId || m.id === memberId,
     );
     if (member?.unsubscribeToken) {
       return `${base}/studio/unsubscribe/${encodeURIComponent(newsletterId)}/${encodeURIComponent(member.unsubscribeToken)}`;

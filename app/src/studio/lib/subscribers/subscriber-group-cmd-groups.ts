@@ -1,12 +1,12 @@
-import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
+import type { SubscriberGroupSummary } from "@/email/components/mailbox/types";
 import type { CmdDropdownOptionGroup } from "@/components/ui/cmd-dropdown";
 
 function pinGroups(
-  groups: AudienceGroupSummary[],
+  groups: SubscriberGroupSummary[],
   pinnedIds: string[],
-): AudienceGroupSummary[] {
+): SubscriberGroupSummary[] {
   const byId = new Map(groups.map((g) => [g.id, g]));
-  const pinned: AudienceGroupSummary[] = [];
+  const pinned: SubscriberGroupSummary[] = [];
   for (const id of pinnedIds) {
     const trimmed = id.trim();
     if (!trimmed || byId.has(trimmed)) continue;
@@ -21,12 +21,12 @@ function pinGroups(
   return [...groups, ...pinned];
 }
 
-export function audienceGroupCmdGroups(
-  groups: AudienceGroupSummary[],
+export function subscriberGroupCmdGroups(
+  groups: SubscriberGroupSummary[],
   pinnedIds: string[] = [],
 ): CmdDropdownOptionGroup[] {
   const candidates = pinGroups(groups, pinnedIds);
-  const byDomain = new Map<string, AudienceGroupSummary[]>();
+  const byDomain = new Map<string, SubscriberGroupSummary[]>();
   for (const group of candidates) {
     const domain = group.domain.trim().toLowerCase() || "Other";
     const list = byDomain.get(domain) ?? [];
@@ -48,10 +48,10 @@ export function audienceGroupCmdGroups(
     }));
 }
 
-export function filterAudienceGroupsByDomain(
-  groups: AudienceGroupSummary[],
+export function filterSubscriberGroupsByDomain(
+  groups: SubscriberGroupSummary[],
   domain: string | null | undefined,
-): AudienceGroupSummary[] {
+): SubscriberGroupSummary[] {
   const d = domain?.trim().toLowerCase();
   if (!d) return groups;
   return groups.filter((g) => g.domain.toLowerCase() === d);

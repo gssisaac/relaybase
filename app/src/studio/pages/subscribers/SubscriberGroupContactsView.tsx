@@ -23,12 +23,12 @@ import {
 } from "@/components/ui/dialog";
 import { useVerifiedAccounts } from "@/studio/stores/verified-accounts";
 import {
-  clearAudienceGroupDetailCache,
-  useAudienceGroupDetail,
-} from "@/studio/pages/audience/AudienceGroupDetailContext";
-import { audienceContactDisplayName } from "@/lib/audience-display";
-import { StudioApiError, studioAudienceApi } from "@/studio/api";
-import { ImportSubscribersDialog } from "@/studio/components/audience/ImportSubscribersDialog";
+  clearSubscriberGroupDetailCache,
+  useSubscriberGroupDetail,
+} from "@/studio/pages/subscribers/SubscriberGroupDetailContext";
+import { subscriberContactDisplayName } from "@/lib/subscriber-display";
+import { StudioApiError, studioSubscriberApi } from "@/studio/api";
+import { ImportSubscribersDialog } from "@/studio/components/subscribers/ImportSubscribersDialog";
 import { AddVerifiedAccountDialog } from "@/studio/components/verified-accounts/AddVerifiedAccountDialog";
 import { VerificationPendingDialog } from "@/studio/components/verified-accounts/VerificationPendingDialog";
 import { VerificationStatusBadge } from "@/studio/components/verified-accounts/VerificationStatusBadge";
@@ -58,8 +58,8 @@ function friendlyCrmError(e: unknown, fallback: string): string {
   return fallback;
 }
 
-export function AudienceGroupContactsView() {
-  const { groupId, detail, refresh } = useAudienceGroupDetail();
+export function SubscriberGroupContactsView() {
+  const { groupId, detail, refresh } = useSubscriberGroupDetail();
   const verifiedStore = useVerifiedAccounts();
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [pendingOpen, setPendingOpen] = useState(false);
@@ -95,13 +95,13 @@ export function AudienceGroupContactsView() {
     email: string,
   ) {
     try {
-      await studioAudienceApi.updateContactSendStatus(groupId, contactId, sendStatus);
+      await studioSubscriberApi.updateContactSendStatus(groupId, contactId, sendStatus);
       toast.success(
         sendStatus === "unsubscribed"
           ? `${email} marked unsubscribed`
           : `${email} resubscribed`,
       );
-      clearAudienceGroupDetailCache("", groupId);
+      clearSubscriberGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
       toast.error(friendlyCrmError(e, "Failed to update account"));
@@ -121,9 +121,9 @@ export function AudienceGroupContactsView() {
 
   async function removeContact(contactId: string, email: string) {
     try {
-      await studioAudienceApi.removeContact(groupId, contactId);
+      await studioSubscriberApi.removeContact(groupId, contactId);
       toast.success(`Removed ${email}`);
-      clearAudienceGroupDetailCache("", groupId);
+      clearSubscriberGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
       toast.error(friendlyCrmError(e, "Failed to remove account"));
@@ -163,7 +163,7 @@ export function AudienceGroupContactsView() {
           <ImportSubscribersDialog
             groupId={groupId}
             onImported={() => {
-              clearAudienceGroupDetailCache("", groupId);
+              clearSubscriberGroupDetailCache("", groupId);
               void refresh(true);
             }}
             trigger={
@@ -176,7 +176,7 @@ export function AudienceGroupContactsView() {
           <AddVerifiedAccountDialog
             groupId={groupId}
             onAdded={() => {
-              clearAudienceGroupDetailCache("", groupId);
+              clearSubscriberGroupDetailCache("", groupId);
               void refresh(true);
             }}
             trigger={
@@ -200,7 +200,7 @@ export function AudienceGroupContactsView() {
             <AddVerifiedAccountDialog
               groupId={groupId}
               onAdded={() => {
-                clearAudienceGroupDetailCache("", groupId);
+                clearSubscriberGroupDetailCache("", groupId);
                 void refresh(true);
               }}
               trigger={
@@ -223,7 +223,7 @@ export function AudienceGroupContactsView() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">
-                      {audienceContactDisplayName(c.email, c.name)}
+                      {subscriberContactDisplayName(c.email, c.name)}
                     </p>
                     {c.name ? (
                       <p className="truncate text-xs text-muted-foreground">{c.email}</p>
@@ -300,7 +300,7 @@ export function AudienceGroupContactsView() {
         open={pendingOpen}
         onOpenChange={setPendingOpen}
         onVerified={() => {
-          clearAudienceGroupDetailCache("", groupId);
+          clearSubscriberGroupDetailCache("", groupId);
           void refresh(true);
         }}
       />

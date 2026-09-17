@@ -13,11 +13,11 @@ export type SerializedNewsletter = {
   name: string;
   slug: string;
   description: string | null;
-  audienceGroupId: string | null;
-  audienceGroupName: string | null;
-  audienceGroupDomain: string | null;
+  subscriberGroupId: string | null;
+  subscriberGroupName: string | null;
+  subscriberGroupDomain: string | null;
   domain: string | null;
-  audienceContactCount: number | null;
+  subscriberContactCount: number | null;
   fromName: string | null;
   fromEmail: string | null;
   replyTo: string | null;
@@ -34,7 +34,7 @@ export type SerializedNewsletter = {
   startedAt: string | null;
   finishedAt: string | null;
   stats: NewsletterStats;
-  audienceActiveCount: number;
+  subscriberActiveCount: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -44,8 +44,8 @@ export type AccountNewsletterSentOverview = {
   totals: NewsletterStats & { newsletters: number };
   rates: { delivery: number; open: number; click: number; bounce: number };
   byWeek: { weekStart: string; sent: number; opened: number; clicked: number }[];
-  byAudience: {
-    audienceGroupId: string;
+  bySubscriberGroup: {
+    subscriberGroupId: string;
     name: string;
     sent: number;
     opened: number;
@@ -59,7 +59,7 @@ export type AccountNewsletterSentOverview = {
     sentAt: string | null;
     finishedAt: string | null;
     stats: NewsletterStats;
-    audienceGroupName: string | null;
+    subscriberGroupName: string | null;
   }>;
   topLinks: { url: string; clicks: number; uniqueClicks: number; newsletterId: string }[];
 };
@@ -108,7 +108,7 @@ export function buildSentOverview(input: {
   newsletters: Newsletter[];
   recipients: Recipient[];
   trackingEvents: TrackingEvent[];
-  audienceNameById: Map<string, string>;
+  subscriberNameById: Map<string, string>;
 }): AccountNewsletterSentOverview {
   const sentRows = input.newsletters
     .filter((b) => b.status === "sent" || b.status === "failed")
@@ -151,18 +151,18 @@ export function buildSentOverview(input: {
     weekMap.set(weekStart, bucket);
   }
 
-  const audienceMap = new Map<
+  const subscriberMap = new Map<
     string,
-    { audienceGroupId: string; name: string; sent: number; opened: number; clicked: number }
+    { subscriberGroupId: string; name: string; sent: number; opened: number; clicked: number }
   >();
   for (const row of sentRows) {
-    const id = row.audienceGroupId || "unknown";
-    const name = input.audienceNameById.get(id) ?? "Unknown audience";
-    const bucket = audienceMap.get(id) ?? { audienceGroupId: id, name, sent: 0, opened: 0, clicked: 0 };
+    const id = row.subscriberGroupId || "unknown";
+    const name = input.subscriberNameById.get(id) ?? "Unknown subscriber group";
+    const bucket = subscriberMap.get(id) ?? { subscriberGroupId: id, name, sent: 0, opened: 0, clicked: 0 };
     bucket.sent += row.stats.sent;
     bucket.opened += row.stats.opened;
     bucket.clicked += row.stats.clicked;
-    audienceMap.set(id, bucket);
+    subscriberMap.set(id, bucket);
   }
 
   const sentIds = new Set(sentRows.map((b) => b.id));
@@ -192,7 +192,7 @@ export function buildSentOverview(input: {
       bounce: rate(totals.bounced, totals.sent || totals.delivered + totals.bounced + totals.failed),
     },
     byWeek: [...weekMap.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart)),
-    byAudience: [...audienceMap.values()].sort((a, b) => b.sent - a.sent || a.name.localeCompare(b.name)),
+    bySubscriberGroup: [...subscriberMap.values()].sort((a, b) => b.sent - a.sent || a.name.localeCompare(b.name)),
     newsletters: sentRows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -201,7 +201,7 @@ export function buildSentOverview(input: {
       sentAt: row.sentAt ?? null,
       finishedAt: row.finishedAt ?? null,
       stats: row.stats,
-      audienceGroupName: input.audienceNameById.get(row.audienceGroupId) ?? null,
+      subscriberGroupName: input.subscriberNameById.get(row.subscriberGroupId) ?? null,
     })),
     topLinks: [...linkMap.values()]
       .map((row) => ({

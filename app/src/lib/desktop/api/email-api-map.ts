@@ -83,7 +83,7 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/keys" || rest.startsWith("/keys/")) {
     return `/console/keys${rest.slice("/keys".length)}${search}`;
   }
-  if (rest === "/audience-groups" || rest.startsWith("/audience-groups")) {
+  if (rest === "/subscriber-groups" || rest.startsWith("/subscriber-groups")) {
     return null;
   }
   if (rest === "/broadcasts" || rest.startsWith("/broadcasts")) {

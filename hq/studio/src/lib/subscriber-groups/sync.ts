@@ -1,16 +1,16 @@
 import { store } from "../../db/store";
-import type { AudienceMember } from "../../db/types";
+import type { SubscriberMember } from "../../db/types";
 import { isEmailSuppressedForGroup } from "../account/suppression";
-import { syncAllNewslettersForAudienceGroup } from "../newsletters/audience-sync";
+import { syncAllNewslettersForSubscriberGroup } from "../newsletters/subscriber-sync";
 import { newId, newToken } from "../shared/ids";
 import { fetchDataSourceContacts } from "./data-source-sync";
-import { findAudienceGroup } from "./group";
+import { findSubscriberGroup } from "./group";
 
-export async function syncAudienceGroupAsync(
+export async function syncSubscriberGroupAsync(
   groupId: string,
   trigger: "manual" | "cron",
 ): Promise<{ ok: true; totalCount: number; skippedCount: number } | { ok: false; error: string }> {
-  const group = findAudienceGroup(groupId);
+  const group = findSubscriberGroup(groupId);
   if (!group) return { ok: false, error: "not found" };
   if (!group.dataSource?.endpointUrl) {
     return { ok: false, error: "group has no data source" };
@@ -19,9 +19,9 @@ export async function syncAudienceGroupAsync(
   const runId = newId("sync");
   const startedAt = new Date().toISOString();
   store.update((draft) => {
-    const idx = draft.audienceGroups.findIndex((g) => g.id === groupId);
+    const idx = draft.subscriberGroups.findIndex((g) => g.id === groupId);
     if (idx < 0) return;
-    draft.audienceGroups[idx]!.syncHistory.unshift({
+    draft.subscriberGroups[idx]!.syncHistory.unshift({
       id: runId,
       trigger,
       status: "running",
@@ -34,14 +34,14 @@ export async function syncAudienceGroupAsync(
     const { contacts, skipped } = await fetchDataSourceContacts(group.dataSource);
     const now = new Date().toISOString();
     store.update((draft) => {
-      const idx = draft.audienceGroups.findIndex((g) => g.id === groupId);
+      const idx = draft.subscriberGroups.findIndex((g) => g.id === groupId);
       if (idx < 0) return;
-      const g = draft.audienceGroups[idx]!;
+      const g = draft.subscriberGroups[idx]!;
       const priorByEmail = new Map(
         g.contacts.map((c) => [c.email.trim().toLowerCase(), c] as const),
       );
       const manual = g.contacts.filter((c) => c.source === "manual");
-      const synced: AudienceMember[] = contacts.map((c) => {
+      const synced: SubscriberMember[] = contacts.map((c) => {
         const emailKey = c.email.trim().toLowerCase();
         const prior = priorByEmail.get(emailKey);
         const ledgerBlocked = isEmailSuppressedForGroup(emailKey, groupId, g.accountLinkId);
@@ -81,15 +81,15 @@ export async function syncAudienceGroupAsync(
         run.successCount = synced.length;
       }
     });
-    syncAllNewslettersForAudienceGroup(groupId);
+    syncAllNewslettersForSubscriberGroup(groupId);
     return { ok: true, totalCount: contacts.length + skipped, skippedCount: skipped };
   } catch (err) {
     const message = err instanceof Error ? err.message : "sync failed";
     const now = new Date().toISOString();
     store.update((draft) => {
-      const idx = draft.audienceGroups.findIndex((g) => g.id === groupId);
+      const idx = draft.subscriberGroups.findIndex((g) => g.id === groupId);
       if (idx < 0) return;
-      const g = draft.audienceGroups[idx]!;
+      const g = draft.subscriberGroups[idx]!;
       g.lastSyncAt = now;
       g.lastSyncStatus = "error";
       g.lastSyncError = message;

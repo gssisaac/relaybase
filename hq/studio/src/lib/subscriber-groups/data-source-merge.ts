@@ -1,10 +1,10 @@
-import type { AudienceDataSource } from "../../db/types";
+import type { SubscriberDataSource } from "../../db/types";
 
 export function mergeDataSource(
-  existing: AudienceDataSource | null,
-  incoming: AudienceDataSource | null | undefined,
+  existing: SubscriberDataSource | null,
+  incoming: SubscriberDataSource | null | undefined,
   keepCredential: boolean,
-): AudienceDataSource | null {
+): SubscriberDataSource | null {
   if (incoming === null) return null;
   if (!incoming) return existing;
   const credential =

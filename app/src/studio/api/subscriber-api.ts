@@ -1,22 +1,22 @@
 import type {
-  AudienceGroupContact,
-  AudienceGroupSummary,
+  SubscriberGroupContact,
+  SubscriberGroupSummary,
 } from "@/email/components/mailbox/types";
 
 import { StudioApiError, studioFetch } from "@/studio/api";
 
-export type CrmAudienceGroupDetail = {
-  group: AudienceGroupSummary;
-  contacts: AudienceGroupContact[];
+export type CrmSubscriberGroupDetail = {
+  group: SubscriberGroupSummary;
+  contacts: SubscriberGroupContact[];
 };
 
 export { StudioApiError };
 
-export const studioAudienceApi = {
-  listGroups: () => studioFetch<{ groups: AudienceGroupSummary[] }>("/studio/audience-groups"),
+export const studioSubscriberApi = {
+  listGroups: () => studioFetch<{ groups: SubscriberGroupSummary[] }>("/studio/subscriber-groups"),
 
   getGroup: (groupId: string) =>
-    studioFetch<CrmAudienceGroupDetail>(`/studio/audience-groups/${encodeURIComponent(groupId)}`),
+    studioFetch<CrmSubscriberGroupDetail>(`/studio/subscriber-groups/${encodeURIComponent(groupId)}`),
 
   testConnection: (input: {
     endpointUrl?: string;
@@ -30,7 +30,7 @@ export const studioAudienceApi = {
       totalCount?: number;
       skippedCount?: number;
       sampleContacts?: Array<{ email: string; name?: string }>;
-    }>("/studio/audience-groups/test", {
+    }>("/studio/subscriber-groups/test", {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -46,7 +46,7 @@ export const studioAudienceApi = {
       credentialHeader?: string;
     };
   }) =>
-    studioFetch<{ group: AudienceGroupSummary }>("/studio/audience-groups", {
+    studioFetch<{ group: SubscriberGroupSummary }>("/studio/subscriber-groups", {
       method: "POST",
       body: JSON.stringify(input),
     }),
@@ -68,25 +68,25 @@ export const studioAudienceApi = {
       } | null;
     }>,
   ) =>
-    studioFetch<CrmAudienceGroupDetail>(`/studio/audience-groups/${encodeURIComponent(groupId)}`, {
+    studioFetch<CrmSubscriberGroupDetail>(`/studio/subscriber-groups/${encodeURIComponent(groupId)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
 
   deleteGroup: (groupId: string) =>
-    studioFetch<{ ok: true }>(`/studio/audience-groups/${encodeURIComponent(groupId)}`, {
+    studioFetch<{ ok: true }>(`/studio/subscriber-groups/${encodeURIComponent(groupId)}`, {
       method: "DELETE",
     }),
 
   addContact: (groupId: string, input: { email: string; name?: string }) =>
-    studioFetch<{ contact: AudienceGroupContact }>(
-      `/studio/audience-groups/${encodeURIComponent(groupId)}/contacts`,
+    studioFetch<{ contact: SubscriberGroupContact }>(
+      `/studio/subscriber-groups/${encodeURIComponent(groupId)}/contacts`,
       { method: "POST", body: JSON.stringify(input) },
     ),
 
   removeContact: (groupId: string, contactId: string) =>
     studioFetch<{ ok: true }>(
-      `/studio/audience-groups/${encodeURIComponent(groupId)}/contacts?contactId=${encodeURIComponent(contactId)}`,
+      `/studio/subscriber-groups/${encodeURIComponent(groupId)}/contacts?contactId=${encodeURIComponent(contactId)}`,
       { method: "DELETE" },
     ),
 
@@ -95,8 +95,8 @@ export const studioAudienceApi = {
     contactId: string,
     sendStatus: "active" | "unsubscribed",
   ) =>
-    studioFetch<{ contact: AudienceGroupContact }>(
-      `/studio/audience-groups/${encodeURIComponent(groupId)}/contacts/${encodeURIComponent(contactId)}`,
+    studioFetch<{ contact: SubscriberGroupContact }>(
+      `/studio/subscriber-groups/${encodeURIComponent(groupId)}/contacts/${encodeURIComponent(contactId)}`,
       { method: "PATCH", body: JSON.stringify({ sendStatus }) },
     ),
 };

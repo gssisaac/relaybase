@@ -1,6 +1,6 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
 import type { Newsletter } from "../../db/types";
-import { audienceGroupToSummary } from "../audience-groups/api-serialize";
+import { subscriberGroupToSummary } from "../subscriber-groups/api-serialize";
 import { buildSentOverview } from "../newsletters/overview";
 import { serializeNewsletter } from "../newsletters/serialize";
 
@@ -49,16 +49,16 @@ export function buildScaleOverview() {
 
   const broadcasts = data.newsletters.filter((b) => b.accountLinkId === accountId && b.listStatus === "active");
   const automations = data.triggers.filter((a) => a.accountLinkId === accountId && a.listStatus === "active");
-  const groups = data.audienceGroups.filter((g) => g.accountLinkId === accountId);
+  const groups = data.subscriberGroups.filter((g) => g.accountLinkId === accountId);
   const triggerEvents = data.triggerEvents.filter((e) => e.accountLinkId === accountId);
 
-  const audienceNameById = new Map(groups.map((g) => [g.id, g.name]));
+  const subscriberNameById = new Map(groups.map((g) => [g.id, g.name]));
 
   const sentOverview = buildSentOverview({
     newsletters: broadcasts,
     recipients: data.recipients,
     trackingEvents: data.trackingEvents,
-    audienceNameById,
+    subscriberNameById,
   });
 
   let monthlySentVolume = 0;
@@ -108,8 +108,8 @@ export function buildScaleOverview() {
         name: nextRow.name,
         subject: nextRow.subject,
         scheduledAt: nextRow.scheduledAt ?? nextRow.startedAt ?? nextRow.updatedAt,
-        audienceGroupName: nextRow.audienceGroupName,
-        recipientCount: nextRow.audienceContactCount ?? nextRow.audienceActiveCount ?? 0,
+        subscriberGroupName: nextRow.subscriberGroupName,
+        recipientCount: nextRow.subscriberContactCount ?? nextRow.subscriberActiveCount ?? 0,
         status: nextRow.status,
       }
     : null;
@@ -179,7 +179,7 @@ export function buildScaleOverview() {
     clicked: row.clicked,
   }));
 
-  const audienceHealthChart = [
+  const subscriberHealthChart = [
     { key: "active", label: "Active", count: healthActive },
     { key: "unsubscribed", label: "Unsubscribed", count: healthUnsubscribed },
     { key: "bounced", label: "Bounced", count: healthBounced },
@@ -231,7 +231,7 @@ export function buildScaleOverview() {
         subject: row.subject,
         scheduledAt: row.scheduledAt ?? row.startedAt ?? row.updatedAt,
         status: row.status as "scheduled" | "sending",
-        audienceGroupName: row.audienceGroupName,
+        subscriberGroupName: row.subscriberGroupName,
       })),
     },
     triggers: {
@@ -252,7 +252,7 @@ export function buildScaleOverview() {
         percentUsed: null,
       },
     },
-    audience: {
+    subscribers: {
       groupCount: groups.length,
       health: {
         active: healthActive,
@@ -264,13 +264,13 @@ export function buildScaleOverview() {
         failedGroupsCount: failedSyncGroups,
       },
       groups: groups
-        .map(audienceGroupToSummary)
+        .map(subscriberGroupToSummary)
         .sort((a, b) => b.contactCount - a.contactCount || a.name.localeCompare(b.name))
         .slice(0, 6),
     },
     charts: {
       sendsByWeek,
-      audienceHealth: audienceHealthChart,
+      subscriberHealth: subscriberHealthChart,
       automationTriggersByDay,
       engagementRates: engagementRatesChart,
     },

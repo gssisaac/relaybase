@@ -1,11 +1,11 @@
 import { store } from "../../db/store";
 import type { Newsletter } from "../../db/types";
-import { findAudienceGroup } from "../audience-groups/group";
+import { findSubscriberGroup } from "../subscriber-groups/group";
 import { newToken } from "../shared/ids";
 
 export function resolveTestSendUnsubscribeToken(broadcast: Newsletter, toEmail: string): string {
-  if (!broadcast.audienceGroupId) return newToken();
-  const group = findAudienceGroup(broadcast.audienceGroupId);
+  if (!broadcast.subscriberGroupId) return newToken();
+  const group = findSubscriberGroup(broadcast.subscriberGroupId);
   const normalized = toEmail.trim().toLowerCase();
   const contact = group?.contacts.find((c) => c.email.trim().toLowerCase() === normalized);
   return contact?.unsubscribeToken ?? newToken();

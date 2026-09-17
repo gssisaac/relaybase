@@ -1,25 +1,25 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { AudienceSendStatus } from "../../db/types";
+import type { SubscriberSendStatus } from "../../db/types";
 import { normalizeSuppressionEmail, recordGroupUnsubscribe } from "../account/suppression";
 
-export function setAudienceContactSendStatus(
+export function setSubscriberContactSendStatus(
   groupId: string,
-  audienceMemberId: string,
-  sendStatus: Extract<AudienceSendStatus, "active" | "unsubscribed">,
+  subscriberMemberId: string,
+  sendStatus: Extract<SubscriberSendStatus, "active" | "unsubscribed">,
   opts?: { sourceNewsletterId?: string | null },
 ): void {
   const now = new Date().toISOString();
   let email: string | null = null;
   store.update((draft) => {
-    const gIdx = draft.audienceGroups.findIndex(
+    const gIdx = draft.subscriberGroups.findIndex(
       (g) => g.id === groupId && g.accountLinkId === DEV_ACCOUNT_LINK_ID,
     );
     if (gIdx < 0) return;
-    const cIdx = draft.audienceGroups[gIdx]!.contacts.findIndex((c) => c.id === audienceMemberId);
+    const cIdx = draft.subscriberGroups[gIdx]!.contacts.findIndex((c) => c.id === subscriberMemberId);
     if (cIdx < 0) return;
-    email = draft.audienceGroups[gIdx]!.contacts[cIdx]!.email;
-    draft.audienceGroups[gIdx]!.contacts[cIdx] = {
-      ...draft.audienceGroups[gIdx]!.contacts[cIdx]!,
+    email = draft.subscriberGroups[gIdx]!.contacts[cIdx]!.email;
+    draft.subscriberGroups[gIdx]!.contacts[cIdx] = {
+      ...draft.subscriberGroups[gIdx]!.contacts[cIdx]!,
       sendStatus,
       unsubscribedAt: sendStatus === "unsubscribed" ? now : null,
     };
@@ -28,7 +28,7 @@ export function setAudienceContactSendStatus(
 
   if (sendStatus === "unsubscribed") {
     recordGroupUnsubscribe({
-      audienceGroupId: groupId,
+      subscriberGroupId: groupId,
       email,
       sourceNewsletterId: opts?.sourceNewsletterId ?? null,
     });
@@ -42,14 +42,14 @@ export function setAudienceContactSendStatus(
         !(
           s.accountLinkId === DEV_ACCOUNT_LINK_ID &&
           s.email === normalized &&
-          s.audienceGroupId === groupId &&
+          s.subscriberGroupId === groupId &&
           s.reason === "unsubscribe"
         ),
     );
   });
 }
 
-export function markAudienceContactBounced(
+export function markSubscriberContactBounced(
   groupId: string,
   email: string,
   detail?: string,
@@ -57,14 +57,14 @@ export function markAudienceContactBounced(
   const now = new Date().toISOString();
   const normalized = email.trim().toLowerCase();
   store.update((draft) => {
-    const gIdx = draft.audienceGroups.findIndex(
+    const gIdx = draft.subscriberGroups.findIndex(
       (g) => g.id === groupId && g.accountLinkId === DEV_ACCOUNT_LINK_ID,
     );
     if (gIdx < 0) return;
-    const cIdx = draft.audienceGroups[gIdx]!.contacts.findIndex((c) => c.email === normalized);
+    const cIdx = draft.subscriberGroups[gIdx]!.contacts.findIndex((c) => c.email === normalized);
     if (cIdx < 0) return;
-    draft.audienceGroups[gIdx]!.contacts[cIdx] = {
-      ...draft.audienceGroups[gIdx]!.contacts[cIdx]!,
+    draft.subscriberGroups[gIdx]!.contacts[cIdx] = {
+      ...draft.subscriberGroups[gIdx]!.contacts[cIdx]!,
       sendStatus: "bounced",
       bouncedAt: now,
       bounceReason: detail ?? "hard_bounce",

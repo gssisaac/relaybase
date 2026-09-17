@@ -1,6 +1,6 @@
-import type { AudienceDataSource, AudienceGroup, AudienceMember } from "../../db/types";
+import type { SubscriberDataSource, SubscriberGroup, SubscriberMember } from "../../db/types";
 
-function maskDataSource(ds: AudienceDataSource | null) {
+function maskDataSource(ds: SubscriberDataSource | null) {
   if (!ds) return undefined;
   return {
     type: ds.type,
@@ -10,7 +10,7 @@ function maskDataSource(ds: AudienceDataSource | null) {
   };
 }
 
-export function audienceGroupToSummary(group: AudienceGroup) {
+export function subscriberGroupToSummary(group: SubscriberGroup) {
   return {
     id: group.id,
     name: group.name,
@@ -29,7 +29,7 @@ export function audienceGroupToSummary(group: AudienceGroup) {
   };
 }
 
-export function audienceContactToApi(group: AudienceGroup, member: AudienceMember) {
+export function subscriberContactToApi(group: SubscriberGroup, member: SubscriberMember) {
   return {
     id: member.id,
     email: member.email,

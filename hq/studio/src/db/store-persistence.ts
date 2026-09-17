@@ -13,7 +13,7 @@ export const STORE_SHARD_KEYS = [
   "triggerEvents",
   "triggerSends",
   "scheduledJobs",
-  "audienceGroups",
+  "subscriberGroups",
 ] as const satisfies readonly (keyof StudioDataStore)[];
 
 /** Additional persisted collections (same `data/store/` directory). */
@@ -45,6 +45,10 @@ function shardPath(dataDir: string, key: PersistedStoreKey) {
   return path.join(storeDir(dataDir), `${key}.json`);
 }
 
+function legacyAudienceGroupsShard(dataDir: string) {
+  return path.join(storeDir(dataDir), "audienceGroups.json");
+}
+
 function writeShard(dataDir: string, key: PersistedStoreKey, value: unknown) {
   fs.writeFileSync(shardPath(dataDir, key), `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -69,6 +73,10 @@ export function migrateLegacyMonolithStore(dataDir: string): boolean {
   if (!fs.existsSync(legacy)) return false;
 
   const parsed = JSON.parse(fs.readFileSync(legacy, "utf8")) as Record<string, unknown>;
+  if (parsed.audienceGroups !== undefined && parsed.subscriberGroups === undefined) {
+    parsed.subscriberGroups = parsed.audienceGroups;
+    delete parsed.audienceGroups;
+  }
   ensureStoreDir(dataDir);
   for (const key of PERSISTED_STORE_KEYS) {
     if (parsed[key] === undefined) continue;
@@ -94,6 +102,14 @@ export function readPersistedStoreShards(
     out[key] = JSON.parse(fs.readFileSync(file, "utf8")) as never;
   }
 
+  if (out.subscriberGroups === undefined) {
+    const legacyAudience = legacyAudienceGroupsShard(dataDir);
+    if (fs.existsSync(legacyAudience)) {
+      found = true;
+      out.subscriberGroups = JSON.parse(fs.readFileSync(legacyAudience, "utf8")) as never;
+    }
+  }
+
   if (!found) return out;
   return out;
 }
@@ -103,6 +119,7 @@ export function hasPersistedStore(dataDir: string): boolean {
   for (const key of PERSISTED_STORE_KEYS) {
     if (fs.existsSync(shardPath(dataDir, key))) return true;
   }
+  if (fs.existsSync(legacyAudienceGroupsShard(dataDir))) return true;
   return false;
 }
 
@@ -111,6 +128,8 @@ export function writePersistedStoreShards(
   store: Omit<StudioDataStore, "templates" | "messages">,
 ) {
   ensureStoreDir(dataDir);
+  const legacyAudience = legacyAudienceGroupsShard(dataDir);
+  if (fs.existsSync(legacyAudience)) fs.unlinkSync(legacyAudience);
   for (const key of PERSISTED_STORE_KEYS) {
     const value = store[key];
     if (isEmptyAuxShard(key, value)) {

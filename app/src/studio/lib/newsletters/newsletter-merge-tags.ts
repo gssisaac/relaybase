@@ -166,11 +166,11 @@ export function previewPersonaOptions(members: NewsletterMember[]): {
     { value: "sample-named", label: SAMPLE_NAMED.label },
     { value: "sample-unnamed", label: SAMPLE_UNNAMED.label },
   ];
-  const fromAudience = members.slice(0, 25).map((m) => ({
+  const fromSubscribers = members.slice(0, 25).map((m) => ({
     value: `member:${m.id}` as PreviewPersonaId,
     label: m.name?.trim() ? `${m.name.trim()} · ${m.email}` : m.email,
   }));
-  return [...base, ...fromAudience];
+  return [...base, ...fromSubscribers];
 }
 
 export function templateThumbnailVariant(

@@ -2,7 +2,7 @@
  * Studio dev store types (`data/store/*.json` + `data/templates/*.yaml` + `data/messages/*.yaml`).
  *
  * Layout — HTML frame · Template — read-only catalog blueprint · Message — editable copy ·
- * Trigger — event send · Newsletter — audience send.
+ * Trigger — event send · Newsletter — subscriber send.
  */
 
 // ============================================================================
@@ -111,7 +111,7 @@ export type Message = {
 };
 
 // ============================================================================
-// Newsletters (audience batch send)
+// Newsletters (subscriber batch send)
 // ============================================================================
 
 export type NewsletterListStatus = "active" | "archived";
@@ -137,7 +137,7 @@ export type Newsletter = {
   name: string;
   slug: string;
   description?: string | null;
-  audienceGroupId: string;
+  subscriberGroupId: string;
   domain: string;
   fromName?: string | null;
   fromEmail?: string | null;
@@ -172,7 +172,7 @@ export type RecipientStatus =
 export type Recipient = {
   id: string;
   newsletterId: string;
-  audienceMemberId: string;
+  subscriberMemberId: string;
   email: string;
   name?: string | null;
   status: RecipientStatus;
@@ -203,7 +203,7 @@ export type AccountSuppression = {
   accountLinkId: string;
   email: string;
   reason: AccountSuppressionReason;
-  audienceGroupId: string | null;
+  subscriberGroupId: string | null;
   sourceNewsletterId?: string | null;
   createdAt: string;
 };
@@ -330,7 +330,7 @@ export type Trigger = {
   listStatus: TriggerListStatus;
   status: TriggerStatus;
   source: TriggerSource;
-  audienceGroupId?: string | null;
+  subscriberGroupId?: string | null;
   cooldownSeconds: number;
   applyMarketingSuppression: boolean;
   /** Editable message body/subject sent by this automation. */
@@ -386,7 +386,7 @@ export type TriggerSend = {
   id: string;
   triggerId: string;
   triggerEventId: string;
-  audienceMemberId?: string | null;
+  subscriberMemberId?: string | null;
   email: string;
   name?: string | null;
   status: TriggerSendStatus;
@@ -444,17 +444,17 @@ export type MessageAsset = {
 /** @deprecated Renamed to MessageAsset — migrated on store load. */
 
 // ============================================================================
-// Audience
+// Subscriber groups
 // ============================================================================
 
-export type AudienceDataSource = {
+export type SubscriberDataSource = {
   type: "generic_json";
   endpointUrl: string;
   credential?: string;
   credentialHeader?: string;
 };
 
-export type AudienceSyncRun = {
+export type SubscriberSyncRun = {
   id: string;
   trigger: "manual" | "cron";
   status: "running" | "success" | "error";
@@ -469,15 +469,15 @@ export type AudienceSyncRun = {
   error?: string;
 };
 
-export type AudienceSendStatus = "active" | "unsubscribed" | "bounced";
+export type SubscriberSendStatus = "active" | "unsubscribed" | "bounced";
 
-export type AudienceMember = {
+export type SubscriberMember = {
   id: string;
   email: string;
   name: string | null;
   source: "manual" | "synced";
   addedAt: string;
-  sendStatus: AudienceSendStatus;
+  sendStatus: SubscriberSendStatus;
   unsubscribedAt: string | null;
   bouncedAt?: string | null;
   bounceReason?: string | null;
@@ -486,22 +486,22 @@ export type AudienceMember = {
   consentedAt: string | null;
 };
 
-export type AudienceGroup = {
+export type SubscriberGroup = {
   id: string;
   accountLinkId: string;
   name: string;
   domain: string;
   createdAt: string;
   defaultFrom: string | null;
-  dataSource: AudienceDataSource | null;
+  dataSource: SubscriberDataSource | null;
   cronEnabled: boolean;
   cronIntervalMinutes: number;
   lastSyncAt: string | null;
   lastSyncStatus: "success" | "error" | null;
   lastSyncError: string | null;
   lastSyncCount: number | null;
-  syncHistory: AudienceSyncRun[];
-  contacts: AudienceMember[];
+  syncHistory: SubscriberSyncRun[];
+  contacts: SubscriberMember[];
 };
 
 export type StudioDataStore = {
@@ -526,5 +526,5 @@ export type StudioDataStore = {
   newsletterAssets: NewsletterAsset[];
   triggerAssets: TriggerAsset[];
   messageAssets: MessageAsset[];
-  audienceGroups: AudienceGroup[];
+  subscriberGroups: SubscriberGroup[];
 };

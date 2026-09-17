@@ -9,28 +9,28 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { type AudienceDetailTab } from "@/studio/lib/paths";
-import { useAudienceGroupDetail } from "@/studio/pages/audience/AudienceGroupDetailContext";
-import { useAudienceRoutes } from "@/studio/pages/audience/AudienceRouteContext";
+import { type SubscriberDetailTab } from "@/studio/lib/paths";
+import { useSubscriberGroupDetail } from "@/studio/pages/subscribers/SubscriberGroupDetailContext";
+import { useSubscriberRoutes } from "@/studio/pages/subscribers/SubscriberRouteContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
-const NAV: { id: AudienceDetailTab; label: string; icon: LucideIcon }[] = [
+const NAV: { id: SubscriberDetailTab; label: string; icon: LucideIcon }[] = [
   { id: "contacts", label: "Subscribers", icon: Users },
   { id: "history", label: "History", icon: History },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-export function AudienceGroupDetailShell({
+export function SubscriberGroupDetailShell({
   section,
   children,
 }: {
-  section: AudienceDetailTab;
+  section: SubscriberDetailTab;
   children: ReactNode;
 }) {
-  const { audienceRoot, audienceDetailHref } = useAudienceRoutes();
+  const { subscribersRoot, subscriberDetailHref } = useSubscriberRoutes();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const { groupId, detail, notFound } = useAudienceGroupDetail();
+  const { groupId, detail, notFound } = useSubscriberGroupDetail();
 
   const title = detail?.group.name?.trim() || (notFound ? "Group not found" : "Untitled group");
   const synced = Boolean(detail?.group.dataSource);
@@ -51,7 +51,7 @@ export function AudienceGroupDetailShell({
             className="-ml-2 shrink-0"
             nativeButton={false}
             aria-label="Back"
-            render={<Link href={audienceRoot} />}
+            render={<Link href={subscribersRoot} />}
           >
             <ArrowLeft className="size-4" aria-hidden />
           </Button>
@@ -62,7 +62,7 @@ export function AudienceGroupDetailShell({
               aria-label="Subscriber group"
             >
               {NAV.map((item) => {
-                const href = audienceDetailHref(groupId, item.id);
+                const href = subscriberDetailHref(groupId, item.id);
                 const Icon = item.icon;
                 const active = item.id === section;
                 return (

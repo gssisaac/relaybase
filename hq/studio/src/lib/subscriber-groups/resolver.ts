@@ -1,31 +1,31 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { AudienceMember, Newsletter } from "../../db/types";
+import type { SubscriberMember, Newsletter } from "../../db/types";
 import { isEmailSuppressedForGroup } from "../account/suppression";
-import { findAudienceGroup } from "./group";
+import { findSubscriberGroup } from "./group";
 
-export function findAudienceContactInGroup(
+export function findSubscriberContactInGroup(
   groupId: string,
   contactId: string,
-): AudienceMember | undefined {
-  const group = findAudienceGroup(groupId);
+): SubscriberMember | undefined {
+  const group = findSubscriberGroup(groupId);
   return group?.contacts.find((c) => c.id === contactId);
 }
 
-export function findAudienceContactByUnsubscribeToken(
+export function findSubscriberContactByUnsubscribeToken(
   groupId: string,
   token: string,
-): AudienceMember | undefined {
-  const group = findAudienceGroup(groupId);
+): SubscriberMember | undefined {
+  const group = findSubscriberGroup(groupId);
   return group?.contacts.find((c) => c.unsubscribeToken === token);
 }
 
-/** Contacts eligible to receive a broadcast at send time (live audience group). */
-export function resolveActiveAudienceContacts(broadcast: Newsletter): AudienceMember[] {
-  const group = broadcast.audienceGroupId ? findAudienceGroup(broadcast.audienceGroupId) : undefined;
+/** Contacts eligible to receive a broadcast at send time (live subscriber group). */
+export function resolveActiveSubscriberContacts(broadcast: Newsletter): SubscriberMember[] {
+  const group = broadcast.subscriberGroupId ? findSubscriberGroup(broadcast.subscriberGroupId) : undefined;
   if (!group) return [];
 
   const seen = new Set<string>();
-  const eligible: AudienceMember[] = [];
+  const eligible: SubscriberMember[] = [];
   for (const c of group.contacts) {
     const email = c.email.trim().toLowerCase();
     if (seen.has(email)) continue;
@@ -37,23 +37,23 @@ export function resolveActiveAudienceContacts(broadcast: Newsletter): AudienceMe
   return eligible;
 }
 
-export function audienceActiveCountForNewsletter(broadcast: Newsletter): number {
-  return resolveActiveAudienceContacts(broadcast).length;
+export function subscriberActiveCountForNewsletter(broadcast: Newsletter): number {
+  return resolveActiveSubscriberContacts(broadcast).length;
 }
 
-export function listAudienceContactsForBroadcast(
+export function listSubscriberContactsForBroadcast(
   newsletterId: string,
   filters?: { status?: string; q?: string },
-): Array<AudienceMember & { audienceGroupId: string }> {
+): Array<SubscriberMember & { subscriberGroupId: string }> {
   const broadcast = store
     .read()
     .newsletters.find((b) => b.id === newsletterId && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
-  if (!broadcast?.audienceGroupId) return [];
+  if (!broadcast?.subscriberGroupId) return [];
 
-  const group = findAudienceGroup(broadcast.audienceGroupId);
+  const group = findSubscriberGroup(broadcast.subscriberGroupId);
   if (!group) return [];
 
-  let rows = group.contacts.map((c) => ({ ...c, audienceGroupId: group.id }));
+  let rows = group.contacts.map((c) => ({ ...c, subscriberGroupId: group.id }));
   if (filters?.status) {
     rows = rows.filter((c) => c.sendStatus === filters.status);
   }

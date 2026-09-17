@@ -4,7 +4,7 @@ import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { TriggerPurpose, Trigger, TriggerSource } from "../db/types";
 import { createMessageForOwner, patchMessage } from "../lib/messages/message";
 import { triggerSource } from "../lib/messages/resolve";
-import { findAudienceGroup } from "../lib/audience-groups/group";
+import { findSubscriberGroup } from "../lib/subscriber-groups/group";
 import { dispatchTriggerSend } from "../lib/triggers/dispatch";
 import { fireTrigger } from "../lib/triggers/fire";
 import {
@@ -111,7 +111,7 @@ studioTriggers.post("/", async (c) => {
       listStatus: "active",
       status: "draft",
       source,
-      audienceGroupId: null,
+      subscriberGroupId: null,
       cooldownSeconds: source.type === "mailbox_inbound" ? 3600 : 86_400,
       applyMarketingSuppression: purpose !== "transactional",
       messageId: message.id,
@@ -150,7 +150,7 @@ studioTriggers.patch("/:id", async (c) => {
     listStatus?: "active" | "archived";
     purpose?: TriggerPurpose;
     source?: TriggerSource;
-    audienceGroupId?: string | null;
+    subscriberGroupId?: string | null;
     cooldownSeconds?: number;
     applyMarketingSuppression?: boolean;
     subject?: string;
@@ -175,12 +175,12 @@ studioTriggers.patch("/:id", async (c) => {
     if (!exists) return c.json({ error: "Compliance sender not found" }, 400);
   }
 
-  if (body.audienceGroupId !== undefined && body.audienceGroupId !== null) {
-    const group = findAudienceGroup(body.audienceGroupId.trim());
-    if (!group) return c.json({ error: "Audience group not found" }, 404);
+  if (body.subscriberGroupId !== undefined && body.subscriberGroupId !== null) {
+    const group = findSubscriberGroup(body.subscriberGroupId.trim());
+    if (!group) return c.json({ error: "Subscriber group not found" }, 404);
     const domain = (body.domain ?? existing.domain).toLowerCase();
     if (group.domain.toLowerCase() !== domain) {
-      return c.json({ error: "Audience group domain must match automation domain" }, 400);
+      return c.json({ error: "Subscriber group domain must match automation domain" }, 400);
     }
   }
 
@@ -224,8 +224,8 @@ studioTriggers.patch("/:id", async (c) => {
       listStatus: body.listStatus ?? row.listStatus,
       purpose,
       source: body.source ? mergeTriggerPatch(existingSource, body.source) : existingSource,
-      audienceGroupId:
-        body.audienceGroupId !== undefined ? body.audienceGroupId : row.audienceGroupId,
+      subscriberGroupId:
+        body.subscriberGroupId !== undefined ? body.subscriberGroupId : row.subscriberGroupId,
       cooldownSeconds:
         body.cooldownSeconds !== undefined ? Math.max(0, body.cooldownSeconds) : row.cooldownSeconds,
       applyMarketingSuppression:
@@ -358,7 +358,7 @@ studioTriggers.post("/:id/test-send", async (c) => {
       id: sendId,
       triggerId: id,
       triggerEventId,
-      audienceMemberId: null,
+      subscriberMemberId: null,
       email,
       name: (payload.name as string) ?? null,
       status: "queued",

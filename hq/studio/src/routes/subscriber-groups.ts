@@ -1,31 +1,31 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { AudienceDataSource, AudienceMember } from "../db/types";
+import type { SubscriberDataSource, SubscriberMember } from "../db/types";
 import { isEmailSuppressedForGroup } from "../lib/account/suppression";
 import {
-  audienceContactToApi,
-  audienceGroupToSummary,
-} from "../lib/audience-groups/api-serialize";
-import { mergeDataSource } from "../lib/audience-groups/data-source-merge";
-import { fetchDataSourceContacts } from "../lib/audience-groups/data-source-sync";
-import { findAudienceGroup } from "../lib/audience-groups/group";
-import { setAudienceContactSendStatus } from "../lib/audience-groups/send-status";
-import { syncAudienceGroupAsync } from "../lib/audience-groups/sync";
+  subscriberContactToApi,
+  subscriberGroupToSummary,
+} from "../lib/subscriber-groups/api-serialize";
+import { mergeDataSource } from "../lib/subscriber-groups/data-source-merge";
+import { fetchDataSourceContacts } from "../lib/subscriber-groups/data-source-sync";
+import { findSubscriberGroup } from "../lib/subscriber-groups/group";
+import { setSubscriberContactSendStatus } from "../lib/subscriber-groups/send-status";
+import { syncSubscriberGroupAsync } from "../lib/subscriber-groups/sync";
 import { newId, newToken } from "../lib/shared/ids";
 
-export const studioAudience = new Hono();
+export const studioSubscriberGroups = new Hono();
 
-// GET /studio/audience-groups
-studioAudience.get("/", (c) => {
+// GET /studio/subscriber-groups
+studioSubscriberGroups.get("/", (c) => {
   const groups = store
     .read()
-    .audienceGroups.filter((g) => g.accountLinkId === DEV_ACCOUNT_LINK_ID)
-    .map(audienceGroupToSummary);
+    .subscriberGroups.filter((g) => g.accountLinkId === DEV_ACCOUNT_LINK_ID)
+    .map(subscriberGroupToSummary);
   return c.json({ groups });
 });
 
-// POST /studio/audience-groups/test
-studioAudience.post("/test", async (c) => {
+// POST /studio/subscriber-groups/test
+studioSubscriberGroups.post("/test", async (c) => {
   let body: {
     endpointUrl?: string;
     credential?: string;
@@ -38,9 +38,9 @@ studioAudience.post("/test", async (c) => {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
-  let dataSource: AudienceDataSource | null = null;
+  let dataSource: SubscriberDataSource | null = null;
   if (body.groupId) {
-    const group = findAudienceGroup(body.groupId);
+    const group = findSubscriberGroup(body.groupId);
     if (!group?.dataSource) {
       return c.json({ error: "group has no data source" }, 400);
     }
@@ -79,13 +79,13 @@ studioAudience.post("/test", async (c) => {
   }
 });
 
-// POST /studio/audience-groups
-studioAudience.post("/", async (c) => {
+// POST /studio/subscriber-groups
+studioSubscriberGroups.post("/", async (c) => {
   let body: {
     name?: string;
     domain?: string;
     workerUrl?: string;
-    dataSource?: AudienceDataSource;
+    dataSource?: SubscriberDataSource;
   };
   try {
     body = await c.req.json();
@@ -105,14 +105,14 @@ studioAudience.post("/", async (c) => {
     if (workerUrl) draft.account.workerUrl = workerUrl;
   });
 
-  const id = newId("audience");
+  const id = newId("subscriber");
   const now = new Date().toISOString();
   const dataSource = body.dataSource
     ? mergeDataSource(null, body.dataSource, false)
     : null;
 
   store.update((draft) => {
-    draft.audienceGroups.push({
+    draft.subscriberGroups.push({
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
       name,
@@ -132,27 +132,27 @@ studioAudience.post("/", async (c) => {
   });
 
   if (dataSource) {
-    await syncAudienceGroupAsync(id, "manual");
+    await syncSubscriberGroupAsync(id, "manual");
   }
 
-  const group = findAudienceGroup(id)!;
-  return c.json({ group: audienceGroupToSummary(group) }, 201);
+  const group = findSubscriberGroup(id)!;
+  return c.json({ group: subscriberGroupToSummary(group) }, 201);
 });
 
-// GET /studio/audience-groups/:id
-studioAudience.get("/:id", (c) => {
-  const group = findAudienceGroup(c.req.param("id"));
+// GET /studio/subscriber-groups/:id
+studioSubscriberGroups.get("/:id", (c) => {
+  const group = findSubscriberGroup(c.req.param("id"));
   if (!group) return c.json({ error: "not found" }, 404);
   return c.json({
-    group: audienceGroupToSummary(group),
-    contacts: group.contacts.map((m) => audienceContactToApi(group, m)),
+    group: subscriberGroupToSummary(group),
+    contacts: group.contacts.map((m) => subscriberContactToApi(group, m)),
   });
 });
 
-// PATCH /studio/audience-groups/:id
-studioAudience.patch("/:id", async (c) => {
+// PATCH /studio/subscriber-groups/:id
+studioSubscriberGroups.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const existing = findAudienceGroup(id);
+  const existing = findSubscriberGroup(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
   let body: {
@@ -162,7 +162,7 @@ studioAudience.patch("/:id", async (c) => {
     defaultFrom?: string | null;
     cronEnabled?: boolean;
     cronIntervalMinutes?: number;
-    dataSource?: AudienceDataSource | null;
+    dataSource?: SubscriberDataSource | null;
   };
   try {
     body = await c.req.json();
@@ -187,9 +187,9 @@ studioAudience.patch("/:id", async (c) => {
   const dataSourceTouched = body.dataSource !== undefined;
   store.update((draft) => {
     if (workerUrl) draft.account.workerUrl = workerUrl;
-    const idx = draft.audienceGroups.findIndex((g) => g.id === id);
+    const idx = draft.subscriberGroups.findIndex((g) => g.id === id);
     if (idx < 0) return;
-    const g = draft.audienceGroups[idx]!;
+    const g = draft.subscriberGroups[idx]!;
     if (body.name !== undefined) g.name = body.name.trim() || g.name;
     if (domainPatch !== undefined && domainPatch !== g.domain) {
       g.domain = domainPatch;
@@ -210,31 +210,31 @@ studioAudience.patch("/:id", async (c) => {
     }
   });
 
-  if (dataSourceTouched && findAudienceGroup(id)?.dataSource) {
-    await syncAudienceGroupAsync(id, "manual");
+  if (dataSourceTouched && findSubscriberGroup(id)?.dataSource) {
+    await syncSubscriberGroupAsync(id, "manual");
   }
 
-  const group = findAudienceGroup(id)!;
+  const group = findSubscriberGroup(id)!;
   return c.json({
-    group: audienceGroupToSummary(group),
-    contacts: group.contacts.map((m) => audienceContactToApi(group, m)),
+    group: subscriberGroupToSummary(group),
+    contacts: group.contacts.map((m) => subscriberContactToApi(group, m)),
   });
 });
 
-// DELETE /studio/audience-groups/:id
-studioAudience.delete("/:id", (c) => {
+// DELETE /studio/subscriber-groups/:id
+studioSubscriberGroups.delete("/:id", (c) => {
   const id = c.req.param("id");
-  const existed = Boolean(findAudienceGroup(id));
+  const existed = Boolean(findSubscriberGroup(id));
   if (!existed) return c.json({ error: "not found" }, 404);
   store.update((draft) => {
-    draft.audienceGroups = draft.audienceGroups.filter((g) => g.id !== id);
+    draft.subscriberGroups = draft.subscriberGroups.filter((g) => g.id !== id);
   });
   return c.json({ ok: true });
 });
 
-// POST /studio/audience-groups/:id/contacts
-studioAudience.post("/:id/contacts", async (c) => {
-  const group = findAudienceGroup(c.req.param("id"));
+// POST /studio/subscriber-groups/:id/contacts
+studioSubscriberGroups.post("/:id/contacts", async (c) => {
+  const group = findSubscriberGroup(c.req.param("id"));
   if (!group) return c.json({ error: "not found" }, 404);
 
   let body: { email?: string; name?: string };
@@ -258,14 +258,14 @@ studioAudience.post("/:id/contacts", async (c) => {
     return c.json(
       {
         error:
-          "This address is on the account suppression list for this audience. Remove the suppression before re-adding.",
+          "This address is on the account suppression list for this subscriber group. Remove the suppression before re-adding.",
       },
       409,
     );
   }
 
   const addedAt = new Date().toISOString();
-  const member: AudienceMember = {
+  const member: SubscriberMember = {
     id: newId("member"),
     email,
     name: body.name?.trim() || null,
@@ -279,17 +279,17 @@ studioAudience.post("/:id/contacts", async (c) => {
   };
 
   store.update((draft) => {
-    const idx = draft.audienceGroups.findIndex((g) => g.id === group.id);
-    if (idx >= 0) draft.audienceGroups[idx]!.contacts.push(member);
+    const idx = draft.subscriberGroups.findIndex((g) => g.id === group.id);
+    if (idx >= 0) draft.subscriberGroups[idx]!.contacts.push(member);
   });
 
-  const updated = findAudienceGroup(group.id)!;
-  return c.json({ contact: audienceContactToApi(updated, member) }, 201);
+  const updated = findSubscriberGroup(group.id)!;
+  return c.json({ contact: subscriberContactToApi(updated, member) }, 201);
 });
 
-// DELETE /studio/audience-groups/:id/contacts?contactId=
-studioAudience.delete("/:id/contacts", (c) => {
-  const group = findAudienceGroup(c.req.param("id"));
+// DELETE /studio/subscriber-groups/:id/contacts?contactId=
+studioSubscriberGroups.delete("/:id/contacts", (c) => {
+  const group = findSubscriberGroup(c.req.param("id"));
   if (!group) return c.json({ error: "not found" }, 404);
 
   const contactId = c.req.query("contactId")?.trim();
@@ -299,9 +299,9 @@ studioAudience.delete("/:id/contacts", (c) => {
   if (!existed) return c.json({ error: "not found" }, 404);
 
   store.update((draft) => {
-    const idx = draft.audienceGroups.findIndex((g) => g.id === group.id);
+    const idx = draft.subscriberGroups.findIndex((g) => g.id === group.id);
     if (idx >= 0) {
-      draft.audienceGroups[idx]!.contacts = draft.audienceGroups[idx]!.contacts.filter(
+      draft.subscriberGroups[idx]!.contacts = draft.subscriberGroups[idx]!.contacts.filter(
         (m) => m.id !== contactId,
       );
     }
@@ -310,9 +310,9 @@ studioAudience.delete("/:id/contacts", (c) => {
   return c.json({ ok: true });
 });
 
-// PATCH /studio/audience-groups/:id/contacts/:contactId { sendStatus: "active" | "unsubscribed" }
-studioAudience.patch("/:id/contacts/:contactId", async (c) => {
-  const group = findAudienceGroup(c.req.param("id"));
+// PATCH /studio/subscriber-groups/:id/contacts/:contactId { sendStatus: "active" | "unsubscribed" }
+studioSubscriberGroups.patch("/:id/contacts/:contactId", async (c) => {
+  const group = findSubscriberGroup(c.req.param("id"));
   if (!group) return c.json({ error: "not found" }, 404);
 
   const contactId = c.req.param("contactId")!.trim();
@@ -329,9 +329,9 @@ studioAudience.patch("/:id/contacts/:contactId", async (c) => {
     return c.json({ error: "sendStatus must be 'active' or 'unsubscribed'" }, 400);
   }
 
-  setAudienceContactSendStatus(group.id, contactId, body.sendStatus);
+  setSubscriberContactSendStatus(group.id, contactId, body.sendStatus);
 
-  const updated = findAudienceGroup(group.id)!;
+  const updated = findSubscriberGroup(group.id)!;
   const member = updated.contacts.find((m) => m.id === contactId)!;
-  return c.json({ contact: audienceContactToApi(updated, member) });
+  return c.json({ contact: subscriberContactToApi(updated, member) });
 });

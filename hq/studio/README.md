@@ -18,7 +18,7 @@ Listens on `http://localhost:32831` (override with `PORT`).
 
 | Path | Contents |
 |------|----------|
-| `data/store/*.json` | Sharded dev store (account, layouts, newsletters, triggers, audience, …) |
+| `data/store/*.json` | Sharded dev store (account, layouts, newsletters, triggers, subscriber groups, …) |
 | `data/templates/*.yaml` | Read-only template gallery blueprints |
 | `data/messages/*.yaml` | Editable message bodies (newsletters, triggers, library copies) |
 

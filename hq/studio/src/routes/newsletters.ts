@@ -6,9 +6,9 @@ import { claimNewsletterForSend, resolveTestSendUnsubscribeToken } from "../lib/
 import { sanitizeTemplateVariables } from "../lib/templates/variable-schema";
 import { createMessageForOwner, patchMessage } from "../lib/messages/message";
 import { requireMessage } from "../lib/messages/resolve";
-import { resolveActiveAudienceContacts } from "../lib/audience-groups/resolver";
-import { findAudienceGroup } from "../lib/audience-groups/group";
-import { dispatchNewsletterToAudience } from "../lib/newsletters/dispatch";
+import { resolveActiveSubscriberContacts } from "../lib/subscriber-groups/resolver";
+import { findSubscriberGroup } from "../lib/subscriber-groups/group";
+import { dispatchNewsletterToSubscribers } from "../lib/newsletters/dispatch";
 import { resolveWorkerSendCredentials } from "../lib/mail/credentials";
 import { buildNewsletterDispatchProgress } from "../lib/newsletters/dispatch-progress";
 import { aggregateNewsletterLinkClicks } from "../lib/newsletters/link-clicks";
@@ -29,7 +29,7 @@ import {
 } from "../lib/render/render";
 import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
 import { newId, newToken } from "../lib/shared/ids";
-import { studioNewsletterAudience } from "./newsletter-audience";
+import { studioNewsletterSubscribers } from "./newsletter-subscribers";
 
 export const studioNewsletters = new Hono();
 
@@ -44,13 +44,13 @@ studioNewsletters.get("/", (c) => {
 
 studioNewsletters.get("/sent-stats", (c) => {
   const data = store.read();
-  const audienceNameById = new Map(data.audienceGroups.map((g) => [g.id, g.name]));
+  const subscriberNameById = new Map(data.subscriberGroups.map((g) => [g.id, g.name]));
   return c.json(
     buildSentOverview({
       newsletters: data.newsletters.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID),
       recipients: data.recipients,
       trackingEvents: data.trackingEvents,
-      audienceNameById,
+      subscriberNameById,
     }),
   );
 });
@@ -76,13 +76,13 @@ studioNewsletters.get("/in-progress", (c) => {
   );
 });
 
-// POST /studio/broadcasts { name, audienceGroupId, ... }
+// POST /studio/broadcasts { name, subscriberGroupId, ... }
 studioNewsletters.post("/", async (c) => {
   let body: {
     name?: string;
     domain?: string;
     workerUrl?: string;
-    audienceGroupId?: string;
+    subscriberGroupId?: string;
     slug?: string;
     fromName?: string;
     fromEmail?: string;
@@ -99,12 +99,12 @@ studioNewsletters.post("/", async (c) => {
   if (!name) return c.json({ error: "Newsletter name is required" }, 400);
   const domain = body.domain?.trim().toLowerCase();
   if (!domain) return c.json({ error: "Select a sending domain for this broadcast" }, 400);
-  const audienceGroupId = body.audienceGroupId?.trim();
-  if (!audienceGroupId) return c.json({ error: "Select an audience group for this broadcast" }, 400);
-  const audienceGroup = findAudienceGroup(audienceGroupId);
-  if (!audienceGroup) return c.json({ error: "Audience group not found" }, 404);
-  if (audienceGroup.domain.toLowerCase() !== domain) {
-    return c.json({ error: "Audience group must belong to the selected domain" }, 400);
+  const subscriberGroupId = body.subscriberGroupId?.trim();
+  if (!subscriberGroupId) return c.json({ error: "Select a subscriber group for this broadcast" }, 400);
+  const subscriberGroup = findSubscriberGroup(subscriberGroupId);
+  if (!subscriberGroup) return c.json({ error: "Subscriber group not found" }, 404);
+  if (subscriberGroup.domain.toLowerCase() !== domain) {
+    return c.json({ error: "Subscriber group must belong to the selected domain" }, 400);
   }
   const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
   store.update((draft) => {
@@ -144,10 +144,10 @@ studioNewsletters.post("/", async (c) => {
       name,
       slug,
       description: null,
-      audienceGroupId,
+      subscriberGroupId,
       domain,
       fromName: body.fromName?.trim() || null,
-      fromEmail: body.fromEmail?.trim() || audienceGroup.defaultFrom || null,
+      fromEmail: body.fromEmail?.trim() || subscriberGroup.defaultFrom || null,
       replyTo: body.replyTo?.trim() || null,
       messageId: message.id,
       listStatus: "active",
@@ -167,7 +167,7 @@ studioNewsletters.post("/", async (c) => {
   return c.json(serializeNewsletter(created!), 201);
 });
 
-studioNewsletters.route("/:newsletterId/audience", studioNewsletterAudience);
+studioNewsletters.route("/:newsletterId/subscribers", studioNewsletterSubscribers);
 
 // GET /studio/newsletters/:id
 studioNewsletters.get("/:id", (c) => {
@@ -199,7 +199,7 @@ studioNewsletters.patch("/:id", async (c) => {
     layoutId?: string | null;
     defaultLayoutId?: string | null;
     templateVariables?: Record<string, string>;
-    audienceGroupId?: string;
+    subscriberGroupId?: string;
   };
   try {
     body = await c.req.json();
@@ -207,31 +207,31 @@ studioNewsletters.patch("/:id", async (c) => {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
-  const audienceGroupIdPatch =
-    body.audienceGroupId !== undefined ? body.audienceGroupId.trim() : undefined;
-  if (audienceGroupIdPatch !== undefined) {
+  const subscriberGroupIdPatch =
+    body.subscriberGroupId !== undefined ? body.subscriberGroupId.trim() : undefined;
+  if (subscriberGroupIdPatch !== undefined) {
     if (existing.status !== "draft" && existing.status !== "scheduled") {
-      return c.json({ error: "Audience can only be changed before send" }, 409);
+      return c.json({ error: "Subscriber list can only be changed before send" }, 409);
     }
-    if (!audienceGroupIdPatch) {
-      return c.json({ error: "Select an audience group" }, 400);
+    if (!subscriberGroupIdPatch) {
+      return c.json({ error: "Select an subscriber group" }, 400);
     }
-    const nextGroup = findAudienceGroup(audienceGroupIdPatch);
-    if (!nextGroup) return c.json({ error: "Audience group not found" }, 404);
+    const nextGroup = findSubscriberGroup(subscriberGroupIdPatch);
+    if (!nextGroup) return c.json({ error: "Subscriber group not found" }, 404);
     const domainFromBody = body.domain?.trim().toLowerCase();
     const effectiveDomain = (
       domainFromBody ??
       existing.domain ??
-      (existing.audienceGroupId ? findAudienceGroup(existing.audienceGroupId)?.domain : "") ??
+      (existing.subscriberGroupId ? findSubscriberGroup(existing.subscriberGroupId)?.domain : "") ??
       ""
     ).toLowerCase();
     if (!effectiveDomain) {
-      return c.json({ error: "Select a sending domain before linking an audience" }, 400);
+      return c.json({ error: "Select a sending domain before linking a subscriber group" }, 400);
     }
     if (nextGroup.domain.toLowerCase() !== effectiveDomain) {
       return c.json(
         {
-          error: `Audience group is on ${nextGroup.domain}. Choose a group on ${effectiveDomain}.`,
+          error: `Subscriber group is on ${nextGroup.domain}. Choose a group on ${effectiveDomain}.`,
         },
         400,
       );
@@ -253,14 +253,14 @@ studioNewsletters.patch("/:id", async (c) => {
     if (!domainPatch) {
       return c.json({ error: "Select a sending domain" }, 400);
     }
-    const group = existing.audienceGroupId ? findAudienceGroup(existing.audienceGroupId) : undefined;
+    const group = existing.subscriberGroupId ? findSubscriberGroup(existing.subscriberGroupId) : undefined;
     const prevDomain = (existing.domain || group?.domain || "").toLowerCase();
     const domainChanging = domainPatch !== prevDomain;
     if (domainChanging) {
       if (group && group.domain.toLowerCase() !== domainPatch) {
         return c.json(
           {
-            error: `Audience group is on ${group.domain}. Choose that domain or change the linked audience.`,
+            error: `Subscriber group is on ${group.domain}. Choose that domain or change the linked subscriber group.`,
           },
           400,
         );
@@ -328,14 +328,14 @@ studioNewsletters.patch("/:id", async (c) => {
       },
       now,
     );
-    const prevGroup = prev.audienceGroupId ? findAudienceGroup(prev.audienceGroupId) : undefined;
-    const nextAudienceGroupId =
-      audienceGroupIdPatch !== undefined ? audienceGroupIdPatch : prev.audienceGroupId;
+    const prevGroup = prev.subscriberGroupId ? findSubscriberGroup(prev.subscriberGroupId) : undefined;
+    const nextSubscriberGroupId =
+      subscriberGroupIdPatch !== undefined ? subscriberGroupIdPatch : prev.subscriberGroupId;
     const nextGroup =
-      audienceGroupIdPatch !== undefined ? findAudienceGroup(audienceGroupIdPatch) : prevGroup;
+      subscriberGroupIdPatch !== undefined ? findSubscriberGroup(subscriberGroupIdPatch) : prevGroup;
     let nextFromEmail = prev.fromEmail;
     if (
-      audienceGroupIdPatch !== undefined &&
+      subscriberGroupIdPatch !== undefined &&
       nextGroup &&
       (!prev.fromEmail || prev.fromEmail === prevGroup?.defaultFrom)
     ) {
@@ -345,7 +345,7 @@ studioNewsletters.patch("/:id", async (c) => {
       body.fromEmail !== undefined ? body.fromEmail?.trim() || null : nextFromEmail;
     draft.newsletters[idx] = {
       ...prev,
-      audienceGroupId: nextAudienceGroupId,
+      subscriberGroupId: nextSubscriberGroupId,
       name: body.name?.trim() || prev.name,
       slug: body.slug?.trim() ? slugifyNewsletter(body.slug) : prev.slug,
       description: body.description !== undefined ? body.description : prev.description,
@@ -468,10 +468,10 @@ studioNewsletters.post("/:id/send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const members = resolveActiveAudienceContacts(existing);
+  const members = resolveActiveSubscriberContacts(existing);
   if (members.length === 0) {
     return c.json(
-      { error: "Cannot send: this broadcast has 0 active audience contacts in the linked group." },
+      { error: "Cannot send: this broadcast has 0 active subscriber contacts in the linked group." },
       400,
     );
   }
@@ -481,7 +481,7 @@ studioNewsletters.post("/:id/send", async (c) => {
     return c.json({ error: "Newsletter is already sending or no longer a draft" }, 409);
   }
 
-  const result = await dispatchNewsletterToAudience(broadcast, members);
+  const result = await dispatchNewsletterToSubscribers(broadcast, members);
   const row = store.read().newsletters.find((r) => r.id === id)!;
   return c.json({ newsletter: serializeNewsletter(row), ...result });
 });
@@ -657,7 +657,7 @@ studioNewsletters.get("/:id/stats", (c) => {
     linkClicks: aggregateNewsletterLinkClicks(id),
     recipients: recipients.map((r) => ({
       id: r.id,
-      audienceMemberId: r.audienceMemberId,
+      subscriberMemberId: r.subscriberMemberId,
       email: r.email,
       name: r.name ?? null,
       status: r.status,

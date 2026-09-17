@@ -1,13 +1,13 @@
-import type { AudienceMember } from "../../db/types";
+import type { SubscriberMember } from "../../db/types";
 
-export function serializeNewsletterAudienceContact(
+export function serializeNewsletterSubscriberContact(
   broadcastId: string,
-  contact: AudienceMember,
+  contact: SubscriberMember,
 ) {
   return {
     id: contact.id,
     broadcastId,
-    audienceMemberId: contact.id,
+    subscriberMemberId: contact.id,
     email: contact.email,
     name: contact.name,
     status: contact.sendStatus,

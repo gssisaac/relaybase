@@ -183,7 +183,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
       id: triggerSendId!,
       triggerId: automation.id,
       triggerEventId,
-      audienceMemberId: null,
+      subscriberMemberId: null,
       email: recipient.email!,
       name: recipient.name,
       status: "queued",

@@ -193,7 +193,7 @@ export function normalizeEntryPath(path: string): string {
   if (
     pathname === "/subscribers" ||
     pathname.startsWith("/subscribers/") ||
-    pathname === "/audience" ||
+    pathname === "/subscribers" ||
     pathname.startsWith("/audience/")
   ) {
     const qs = params.toString();

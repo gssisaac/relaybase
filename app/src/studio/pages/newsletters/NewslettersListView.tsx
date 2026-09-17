@@ -19,6 +19,11 @@ import {
   NewsletterGallerySkeleton,
   NewsletterListKpiSkeleton,
 } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
+import {
+  StudioGalleryViewToggle,
+  type StudioGalleryViewMode,
+} from "@/studio/components/gallery/StudioGalleryViewToggle";
+import { NewsletterListTable } from "@/studio/components/newsletters/NewsletterListTable";
 import { NewsletterThumbnailGrid } from "@/studio/components/newsletters/NewsletterThumbnailGrid";
 import { newslettersSectionHref } from "@/studio/lib/paths";
 import { OverviewKpiCard } from "@/studio/pages/overview/OverviewKpiCard";
@@ -117,6 +122,7 @@ export function NewslettersListView() {
   const layouts = hub.layouts;
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<NewsletterFilter>("draft");
+  const [listView, setListView] = useState<StudioGalleryViewMode>("card");
   const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(
@@ -306,14 +312,25 @@ export function NewslettersListView() {
             onSearchChange={setSearch}
             searchPlaceholder="Search newsletters…"
             leading={filterPills}
+            searchTrailing={
+              <StudioGalleryViewToggle value={listView} onChange={setListView} />
+            }
           />
 
           {filtered.length > 0 ? (
-            <NewsletterThumbnailGrid
-              newsletters={filtered}
-              layouts={layouts}
-              statsLine={statsLine}
-            />
+            listView === "card" ? (
+              <NewsletterThumbnailGrid
+                newsletters={filtered}
+                layouts={layouts}
+                statsLine={statsLine}
+              />
+            ) : (
+              <NewsletterListTable
+                newsletters={filtered}
+                layouts={layouts}
+                statsLine={statsLine}
+              />
+            )
           ) : !hub.listFetching || newsletters.length > 0 ? (
             newsletters.length === 0 ? (
               <EmptyListState
@@ -350,7 +367,11 @@ export function NewslettersListView() {
               />
             )
           ) : showPlaceholder ? (
-            <NewsletterGallerySkeleton />
+            listView === "card" ? (
+              <NewsletterGallerySkeleton />
+            ) : (
+              <div className="min-h-[200px] animate-pulse rounded-lg bg-muted/40" aria-busy="true" />
+            )
           ) : null}
         </div>
       </div>

@@ -70,12 +70,15 @@ export function ListToolbar({
   onSearchChange,
   searchPlaceholder = "Search…",
   leading,
+  searchTrailing,
   trailing,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
   leading?: ReactNode;
+  /** Rendered at the right end of the search field row (same line as the input). */
+  searchTrailing?: ReactNode;
   trailing?: ReactNode;
 }) {
   const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
@@ -106,20 +109,36 @@ export function ListToolbar({
           </div>
         ) : null}
         <div
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-2",
+            dragRegionClassName,
+          )}
           {...dragRegionProps}
-          className={cn("relative min-w-0 flex-1", dragRegionClassName)}
         >
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          onMouseDown={onDraggableFieldMouseDown}
-          placeholder={searchPlaceholder}
-          className="h-8 border-0 bg-secondary/60 pl-8 shadow-none focus-visible:bg-secondary/90 focus-visible:ring-0 focus-visible:border-0"
-        />
+          <div
+            {...dragRegionProps}
+            className={cn("relative min-w-0 flex-1", dragRegionClassName)}
+          >
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onMouseDown={onDraggableFieldMouseDown}
+              placeholder={searchPlaceholder}
+              className="h-8 border-0 bg-secondary/60 pl-8 shadow-none focus-visible:bg-secondary/90 focus-visible:ring-0 focus-visible:border-0"
+            />
+          </div>
+          {searchTrailing ? (
+            <div
+              className={cn("shrink-0", noDragClassName)}
+              {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+            >
+              {searchTrailing}
+            </div>
+          ) : null}
         </div>
       </div>
       {trailing ? (

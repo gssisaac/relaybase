@@ -169,23 +169,42 @@ function sidebarTitleForMode(mode: SidebarMode) {
   return "Console";
 }
 
+function StudioProBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        "h-4 shrink-0 border-0 px-1.5 py-0 text-[10px] font-semibold tracking-wide",
+        className,
+      )}
+    >
+      Pro
+    </Badge>
+  );
+}
+
 function ModeMenuItem({
   label,
   mode,
   active,
+  proBadge,
   onClick,
 }: {
   label: string;
   mode: SidebarMode;
   active: boolean;
+  proBadge?: boolean;
   onClick: () => void;
 }) {
   return (
     <DropdownMenuItem onClick={onClick}>
       <ModeIcon mode={mode} className="size-3.5" />
-      <span className="flex-1">{label}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        {label}
+        {proBadge ? <StudioProBadge /> : null}
+      </span>
       <Check
-        className={cn("ml-auto size-3.5", active ? "opacity-100" : "opacity-0")}
+        className={cn("ml-auto size-3.5 shrink-0", active ? "opacity-100" : "opacity-0")}
         aria-hidden
       />
     </DropdownMenuItem>
@@ -217,12 +236,6 @@ function TitleMenuItems({
         active={mode === "email"}
         onClick={() => onSwitchTo("email")}
       />
-      <ModeMenuItem
-        label="Studio"
-        mode="studio"
-        active={mode === "studio"}
-        onClick={() => onSwitchTo("studio")}
-      />
       {teamMode ? null : (
         <ModeMenuItem
           label="Console"
@@ -231,6 +244,13 @@ function TitleMenuItems({
           onClick={() => onSwitchTo("dashboard")}
         />
       )}
+      <ModeMenuItem
+        label="Studio"
+        mode="studio"
+        active={mode === "studio"}
+        proBadge
+        onClick={() => onSwitchTo("studio")}
+      />
       <div role="separator" className="my-1 h-px bg-border" />
       {mode === "email" ? (
         <DropdownMenuItem onClick={onAddAccount} disabled={!canAddAccount}>
@@ -1025,8 +1045,11 @@ export function UserSidebar({
                     }
                   >
                     <TitleIcon mode={mode} />
-                    <span className="truncate text-sm font-semibold tracking-tight">
-                      {titleLabel}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-sm font-semibold tracking-tight">
+                        {titleLabel}
+                      </span>
+                      {mode === "studio" ? <StudioProBadge /> : null}
                     </span>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" sideOffset={8}>

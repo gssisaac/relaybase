@@ -164,11 +164,34 @@ export function transformEmailButtonMarkersToBulletproof(html: string): string {
   });
 }
 
+export function emailButtonPropsFromBlockRecord(
+  props: Record<string, unknown>,
+): EmailButtonProps {
+  const legacyUrl = props.url;
+  const linkUrl = props.linkUrl;
+  const url =
+    typeof linkUrl === "string"
+      ? linkUrl
+      : typeof legacyUrl === "string"
+        ? legacyUrl
+        : "https://";
+  return {
+    text: typeof props.text === "string" ? props.text : "Button",
+    url,
+    variant: normalizeEmailButtonVariant(
+      typeof props.variant === "string" ? props.variant : undefined,
+    ),
+    alignment: normalizeEmailButtonAlign(
+      typeof props.alignment === "string" ? props.alignment : undefined,
+    ),
+  };
+}
+
 export function isEmailButtonBlock(block: unknown): block is {
   type: "emailButton";
-  props: EmailButtonProps;
+  props: Record<string, unknown>;
 } {
   if (!block || typeof block !== "object") return false;
-  const b = block as { type?: string; props?: EmailButtonProps };
+  const b = block as { type?: string; props?: unknown };
   return b.type === "emailButton" && !!b.props && typeof b.props === "object";
 }

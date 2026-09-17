@@ -2,6 +2,7 @@ import type { BlockNoteEditor } from "@blocknote/core";
 
 import {
   emailButtonMarkerHtml,
+  emailButtonPropsFromBlockRecord,
   emailButtonPropsFromMarkerHtml,
   isEmailButtonBlock,
   isEmailButtonMarkerHtml,
@@ -34,7 +35,7 @@ function emailButtonBlockFromProps(props: EmailButtonProps): Record<string, unkn
     type: "emailButton",
     props: {
       text: props.text,
-      url: props.url,
+      linkUrl: props.url,
       variant: props.variant,
       alignment: props.alignment,
     },
@@ -69,7 +70,9 @@ export function promoteEmailButtonBlocks<T>(blocks: T[]): T[] {
 
 export function serializeEmailButtonBlockMarkdown(block: unknown): string | null {
   if (!isEmailButtonBlock(block)) return null;
-  return emailButtonMarkerHtml(block.props);
+  return emailButtonMarkerHtml(
+    emailButtonPropsFromBlockRecord(block.props),
+  );
 }
 
 function markdownContainsEmailButtonMarker(markdown: string): boolean {

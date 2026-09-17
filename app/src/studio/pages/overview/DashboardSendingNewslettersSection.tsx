@@ -1,18 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
-import { DashboardNewsletterDispatchStats } from "@/studio/pages/overview/DashboardNewsletterDispatchStats";
 import { studioApi, type InProgressOverview } from "@/studio/api";
-import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
-import { newsletterDisplaySubject } from "@/studio/lib/newsletters/newsletter-display-subject";
+import { formatInMinutes } from "@/studio/lib/newsletters/newsletter-dispatch-display";
+import { useStudioPaths } from "@/studio/lib/paths";
+import { buildDashboardSendingAggregate } from "@/studio/pages/overview/dashboard-sending-aggregate";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 5_000;
+
+function Metric({
+  label,
+  value,
+  hint,
+  className,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="truncate text-lg font-semibold tabular-nums leading-tight">{value}</p>
+      {hint ? <p className="truncate text-[11px] text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
 
 export function DashboardSendingNewslettersSection() {
   const { newslettersInProgress } = useStudioPaths();
@@ -37,70 +56,71 @@ export function DashboardSendingNewslettersSection() {
   }, [data?.sending.length, load]);
 
   const sending = data?.sending ?? [];
+  const aggregate = useMemo(() => buildDashboardSendingAggregate(sending), [sending]);
+
   if (sending.length === 0) return null;
 
+  const etaLabel = formatInMinutes(aggregate.latestEtaIso);
+
   return (
-    <Card className="flex h-[232px] w-full shrink-0 flex-col overflow-hidden">
-      <CardHeader className="flex shrink-0 flex-row items-start justify-between gap-2 space-y-0 pb-2 pt-4">
+    <Card className="w-full shrink-0">
+      <CardHeader className="flex shrink-0 flex-row items-start justify-between gap-2 space-y-0 pb-2 pt-5">
         <div className="min-w-0 space-y-0.5">
           <CardTitle className="text-base">Sending now</CardTitle>
           <CardDescription>
-            {sending.length === 1
+            {aggregate.newsletterCount === 1
               ? "1 newsletter dispatch in progress"
-              : `${sending.length} newsletter dispatches in progress`}
+              : `${aggregate.newsletterCount} newsletter dispatches in progress`}
           </CardDescription>
         </div>
         <Link href={newslettersInProgress} className={buttonVariants({ variant: "ghost", size: "sm" })}>
           View all
         </Link>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pb-4 pt-0">
-        <div
-          className={cn(
-            "flex h-full min-h-0 gap-3",
-            sending.length === 1 ? "min-w-0" : "min-w-min pr-1",
-          )}
-        >
-          {sending.map((row) => (
-            <div
-              key={row.newsletter.id}
-              className={cn(
-                "flex min-h-0 min-w-0 flex-col gap-2 rounded-lg border bg-muted/20 p-3",
-                sending.length === 1 ? "w-full flex-1" : "w-[min(100%,420px)] shrink-0",
-              )}
-            >
-              <div className="flex min-w-0 items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <Link
-                    href={newsletterDetailHref(row.newsletter.id, "publish")}
-                    className="truncate text-sm font-semibold hover:underline"
-                  >
-                    {newsletterDisplaySubject(row.newsletter.subject)}
-                  </Link>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {row.newsletter.subscriberGroupName ?? "Subscriber group"}
-                  </p>
-                </div>
-                <NewsletterStatusBadge status={row.newsletter.status} />
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col justify-between gap-2">
-                {row.dispatch ? (
-                  <DashboardNewsletterDispatchStats dispatch={row.dispatch} />
-                ) : (
-                  <p className="text-xs text-muted-foreground">Queue statistics loading…</p>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 w-fit text-xs"
-                  nativeButton={false}
-                  render={<Link href={newsletterDetailHref(row.newsletter.id, "stats")} />}
-                >
-                  Open stats
-                </Button>
-              </div>
-            </div>
-          ))}
+      <CardContent className="pb-5 pt-0">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+          <Metric
+            label="Newsletters"
+            value={aggregate.newsletterCount.toLocaleString()}
+            hint="Currently sending"
+          />
+          <Metric
+            label="Recipients"
+            value={`${aggregate.processed.toLocaleString()} / ${aggregate.recipientTotal.toLocaleString()}`}
+            hint={
+              aggregate.remaining > 0
+                ? `${aggregate.remaining.toLocaleString()} remaining`
+                : "Queue draining"
+            }
+          />
+          <Metric
+            label="Complete"
+            value={`${aggregate.overallPercent}%`}
+            hint={`${aggregate.delivered.toLocaleString()} delivered`}
+          />
+          <Metric
+            label="Failure rate"
+            value={`${aggregate.failureRate}%`}
+            hint={`${(aggregate.failed + aggregate.bounced).toLocaleString()} failed · ${aggregate.skipped.toLocaleString()} skipped`}
+          />
+          <Metric
+            label="Est. finish"
+            value={aggregate.remaining > 0 && etaLabel ? etaLabel : "—"}
+            hint={
+              aggregate.remaining > 0
+                ? `${aggregate.queued.toLocaleString()} queued · ${aggregate.inFlight.toLocaleString()} in flight`
+                : "Finishing batches"
+            }
+          />
+          <Metric
+            label="Throughput"
+            value={
+              aggregate.throughputPerMin != null
+                ? `~${aggregate.throughputPerMin.toLocaleString()}/min`
+                : "—"
+            }
+            hint="Observed send rate"
+          />
         </div>
       </CardContent>
     </Card>

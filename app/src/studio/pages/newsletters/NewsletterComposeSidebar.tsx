@@ -1,7 +1,7 @@
 "use client";
 
-import { Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
-import { useState } from "react";
+import { Code2, PanelRightClose, PanelRightOpen, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { ComposeMergeTagInsertList } from "@/studio/components/ComposeMergeTagInsertList";
 import { NewsletterTemplateVariablesEditor } from "@/studio/components/newsletters/NewsletterTemplateVariablesEditor";
@@ -11,6 +11,7 @@ import { NewsletterPreflightChecklist } from "@/studio/components/newsletters/Ne
 import { LayoutCodeEditorDialog } from "@/studio/components/layouts/LayoutCodeEditorDialog";
 import { LayoutImportDialog } from "@/studio/components/layouts/LayoutImportDialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -96,8 +97,16 @@ export function NewsletterComposeSidebar({
 }) {
   const [importOpen, setImportOpen] = useState(false);
   const [codeEditorTemplate, setCodeEditorTemplate] = useState<StudioLayout | null>(null);
+  const [layoutSearch, setLayoutSearch] = useState("");
 
   const template = templates.find((t) => t.id === templateId);
+  const filteredTemplates = useMemo(() => {
+    const q = layoutSearch.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter(
+      (t) => t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q),
+    );
+  }, [layoutSearch, templates]);
   const preflight = runNewsletterPreflight({
     subject,
     bodyMarkdown,
@@ -144,7 +153,7 @@ export function NewsletterComposeSidebar({
           <div className="shrink-0 border-b border-border px-2 py-2">
             <TabsList variant="line" className="h-8 w-full justify-start gap-0 px-0">
               <TabsTrigger value="templates" className="flex-1 px-1 text-xs">
-                Templates
+                Layout
               </TabsTrigger>
               <TabsTrigger value="variables" className="flex-1 px-1 text-xs">
                 Variables
@@ -155,12 +164,31 @@ export function NewsletterComposeSidebar({
             </TabsList>
           </div>
 
-          <TabsContent value="templates" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+          <TabsContent value="templates" className="mt-0 flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 border-b border-border px-2 py-2">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  type="search"
+                  value={layoutSearch}
+                  onChange={(e) => setLayoutSearch(e.target.value)}
+                  placeholder="Search layouts…"
+                  autoComplete="off"
+                  className="h-8 border-border/60 bg-background pl-8 text-xs shadow-none"
+                />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {templates.length === 0 ? (
-              <p className="px-1 py-2 text-xs text-muted-foreground">No templates yet</p>
+              <p className="px-1 py-2 text-xs text-muted-foreground">No layouts yet</p>
+            ) : filteredTemplates.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-muted-foreground">No matching layouts</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {templates.map((t) => {
+                {filteredTemplates.map((t) => {
                   const selected = t.id === templateId;
                   const variant = templateThumbnailVariant(t.id, t.derivedFromLayoutId);
                   return (
@@ -237,6 +265,7 @@ export function NewsletterComposeSidebar({
                 Import HTML template
               </Button>
             ) : null}
+            </div>
           </TabsContent>
 
           <TabsContent value="variables" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">

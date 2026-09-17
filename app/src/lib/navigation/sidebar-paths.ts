@@ -60,6 +60,11 @@ export function normalizeEntryPath(path: string): string {
   let pathname = pathnamePart || "/";
   const params = new URLSearchParams(query);
 
+  if (pathname === "/studio/layouts") {
+    const qs = params.toString();
+    return qs ? `/studio/settings/layouts?${qs}` : "/studio/settings/layouts";
+  }
+
   if (pathname === "/studio/broadcasts" || pathname.startsWith("/studio/broadcasts/")) {
     pathname = pathname.replace(/^\/studio\/broadcasts(?=\/|$)/, "/studio/newsletters");
   }

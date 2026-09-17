@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { authStore } from "../db/auth-store";
 import { requireJwtSecret } from "../lib/auth/hq-auth-config";
 import {
+  changeUserPassword,
   issueAccessToken,
   issueAuthResponse,
   loginUser,
@@ -13,6 +14,7 @@ import {
   serializeUser,
   setRefreshCookie,
   signupUser,
+  updateUserProfile,
 } from "../lib/auth/hq-auth-service";
 import { verifyAccessToken } from "../lib/auth/jwt";
 import { bearerToken } from "../lib/auth/bearer-token";
@@ -122,24 +124,83 @@ hqAuth.post("/logout", async (c) => {
   return c.json({ ok: true });
 });
 
-hqAuth.get("/me", async (c) => {
+function authenticatedUser(c: { req: { header: (name: string) => string | undefined } }) {
   let secret: string;
   try {
     secret = requireJwtSecret();
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Auth unavailable" }, 503);
+    return {
+      error: err instanceof Error ? err.message : "Auth unavailable",
+      status: 503 as const,
+      user: null,
+    };
   }
 
   const token = bearerToken(c);
-  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  if (!token) return { error: "Unauthorized", status: 401 as const, user: null };
 
   const claims = verifyAccessToken(token, secret);
-  if (!claims) return c.json({ error: "Unauthorized" }, 401);
+  if (!claims) return { error: "Unauthorized", status: 401 as const, user: null };
 
   const user = authStore.findUserById(claims.sub);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (!user) return { error: "Unauthorized", status: 401 as const, user: null };
 
-  return c.json({ user: serializeUser(user) });
+  return { error: null, status: null, user };
+}
+
+hqAuth.get("/me", async (c) => {
+  const auth = authenticatedUser(c);
+  if (!auth.user) {
+    return c.json({ error: auth.error ?? "Unauthorized" }, auth.status ?? 401);
+  }
+
+  return c.json({ user: serializeUser(auth.user) });
+});
+
+hqAuth.patch("/me", async (c) => {
+  const auth = authenticatedUser(c);
+  if (!auth.user) {
+    return c.json({ error: auth.error ?? "Unauthorized" }, auth.status ?? 401);
+  }
+
+  let body: { name?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const result = updateUserProfile(auth.user.id, body.name ?? "");
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status as 400 | 401);
+  }
+
+  return c.json({ user: serializeUser(result.user) });
+});
+
+hqAuth.post("/change-password", async (c) => {
+  const auth = authenticatedUser(c);
+  if (!auth.user) {
+    return c.json({ error: auth.error ?? "Unauthorized" }, auth.status ?? 401);
+  }
+
+  let body: { currentPassword?: string; newPassword?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const result = changeUserPassword(
+    auth.user.id,
+    body.currentPassword ?? "",
+    body.newPassword ?? "",
+  );
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status as 400 | 401);
+  }
+
+  return c.json({ ok: true });
 });
 
 hqAuth.post("/forgot-password", async (c) => {

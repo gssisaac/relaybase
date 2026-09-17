@@ -285,7 +285,7 @@ function TitleMenuItems({
           Add account
         </DropdownMenuItem>
       ) : null}
-      {mode === "email" ? (
+      {mode === "email" || mode === "studio" ? (
         <DropdownMenuItem onClick={onOpenSettings}>
           <Settings className="size-3.5" />
           Settings
@@ -861,7 +861,8 @@ export function UserSidebar({
   const studioSignedIn = useHqStudioSignedIn();
   const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
-  const { settings: settingsHref } = useEmailPaths();
+  const { settings: emailSettingsHref } = useEmailPaths();
+  const { settings: studioSettingsHref } = useStudioPaths();
   const isTeam = teamMode || mailSession.isTeamMode;
   const { availableAddresses, enabledAccounts } = useMailAccounts();
   const enabledSet = useMemo(
@@ -991,13 +992,17 @@ export function UserSidebar({
   }
 
   function openSettings() {
+    if (mode === "studio") {
+      router.push(studioSettingsHref);
+      return;
+    }
     const account =
       searchParams.get("account")?.trim() ||
       searchParams.get("from")?.trim() ||
       null;
     const href = account
-      ? `${settingsHref}?account=${encodeURIComponent(account)}`
-      : settingsHref;
+      ? `${emailSettingsHref}?account=${encodeURIComponent(account)}`
+      : emailSettingsHref;
     router.push(href);
   }
 

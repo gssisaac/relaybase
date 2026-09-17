@@ -6,10 +6,12 @@ import { useCallback, useMemo } from "react";
 import { modeFromPathname } from "@/lib/navigation/sidebar-mode";
 import { useEmailPaths } from "@/email/lib/paths";
 import { settingsTabHref } from "@/console/lib/paths";
+import { useStudioPaths } from "@/studio/lib/paths";
 
 /**
  * Navigate to the settings page for the current sidebar mode:
  * - email mode    → /email/settings (preserving ?account= / ?from= if present)
+ * - studio mode   → /studio/settings
  * - dashboard mode → /settings
  *
  * Shared by the `Meta+,` hotkey and the Cmd+K "Go to settings" command so the
@@ -20,9 +22,13 @@ export function useOpenSettings(): () => void {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { settings: emailSettingsHref } = useEmailPaths();
+  const { settings: studioSettingsHref } = useStudioPaths();
 
   const href = useMemo(() => {
     const mode = modeFromPathname(pathname);
+    if (mode === "studio") {
+      return studioSettingsHref;
+    }
     if (mode === "email") {
       const account =
         searchParams.get("account")?.trim() ||
@@ -33,7 +39,7 @@ export function useOpenSettings(): () => void {
         : emailSettingsHref;
     }
     return settingsTabHref("cloudflare");
-  }, [pathname, searchParams, emailSettingsHref]);
+  }, [pathname, searchParams, emailSettingsHref, studioSettingsHref]);
 
   return useCallback(() => {
     router.push(href);

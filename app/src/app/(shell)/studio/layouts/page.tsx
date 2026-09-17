@@ -1,5 +1,5 @@
-import { LayoutsView } from "@/studio/pages/layouts/LayoutsView";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <LayoutsView />;
+  redirect("/studio/settings/layouts");
 }

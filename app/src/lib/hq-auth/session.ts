@@ -73,11 +73,13 @@ class AuthFetchError extends Error {
 }
 
 async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getHqAccessToken();
   const res = await fetch(`${getStudioApiBase()}${path}`, {
     ...init,
     credentials: "include",
     headers: {
       "content-type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
@@ -179,4 +181,31 @@ export async function hqResetPassword(token: string, newPassword: string): Promi
   });
   applyAuthPayload(payload);
   return payload.user;
+}
+
+export async function hqFetchMe(): Promise<HqUser> {
+  const payload = await authFetch<{ user: HqUser }>("/auth/me");
+  cachedUser = payload.user;
+  emit();
+  return payload.user;
+}
+
+export async function hqUpdateProfile(name: string): Promise<HqUser> {
+  const payload = await authFetch<{ user: HqUser }>("/auth/me", {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+  cachedUser = payload.user;
+  emit();
+  return payload.user;
+}
+
+export async function hqChangePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  await authFetch<{ ok: boolean }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }

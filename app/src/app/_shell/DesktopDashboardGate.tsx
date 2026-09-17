@@ -21,6 +21,7 @@ import { useAppSession } from "@/lib/desktop/app-session";
 import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { isStudioSettingsPath } from "@/lib/navigation/studio-settings-path";
 import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
@@ -62,6 +63,7 @@ function DashboardShell({
   const pathname = usePathname();
   const isEmailSettings =
     pathname === "/email/settings" || pathname.startsWith("/email/settings?");
+  const hideMainSidebar = isEmailSettings || isStudioSettingsPath(pathname);
 
   if (teamMode) {
     return (
@@ -73,7 +75,7 @@ function DashboardShell({
               <EmailMailboxProvider>
                 <EmailCommandRuntimeProvider>
                   <DisableAppTabFocus />
-                  <AppShellFrame teamMode hideSidebar={isEmailSettings}>
+                  <AppShellFrame teamMode hideSidebar={hideMainSidebar}>
                     {children}
                   </AppShellFrame>
                   <AppHotkeys />
@@ -96,10 +98,10 @@ function DashboardShell({
             <EmailMailboxProvider>
               <EmailCommandRuntimeProvider>
                 <DisableAppTabFocus />
-                <AppShellFrame hideSidebar={isEmailSettings}>
+                <AppShellFrame hideSidebar={hideMainSidebar}>
                   <ConsoleRouteGate>
                     <OwnerConsoleDashboard>
-                      {isEmailSettings ? null : <DomainProgressBanner />}
+                      {hideMainSidebar ? null : <DomainProgressBanner />}
                       {children}
                     </OwnerConsoleDashboard>
                   </ConsoleRouteGate>

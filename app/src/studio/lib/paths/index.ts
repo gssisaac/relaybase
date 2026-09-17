@@ -4,7 +4,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   CalendarDays,
-  Layers,
   LayoutDashboard,
   Mail,
   Users,
@@ -30,7 +29,10 @@ export function useStudioPaths() {
   const newslettersInProgress = "/studio/newsletters/in-progress";
   const templates = "/studio/templates";
   const messages = "/studio/messages";
-  const layouts = "/studio/layouts";
+  const settings = "/studio/settings";
+  const settingsLayouts = "/studio/settings/layouts";
+  /** @deprecated Use settingsLayouts — kept for redirects. */
+  const layouts = settingsLayouts;
   const triggers = "/studio/triggers";
   const schedule = "/studio/schedule";
   const dashboard = "/studio/dashboard";
@@ -46,7 +48,6 @@ export function useStudioPaths() {
     { href: newsletters, label: "Newsletters", icon: Mail },
     { href: schedule, label: "Schedule", icon: CalendarDays },
     { href: subscribers, label: "Subscribers", icon: Users },
-    { href: layouts, label: "Layouts", icon: Layers },
   ];
 
   return {
@@ -57,6 +58,8 @@ export function useStudioPaths() {
     newslettersInProgress,
     templates,
     messages,
+    settings,
+    settingsLayouts,
     layouts,
     triggers,
     schedule,

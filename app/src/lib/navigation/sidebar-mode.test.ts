@@ -18,6 +18,7 @@ describe("modeFromPathname", () => {
   it("treats /studio as studio mode", () => {
     assert.equal(modeFromPathname("/studio/subscribers"), "studio");
     assert.equal(modeFromPathname("/studio/newsletters"), "studio");
+    assert.equal(modeFromPathname("/studio/settings"), "studio");
   });
 
   it("treats everything else as dashboard", () => {
@@ -88,6 +89,10 @@ describe("normalizeEntryPath", () => {
       "/studio/newsletters?id=bc1&tab=stats",
     );
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/studio/newsletters?new=1");
+    assert.equal(
+      normalizeEntryPath("/studio/layouts?id=custom-1"),
+      "/studio/settings/layouts?id=custom-1",
+    );
   });
 
   it("rewrites automation nested tabs into ?id=&tab= for last-path restore", () => {

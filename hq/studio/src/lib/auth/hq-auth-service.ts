@@ -239,6 +239,66 @@ export function requestPasswordReset(email: string): void {
   }
 }
 
+export function updateUserProfile(
+  userId: string,
+  name: string,
+): { ok: true; user: HqAuthUser } | { ok: false; error: string; status: number } {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { ok: false, error: "Name is required.", status: 400 };
+  }
+
+  const existing = authStore.findUserById(userId);
+  if (!existing) {
+    return { ok: false, error: "Unauthorized", status: 401 };
+  }
+
+  const updatedAt = new Date().toISOString();
+  authStore.update((draft) => {
+    const row = draft.users.find((u) => u.id === userId);
+    if (row) {
+      row.name = trimmed;
+      row.updatedAt = updatedAt;
+    }
+  });
+
+  return {
+    ok: true,
+    user: { ...existing, name: trimmed, updatedAt },
+  };
+}
+
+export function changeUserPassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): { ok: true; user: HqAuthUser } | { ok: false; error: string; status: number } {
+  const policy = validatePasswordPolicy(newPassword);
+  if (policy) return { ok: false, error: policy, status: 400 };
+
+  const user = authStore.findUserById(userId);
+  if (!user || !verifyPassword(currentPassword, user.passwordHash)) {
+    return { ok: false, error: "Current password is incorrect.", status: 401 };
+  }
+
+  const passwordHash = hashPassword(newPassword);
+  const updatedAt = new Date().toISOString();
+
+  authStore.update((draft) => {
+    const row = draft.users.find((u) => u.id === userId);
+    if (row) {
+      row.passwordHash = passwordHash;
+      row.updatedAt = updatedAt;
+    }
+    draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== userId);
+  });
+
+  return {
+    ok: true,
+    user: { ...user, passwordHash, updatedAt },
+  };
+}
+
 export function resetPasswordWithToken(
   token: string,
   newPassword: string,

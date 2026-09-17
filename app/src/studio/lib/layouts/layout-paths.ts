@@ -3,7 +3,7 @@
 export function layoutDetailHref(id: string): string {
   const params = new URLSearchParams();
   params.set("id", id.trim());
-  return `/studio/layouts?${params.toString()}`;
+  return `/studio/settings/layouts?${params.toString()}`;
 }
 
 export function layoutFromSearch(searchParams: {

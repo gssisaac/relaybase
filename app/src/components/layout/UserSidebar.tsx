@@ -693,6 +693,32 @@ function EmailModeNav({
   );
 }
 
+function StudioSettingsButton({ collapsed }: { collapsed: boolean }) {
+  const pathname = usePathname();
+  const { settings } = useStudioPaths();
+  const active = pathname === settings || pathname.startsWith(`${settings}/`);
+
+  return (
+    <Link
+      href={settings}
+      title={collapsed ? "Settings" : undefined}
+      aria-label="Settings"
+      className={cn(
+        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+        collapsed ? "justify-center gap-0" : "gap-2",
+      )}
+    >
+      <Settings className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? (
+        <span className="min-w-0 flex-1 truncate">Settings</span>
+      ) : null}
+    </Link>
+  );
+}
+
 function SendFeedbackButton({
   collapsed,
   account,
@@ -1168,7 +1194,10 @@ export function UserSidebar({
       ) : null}
 
       <div
-        className={cn("shrink-0 border-t border-sidebar-border p-2", noDragClassName)}
+        className={cn(
+          "flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2",
+          noDragClassName,
+        )}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         <SendFeedbackButton
@@ -1179,6 +1208,9 @@ export function UserSidebar({
             null
           }
         />
+        {mode === "studio" ? (
+          <StudioSettingsButton collapsed={sidebarCollapsed} />
+        ) : null}
       </div>
 
       {isTeam && mailSession.workerUrl ? (

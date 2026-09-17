@@ -112,13 +112,27 @@ export function getNewsletterEditorSlashMenuItems(
     }),
   );
 
-  const defaultItems = getDefaultReactSlashMenuItems(editor).map((item) => ({
-    ...item,
-    onItemClick: () => {
-      cleanSlashQuery(editor);
-      item.onItemClick();
-    },
-  }));
+  const defaultItems = getDefaultReactSlashMenuItems(editor).map((item) => {
+    if (item.key === "video") {
+      return {
+        ...item,
+        title: "Video / YouTube",
+        subtext: "Embed a YouTube video or direct video link",
+        aliases: [...(item.aliases || []), "youtube", "yt", "embed", "vimeo", "clip"],
+        onItemClick: () => {
+          cleanSlashQuery(editor);
+          item.onItemClick();
+        },
+      };
+    }
+    return {
+      ...item,
+      onItemClick: () => {
+        cleanSlashQuery(editor);
+        item.onItemClick();
+      },
+    };
+  });
 
   if ("emailButton" in editor.schema.blockSchema) {
     defaultItems.push({

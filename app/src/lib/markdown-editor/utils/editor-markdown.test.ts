@@ -88,6 +88,14 @@ describe("enhancePreviewHtml", () => {
     assert.match(html, /<table role="presentation"/);
     assert.match(html, /href="https:\/\/relaybase.com"/);
   });
+
+  it("renders YouTube video tags as responsive email cards", () => {
+    const video = '<video src="https://youtu.be/g87ErJB0rh4?list=RDg87ErJB0rh4" controls></video>';
+    const html = enhancePreviewHtml(video);
+    assert.match(html, /<table role="presentation"/);
+    assert.match(html, /https:\/\/img\.youtube\.com\/vi\/g87ErJB0rh4\/hqdefault\.jpg/);
+    assert.match(html, /https:\/\/www\.youtube\.com\/watch\?v=g87ErJB0rh4/);
+  });
 });
 
 describe("applyGmailContentLinkStyles", () => {

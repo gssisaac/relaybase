@@ -265,3 +265,51 @@
   border-radius: var(--radius);
   background: var(--muted);
 }
+
+.gtm-md-editor [data-content-type="video"] .bn-visual-media-wrapper,
+.gtm-md-editor-view [data-content-type="video"] .bn-visual-media-wrapper {
+  max-width: 100%;
+}
+
+.gtm-md-editor [data-content-type="video"] .bn-file-block-content-wrapper,
+.gtm-md-editor-view [data-content-type="video"] .bn-file-block-content-wrapper {
+  max-width: 100%;
+}
+
+/* YouTube iframe embed — explicit width so BlockNote fit-content wrappers do not collapse. */
+.gtm-md-editor .bn-youtube-embed,
+.gtm-md-editor-view .bn-youtube-embed {
+  display: block;
+  width: min(560px, 100%);
+  min-width: 240px;
+}
+
+.gtm-md-editor .bn-youtube-embed-ratio,
+.gtm-md-editor-view .bn-youtube-embed-ratio {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  border: 1px solid color-mix(in oklch, var(--border) 40%, transparent);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+.gtm-md-editor .bn-youtube-embed-iframe,
+.gtm-md-editor-view .bn-youtube-embed-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.gtm-md-editor [data-content-type="video"] .bn-file-block-content-wrapper:has(.bn-youtube-embed),
+.gtm-md-editor-view [data-content-type="video"] .bn-file-block-content-wrapper:has(.bn-youtube-embed),
+.gtm-md-editor [data-content-type="image"] .bn-file-block-content-wrapper:has(.bn-youtube-embed),
+.gtm-md-editor-view [data-content-type="image"] .bn-file-block-content-wrapper:has(.bn-youtube-embed) {
+  width: min(560px, 100%) !important;
+  min-width: 240px;
+}

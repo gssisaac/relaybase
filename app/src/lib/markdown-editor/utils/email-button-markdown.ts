@@ -12,7 +12,7 @@ import {
   encodeEmptyParagraphsForParse,
   restoreEmptyParagraphBlocks,
 } from "./empty-paragraph-markdown";
-import { promotePageMediaBlocks } from "./media-markdown";
+import { normalizeYoutubeEmbedsInMarkdown, promotePageMediaBlocks } from "./media-markdown";
 
 const EMAIL_BUTTON_MARKER_SPLIT =
   /(<div\b[^>]*\bdata-rb-email-button\b[^>]*>\s*<\/div>)/gi;
@@ -88,7 +88,7 @@ export async function parseMarkdownToEditorBlocks(
   markdown: string,
   linkifyParsedBlocks: (blocks: unknown[]) => unknown[],
 ): Promise<unknown[]> {
-  const encoded = encodeEmptyParagraphsForParse(markdown);
+  const encoded = encodeEmptyParagraphsForParse(normalizeYoutubeEmbedsInMarkdown(markdown));
 
   if (!markdownContainsEmailButtonMarker(encoded)) {
     return restoreEmptyParagraphBlocks(

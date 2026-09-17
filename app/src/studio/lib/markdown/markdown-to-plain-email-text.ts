@@ -34,10 +34,14 @@ function stripInlineMarkdown(line: string): string {
 
   let s = protectedLine;
 
-  s = s.replace(/<video\b[^>]*\bsrc="([^"]+)"[^>]*>\s*<\/video>/gi, "$1");
+  s = s.replace(/<video\b[^>]*\bsrc="([^"]+)"[^>]*>[\s\S]*?<\/video>/gi, "$1");
 
   s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, alt: string, url: string) => {
     const label = alt?.trim();
+    if (/(?:youtube\.com|youtu\.be)/i.test(url)) {
+      if (label && label !== url && !url.includes(label)) return `${label}: ${url}`;
+      return url;
+    }
     return label || url;
   });
 

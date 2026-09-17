@@ -8,6 +8,8 @@ import {
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
 import { applyGmailContentLinkStyles } from "../render/gmail-link-style";
+import { transformEmailButtonMarkersToBulletproof } from "../render/email-button-html.js";
+import { transformYouTubeEmbedsToHtml } from "../render/youtube.js";
 import { wrapLayoutBodyHtml } from "../render/layout-content-theme";
 import { markdownToPlainEmailText } from "../render/markdown-to-plain-email-text";
 import { applyTriggerComplianceMergeTags, shouldIncludeListUnsubscribe } from "./compliance";
@@ -74,7 +76,10 @@ function sanitizeTriggerContentImages(
 
 function markdownToHtml(markdown: string): string {
   const out = marked.parse(markdown ?? "", { gfm: true, breaks: true });
-  return typeof out === "string" ? out : "";
+  const html = typeof out === "string" ? out : "";
+  return transformYouTubeEmbedsToHtml(
+    transformEmailButtonMarkersToBulletproof(html),
+  );
 }
 
 function escapeHtml(text: string): string {

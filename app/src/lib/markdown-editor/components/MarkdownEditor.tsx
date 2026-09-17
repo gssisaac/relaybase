@@ -23,6 +23,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 
+import { DEFAULT_EMBEDDED_VIDEO_PROPS } from "@/lib/markdown-editor/blocks/youtube-embed-frame";
 import { EmailButtonSettingsProvider } from "@/lib/markdown-editor/blocks/email-button-settings-context";
 import { EmailButtonFormattingToolbar } from "@/lib/markdown-editor/components/email-button-formatting-toolbar";
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
@@ -47,9 +48,11 @@ import {
   encodeEmptyParagraphsForParse,
   enhancePreviewHtml,
   isEmptyParagraphMarkdownLine,
+  isYouTubeUrl,
   serializeEditorMarkdown,
 } from "@/lib/markdown-editor/utils/editor-markdown";
 import { parseMarkdownToEditorBlocks } from "@/lib/markdown-editor/utils/email-button-markdown";
+import { promoteYouTubeBlocksInEditor } from "@/lib/markdown-editor/utils/promote-youtube-in-editor";
 import { markdownSelectAllExtension } from "@/lib/markdown-editor/utils/select-all";
 import { resolveNewsletterAssetPath } from "@/lib/markdown-editor/utils/assets";
 import {
@@ -159,6 +162,7 @@ async function setEditorMarkdown(
       editor.document,
       blocks.length > 0 ? (blocks as never[]) : [{ type: "paragraph", content: "" }],
     );
+    promoteYouTubeBlocksInEditor(editor);
     return true;
   } catch (err) {
     console.error("Failed to hydrate markdown editor", err);
@@ -319,6 +323,62 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       if (files.length > 0) {
         void ingestAndInsert(files, pasteEditor);
         return true;
+      }
+      const plainText = clipboard?.getData("text/plain")?.trim();
+      const cleanUrl = plainText?.replace(/^<|>$/g, "").trim();
+      if (cleanUrl && isYouTubeUrl(cleanUrl)) {
+        const videoBlock = {
+          type: "video" as const,
+          props: { url: cleanUrl, ...DEFAULT_EMBEDDED_VIDEO_PROPS },
+        };
+        try {
+          const currentBlock = pasteEditor.getTextCursorPosition().block;
+          const isCurrentEmpty =
+            currentBlock &&
+            Array.isArray(currentBlock.content) &&
+            (currentBlock.content.length === 0 ||
+              (currentBlock.content.length === 1 &&
+                currentBlock.content[0].type === "text" &&
+                !(currentBlock.content[0] as { text?: string }).text?.trim()));
+
+          if (currentBlock && isCurrentEmpty) {
+            pasteEditor.updateBlock(currentBlock, videoBlock);
+            promoteYouTubeBlocksInEditor(pasteEditor);
+            emitChange(serializeEditorMarkdown(pasteEditor), pasteEditor);
+            return true;
+          }
+
+          if (currentBlock) {
+            const inserted = pasteEditor.insertBlocks(
+              [videoBlock],
+              currentBlock,
+              "after",
+            );
+            if (inserted.length > 0) {
+              try {
+                pasteEditor.setTextCursorPosition(inserted[0], "end");
+              } catch {
+                // ignore
+              }
+            }
+            emitChange(serializeEditorMarkdown(pasteEditor), pasteEditor);
+            return true;
+          }
+        } catch {
+          // fallback if getTextCursorPosition threw
+          try {
+            const doc = pasteEditor.document;
+            const lastBlock = doc[doc.length - 1];
+            if (lastBlock) {
+              pasteEditor.insertBlocks([videoBlock], lastBlock, "after");
+              promoteYouTubeBlocksInEditor(pasteEditor);
+              emitChange(serializeEditorMarkdown(pasteEditor), pasteEditor);
+              return true;
+            }
+          } catch {
+            // ignore
+          }
+        }
       }
       return defaultPasteHandler({
         plainTextAsMarkdown: true,
@@ -485,7 +545,15 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
 
   useEffect(() => {
     if (!editor) return;
-    return editor.onChange((editorInstance) => notifyEditorChange(editorInstance));
+    return editor.onChange((editorInstance) => {
+      if (!syncingRef.current && hydratedRef.current) {
+        syncingRef.current = true;
+        const promoted = promoteYouTubeBlocksInEditor(editorInstance);
+        syncingRef.current = false;
+        if (promoted) return;
+      }
+      notifyEditorChange(editorInstance);
+    });
   }, [editor, notifyEditorChange]);
 
   const pullSnapshot = useCallback((): string | null => {

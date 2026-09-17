@@ -1,4 +1,5 @@
 import { assetKindFromHref } from "./assets";
+import { isYouTubeUrl } from "./youtube";
 
 const VIDEO_IMAGE_MD_RE =
   /!\[([^\]]*)\]\(([^)\s]+\.(?:mp4|webm|ogv|mov|mkv|m4v|avi|wmv|flv))\)/gi;
@@ -33,6 +34,51 @@ function isWhitespaceOnly(content: unknown[]): boolean {
   });
 }
 
+function escapeMarkdownLabel(label: string): string {
+  return label.replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+}
+
+function isVideoBlock(block: unknown): block is {
+  type: "video";
+  props: { url?: string; name?: string; caption?: string };
+} {
+  return !!block && typeof block === "object" && (block as { type?: string }).type === "video";
+}
+
+/**
+ * BlockNote's markdown exporter omits YouTube (and other non-file) video blocks.
+ * Persist them as `![label](url)` so raw ↔ rich toggles keep the embed.
+ */
+export function serializeVideoBlockMarkdown(block: unknown): string | null {
+  if (!isVideoBlock(block)) return null;
+  const url = block.props.url?.trim();
+  if (!url) return null;
+
+  if (isYouTubeUrl(url) || assetKindFromHref(url) === "video") {
+    const label =
+      block.props.name?.trim() ||
+      block.props.caption?.trim() ||
+      (isYouTubeUrl(url) ? "YouTube video" : url.split("/").pop() || "video");
+    return `![${escapeMarkdownLabel(label)}](${url})`;
+  }
+
+  return null;
+}
+
+const YOUTUBE_VIDEO_TAG_RE = /<video\b([^>]*)>\s*<\/video>/gi;
+
+/** Rewrite persisted `<video src="…youtube…">` markers into markdown image syntax before parse. */
+export function normalizeYoutubeEmbedsInMarkdown(markdown: string): string {
+  return markdown.replace(YOUTUBE_VIDEO_TAG_RE, (full, attrs: string) => {
+    const srcMatch = attrs.match(/\bsrc="([^"]*)"/i);
+    const src = srcMatch?.[1]?.replace(/&amp;/g, "&") ?? "";
+    if (!src || !/(?:youtube\.com|youtu\.be)/i.test(src)) return full;
+    const nameMatch = attrs.match(/\bdata-name="([^"]*)"/i);
+    const label = nameMatch?.[1]?.replace(/&quot;/g, '"') || "YouTube video";
+    return `![${escapeMarkdownLabel(label)}](${src})`;
+  });
+}
+
 /** Persist BlockNote video image-syntax as a `<video>` tag. */
 export function serializePageMediaMarkdown(markdown: string): string {
   return markdown.replace(VIDEO_IMAGE_MD_RE, (_match, _alt: string, url: string) => {
@@ -41,9 +87,9 @@ export function serializePageMediaMarkdown(markdown: string): string {
 }
 
 /**
- * BlockNote treats `![name](relative.mp4)` as an image (its video detector
- * requires an absolute URL) and document links as paragraphs. Promote those
- * back to video / file blocks so the editor matches the reader.
+ * BlockNote treats `![name](relative.mp4)` or `![name](youtube_url)` as an image
+ * and document / video links as paragraphs. Promote those back to video / file blocks
+ * so the editor displays rich interactive media.
  */
 export function promotePageMediaBlocks<T>(blocks: T[]): T[] {
   return blocks.map((block) => promotePageMediaBlock(block) as T);
@@ -57,9 +103,20 @@ function promotePageMediaBlock(block: unknown): unknown {
   }
 
   if (next.type === "image") {
-    const props = (next.props ?? {}) as { url?: string; name?: string };
-    if (props.url && assetKindFromHref(props.url) === "video") {
-      return { ...next, type: "video" };
+    const props = (next.props ?? {}) as { url?: string; name?: string; caption?: string };
+    if (props.url && (assetKindFromHref(props.url) === "video" || isYouTubeUrl(props.url))) {
+      return {
+        ...next,
+        type: "video",
+        props: {
+          url: props.url,
+          name: props.name || "",
+          caption: props.caption || "",
+          showPreview: true,
+          backgroundColor: "default",
+          textAlignment: "left",
+        },
+      };
     }
     return next;
   }
@@ -72,13 +129,14 @@ function promotePageMediaBlock(block: unknown): unknown {
   if (!isWhitespaceOnly(leftovers)) return next;
 
   const href = links[0].href;
+  const isYt = isYouTubeUrl(href);
   const kind = assetKindFromHref(href);
-  if (kind !== "document" && kind !== "video" && kind !== "audio") {
+  if (kind !== "document" && kind !== "video" && kind !== "audio" && !isYt) {
     return next;
   }
 
-  const name = linkLabel(links[0].content) || href.split("/").pop() || "file";
-  if (kind === "video") {
+  const name = linkLabel(links[0].content) || href.split("/").pop() || (isYt ? "YouTube Video" : "file");
+  if (kind === "video" || isYt) {
     return {
       ...next,
       type: "video",

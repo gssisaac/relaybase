@@ -6,7 +6,8 @@ import {
   EMPTY_PARAGRAPH_MD,
   isEmptyParagraphBlock,
 } from "./empty-paragraph-markdown";
-import { serializePageMediaMarkdown } from "./media-markdown";
+import { serializePageMediaMarkdown, serializeVideoBlockMarkdown } from "./media-markdown";
+import { transformYouTubeEmbedsToHtml } from "./youtube";
 
 export {
   EMPTY_PARAGRAPH_MD,
@@ -16,6 +17,14 @@ export {
   isEmptyParagraphMarkdownLine,
   restoreEmptyParagraphBlocks,
 } from "./empty-paragraph-markdown";
+
+export {
+  isYouTubeUrl,
+  parseYouTubeUrl,
+  renderYouTubeEmailCard,
+  transformYouTubeEmbedsToHtml,
+  type YouTubeVideoDetails,
+} from "./youtube";
 
 /** Serialize top-level blocks so intentional blank lines survive save/reload. */
 export function serializeEditorMarkdown(editor: BlockNoteEditor<any, any, any>): string {
@@ -28,6 +37,11 @@ export function serializeEditorMarkdown(editor: BlockNoteEditor<any, any, any>):
     const buttonMd = serializeEmailButtonBlockMarkdown(block);
     if (buttonMd) {
       chunks.push(buttonMd);
+      continue;
+    }
+    const videoMd = serializeVideoBlockMarkdown(block);
+    if (videoMd) {
+      chunks.push(videoMd);
       continue;
     }
     const piece = editor.blocksToMarkdownLossy([block as never]).trim();
@@ -60,13 +74,15 @@ export function applyGmailContentLinkStyles(html: string): string {
   });
 }
 
-/** Make empty paragraphs visible in email-style HTML previews. */
+/** Make empty paragraphs visible in email-style HTML previews and convert embeds. */
 export function enhancePreviewHtml(html: string): string {
   return applyGmailContentLinkStyles(
-    transformEmailButtonMarkersToBulletproof(
-      html
-        .replace(/<p>\s*<\/p>/gi, "<p>&nbsp;</p>")
-        .replace(/<p><br\s*\/?><\/p>/gi, "<p>&nbsp;</p>"),
+    transformYouTubeEmbedsToHtml(
+      transformEmailButtonMarkersToBulletproof(
+        html
+          .replace(/<p>\s*<\/p>/gi, "<p>&nbsp;</p>")
+          .replace(/<p><br\s*\/?><\/p>/gi, "<p>&nbsp;</p>"),
+      ),
     ),
   );
 }

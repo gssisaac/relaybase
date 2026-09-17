@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, FileEdit, Mail, Plus, RefreshCw, Send } from "lucide-react";
+import { CalendarClock, Clock, FileEdit, Mail, Plus, RefreshCw, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,50 +25,22 @@ import {
 } from "@/studio/components/gallery/StudioGalleryViewToggle";
 import { NewsletterListTable } from "@/studio/components/newsletters/NewsletterListTable";
 import { NewsletterThumbnailGrid } from "@/studio/components/newsletters/NewsletterThumbnailGrid";
-import { newslettersSectionHref } from "@/studio/lib/paths";
+import { newslettersSectionHref, useStudioPaths } from "@/studio/lib/paths";
 import { OverviewKpiCard } from "@/studio/pages/overview/OverviewKpiCard";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { EmptyListState } from "@/email/components/mailbox/EmailListShell";
 import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
-import type { Newsletter, NewsletterStatus } from "@/studio/api";
+import type { Newsletter } from "@/studio/api";
 import { cn } from "@/lib/utils";
+import {
+  NEWSLETTER_FILTER_OPTIONS,
+  countNewslettersByFilter,
+  matchesNewsletterFilter,
+  newsletterFilterLabel,
+  type NewsletterFilter,
+} from "@/studio/pages/newsletters/newsletter-list-filters";
 
-export type NewsletterFilter =
-  | "draft"
-  | "scheduled"
-  | "sent"
-  | "archived"
-  | "all";
-
-const FILTER_OPTIONS: { value: NewsletterFilter; label: string }[] = [
-  { value: "draft", label: "Draft" },
-  { value: "scheduled", label: "Scheduled" },
-  { value: "sent", label: "Sent" },
-  { value: "archived", label: "Archived" },
-  { value: "all", label: "All" },
-];
-
-function filterLabel(filter: NewsletterFilter): string {
-  return FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
-}
-
-function matchesNewsletterFilter(
-  status: NewsletterStatus,
-  filter: NewsletterFilter,
-): boolean {
-  switch (filter) {
-    case "draft":
-      return status === "draft";
-    case "scheduled":
-      return status === "scheduled" || status === "sending";
-    case "sent":
-      return status === "sent";
-    case "archived":
-    case "all":
-    default:
-      return true;
-  }
-}
+export type { NewsletterFilter };
 
 function formatWhen(value?: string | null): string {
   if (!value) return "Upcoming";
@@ -117,6 +89,7 @@ function statsLine(b: Newsletter): string {
 export function NewslettersListView() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const paths = useStudioPaths();
   const hub = useNewslettersHub();
   const newsletters = hub.newsletters;
   const layouts = hub.layouts;
@@ -152,19 +125,7 @@ export function NewslettersListView() {
     }
   }, [searchParams, router]);
 
-  const counts = useMemo(() => {
-    const active = newsletters.filter((b) => b.listStatus !== "archived");
-    const archived = newsletters.filter((b) => b.listStatus === "archived");
-    return {
-      draft: active.filter((b) => b.status === "draft").length,
-      scheduled: active.filter(
-        (b) => b.status === "scheduled" || b.status === "sending",
-      ).length,
-      sent: active.filter((b) => b.status === "sent").length,
-      archived: archived.length,
-      all: active.length,
-    };
-  }, [newsletters]);
+  const counts = useMemo(() => countNewslettersByFilter(newsletters), [newsletters]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -187,7 +148,7 @@ export function NewslettersListView() {
 
   const filterPills = (
     <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
-      {FILTER_OPTIONS.map((opt) => {
+      {NEWSLETTER_FILTER_OPTIONS.map((opt) => {
         const count = counts[opt.value];
         const isSelected = filter === opt.value;
         return (
@@ -262,7 +223,7 @@ export function NewslettersListView() {
           {showPlaceholder ? (
             <NewsletterListKpiSkeleton />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <OverviewKpiCard
                 icon={FileEdit}
                 label="Drafts"
@@ -272,12 +233,28 @@ export function NewslettersListView() {
                 onClick={() => setFilter("draft")}
               />
               <OverviewKpiCard
-                icon={Clock}
-                label="In progress"
+                icon={CalendarClock}
+                label="Scheduled"
                 value={String(counts.scheduled)}
-                hint="Filter scheduled & sending"
+                hint="Queued for a future send"
                 selected={filter === "scheduled"}
                 onClick={() => setFilter("scheduled")}
+                footer={
+                  <Link
+                    href={paths.schedule}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    View schedule
+                  </Link>
+                }
+              />
+              <OverviewKpiCard
+                icon={Clock}
+                label="In progress"
+                value={String(counts.sending)}
+                hint="Currently sending"
+                selected={filter === "sending"}
+                onClick={() => setFilter("sending")}
                 footer={
                   <Link
                     href={newslettersSectionHref("in-progress")}
@@ -348,8 +325,8 @@ export function NewslettersListView() {
                 title="No matching newsletters"
                 description={
                   search
-                    ? `No newsletters match "${search}" with filter "${filterLabel(filter)}".`
-                    : `There are no newsletters with status "${filterLabel(filter)}".`
+                    ? `No newsletters match "${search}" with filter "${newsletterFilterLabel(filter)}".`
+                    : `There are no newsletters with status "${newsletterFilterLabel(filter)}".`
                 }
                 action={
                   <Button

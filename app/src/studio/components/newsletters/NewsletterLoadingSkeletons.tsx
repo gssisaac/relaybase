@@ -41,8 +41,8 @@ export function NewsletterGallerySkeleton({ count = 8 }: { count?: number }) {
 
 export function NewsletterListKpiSkeleton() {
   return (
-    <div className="grid gap-3 sm:grid-cols-3 animate-pulse" aria-busy="true">
-      {Array.from({ length: 3 }).map((_, index) => (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 animate-pulse" aria-busy="true">
+      {Array.from({ length: 4 }).map((_, index) => (
         <div key={index} className={cn(overviewKpiClassName, "space-y-3 shadow-none")}>
           <div className="flex items-center gap-2">
             <Bone className="size-4 shrink-0 rounded" />

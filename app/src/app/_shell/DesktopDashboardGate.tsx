@@ -12,7 +12,6 @@ import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { ConsoleAppProviders, WebConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
-import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SendingHealthProvider } from "@/lib/dashboard/SendingHealthContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
@@ -45,10 +44,8 @@ const WEB_OWNER_USER_ID = "web-owner";
 function OwnerConsoleDashboard({ children }: { children: ReactNode }) {
   return (
     <AccountsProvider>
-      <BroadcastProvider>
-        <AccountsSyncBridge />
-        {children}
-      </BroadcastProvider>
+      <AccountsSyncBridge />
+      {children}
     </AccountsProvider>
   );
 }

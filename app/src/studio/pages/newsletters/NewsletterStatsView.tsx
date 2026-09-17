@@ -2,7 +2,7 @@
 
 import { Download, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref } from "@/studio/lib/paths";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
 import {
-  studioApi,
-  type NewsletterDispatchProgress,
-  type NewsletterLinkClickStat,
-  type NewsletterRecipient,
-  type NewsletterTrackingEvent,
+  useNewsletterDetail,
+  useNewsletterDetailStats,
+} from "@/studio/stores/NewsletterDetailContext";
+import type {
+  NewsletterLinkClickStat,
+  NewsletterRecipient,
+  NewsletterTrackingEvent,
 } from "@/lib/studio/api";
 
 const EVENT_LABEL: Record<NewsletterTrackingEvent["type"], string> = {
@@ -87,40 +88,8 @@ function downloadRecipientsCsv(
 }
 
 export function NewsletterStatsView() {
-  const { newsletterId, newsletter, setNewsletter } = useNewsletterDetail();
-  const [recipients, setRecipients] = useState<NewsletterRecipient[]>([]);
-  const [trackingEvents, setTrackingEvents] = useState<NewsletterTrackingEvent[]>([]);
-  const [linkClicks, setLinkClicks] = useState<NewsletterLinkClickStat[]>([]);
-  const [dispatch, setDispatch] = useState<NewsletterDispatchProgress | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadStats = () => {
-      studioApi
-        .getNewsletterStats(newsletterId)
-        .then(({ newsletter: row, dispatch: progress, recipients: rows, trackingEvents: events, linkClicks: links }) => {
-          if (cancelled) return;
-          setNewsletter(row);
-          setDispatch(progress);
-          setRecipients(rows);
-          setTrackingEvents(events);
-          setLinkClicks(links);
-        })
-        .catch(() => {});
-    };
-
-    loadStats();
-
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (newsletter?.status === "sending") {
-      interval = setInterval(loadStats, 3000);
-    }
-
-    return () => {
-      cancelled = true;
-      if (interval) clearInterval(interval);
-    };
-  }, [newsletterId, newsletter?.status, setNewsletter]);
+  const { newsletterId, newsletter } = useNewsletterDetail();
+  const { recipients, trackingEvents, linkClicks, dispatch } = useNewsletterDetailStats();
 
   const stats = newsletter?.stats;
   const hasSendData = Boolean(stats && (stats.sent > 0 || recipients.length > 0));

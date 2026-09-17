@@ -14,9 +14,6 @@ import { requireMessage } from "../messages/resolve";
 import { getNewsletterLayoutHtml, getNewsletterLayoutSchema } from "./serialize";
 import { rollupNewsletterStatsFromRecipients } from "./stats";
 
-/** Small lists send inline; larger audiences queue and drain via scheduler batches. */
-const INLINE_RECIPIENT_MAX = 50;
-
 export { DISPATCH_BATCH_SIZE };
 
 /** Prevents scheduler + HTTP send from processing the same broadcast concurrently. */
@@ -282,12 +279,6 @@ export async function dispatchNewsletterToAudience(
   const now = new Date().toISOString();
   enqueueNewsletterRecipients(broadcast, members, now);
 
-  const asyncDispatch = members.length > INLINE_RECIPIENT_MAX;
-  if (asyncDispatch) {
-    await processNewsletterDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
-    return { sent: 0, failed: 0, skipped: 0, async: true, queued: members.length };
-  }
-
-  const result = await processNewsletterDispatchBatch(broadcast.id, members.length + 1000);
-  return { sent: result.sent, failed: result.failed, skipped: result.skipped, async: false };
+  void processNewsletterDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
+  return { sent: 0, failed: 0, skipped: 0, async: true, queued: members.length };
 }

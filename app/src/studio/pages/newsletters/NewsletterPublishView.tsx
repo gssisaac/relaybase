@@ -30,11 +30,12 @@ import { AudienceGroupCmdDropdown } from "@/studio/components/AudienceGroupCmdDr
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { studioAudienceDetailHref, newsletterDetailHref } from "@/studio/lib/paths";
-import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
+import {
+  useNewsletterDetail,
+  useNewsletterDetailStore,
+} from "@/studio/stores/NewsletterDetailContext";
 import { studioAudienceApi } from "@/lib/studio/audience-api";
-import { syncStudioSendCredentials } from "@/studio/lib/sync-studio-send-credentials";
 import { useEmailPaths } from "@/email/lib/paths";
-import { studioApi, StudioApiError, type NewsletterDispatchProgress } from "@/lib/studio/api";
 
 const PREVIEW_CONTACT_LIMIT = 40;
 
@@ -94,17 +95,11 @@ function formatWhen(value?: string | null): string {
 
 export function NewsletterPublishView() {
   const router = useRouter();
-  const {
-    newsletterId,
-    newsletter,
-    setNewsletter,
-    persistDraft,
-    refresh,
-    refreshAudience,
-  } = useNewsletterDetail();
+  const { newsletterId, newsletter } = useNewsletterDetail();
+  const detailStore = useNewsletterDetailStore();
   const { apiBase } = useEmailPaths();
 
-  const [sending, setSending] = useState(false);
+  const sending = detailStore.sendInFlight;
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
   const [blockedError, setBlockedError] = useState<string | null>(null);
   const [testEmailOpen, setTestEmailOpen] = useState(false);
@@ -118,31 +113,7 @@ export function NewsletterPublishView() {
   const [dialogContacts, setDialogContacts] = useState<AudienceGroupContact[]>([]);
   const [dialogContactsLoading, setDialogContactsLoading] = useState(false);
   const [savingAudience, setSavingAudience] = useState(false);
-  const [sendDispatch, setSendDispatch] = useState<NewsletterDispatchProgress | null>(null);
-
-  useEffect(() => {
-    if (newsletter?.status !== "sending") {
-      setSendDispatch(null);
-      return;
-    }
-    let cancelled = false;
-    const load = () => {
-      studioApi
-        .getNewsletterStats(newsletterId)
-        .then(({ dispatch, newsletter: row }) => {
-          if (cancelled) return;
-          setSendDispatch(dispatch);
-          setNewsletter(row);
-        })
-        .catch(() => {});
-    };
-    load();
-    const timer = setInterval(load, 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [newsletter?.status, newsletterId, setNewsletter]);
+  const sendDispatch = detailStore.dispatch;
 
   const sendDomain = newsletter?.domain ?? newsletter?.audienceGroupDomain ?? null;
 
@@ -216,15 +187,13 @@ export function NewsletterPublishView() {
     if (!audienceContactsDialog || audienceContactsDialog.mode !== "confirm") return;
     setSavingAudience(true);
     try {
-      const updated = await studioApi.updateNewsletter(newsletterId, {
-        audienceGroupId: audienceContactsDialog.groupId,
-      });
-      setNewsletter(updated);
-      await refreshAudience();
+      const result = await detailStore.updateAudienceGroup(audienceContactsDialog.groupId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
       closeAudienceContactsDialog();
       toast.success("Subscriber group updated for this newsletter");
-    } catch (err) {
-      toast.error(err instanceof StudioApiError ? err.message : "Could not update audience");
     } finally {
       setSavingAudience(false);
     }
@@ -245,87 +214,70 @@ export function NewsletterPublishView() {
           : undefined))
       : undefined;
 
-  async function ensureSaved(): Promise<boolean> {
-    const saved = await persistDraft();
-    if (!saved) toast.error("Could not save newsletter");
-    return saved;
-  }
-
-  async function prepareSendCredentials(): Promise<boolean> {
+  async function handleConfirmSend() {
     const domain = sendDomain?.trim();
     if (!domain) {
       toast.error("Select a sending domain on Settings before sending.");
-      return false;
+      return;
     }
-    try {
-      await syncStudioSendCredentials({ apiBase, sendingDomain: domain });
-      return true;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not configure Studio send credentials");
-      return false;
-    }
-  }
 
-  async function handleConfirmSend() {
-    setSending(true);
-    try {
-      const saved = await ensureSaved();
-      if (!saved) return;
-      if (!(await prepareSendCredentials())) return;
-      const result = await studioApi.sendNewsletter(newsletterId);
-      setNewsletter(result.newsletter);
-      setConfirmSendOpen(false);
-      if (result.async || result.newsletter.status === "sending") {
-        toast.success("Newsletter is sending — stats update as delivery progresses");
-        router.push(newsletterDetailHref(newsletterId, "stats"));
-      } else {
-        toast.success("Newsletter sent — view stats for delivery details");
-        router.push(newsletterDetailHref(newsletterId, "stats"));
-      }
-    } catch (err) {
-      setConfirmSendOpen(false);
-      setBlockedError(err instanceof StudioApiError ? err.message : "Send failed");
-    } finally {
-      setSending(false);
+    setConfirmSendOpen(false);
+    toast.success("Newsletter is sending — stats update as delivery progresses");
+    router.push(newsletterDetailHref(newsletterId, "stats"));
+
+    const result = await detailStore.sendNewsletter({ apiBase, sendingDomain: domain });
+    if (!result.ok) {
+      toast.error(result.error);
+      setBlockedError(result.error);
     }
   }
 
   async function handleTestSend() {
     if (!testEmail.includes("@")) return;
-    try {
-      const saved = await ensureSaved();
-      if (!saved) return;
-      if (!(await prepareSendCredentials())) return;
-      await studioApi.testSendNewsletter(newsletterId, testEmail);
+    const domain = sendDomain?.trim();
+    if (!domain) {
+      toast.error("Select a sending domain on Settings before sending.");
+      return;
+    }
+    const result = await detailStore.testSendNewsletter({
+      apiBase,
+      sendingDomain: domain,
+      to: testEmail,
+    });
+    if (result.ok) {
       toast.success(`Test email sent to ${testEmail}`);
       setTestEmailOpen(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Send failed: check Worker connection");
+    } else {
+      toast.error(result.error);
     }
   }
 
   async function handleSchedule() {
     if (!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()) return;
-    try {
-      const saved = await ensureSaved();
-      if (!saved) return;
-      if (!(await prepareSendCredentials())) return;
-      const updated = await studioApi.scheduleNewsletter(newsletterId, new Date(scheduleAt).toISOString());
-      setNewsletter(updated);
+    const domain = sendDomain?.trim();
+    if (!domain) {
+      toast.error("Select a sending domain on Settings before sending.");
+      return;
+    }
+    const result = await detailStore.scheduleNewsletter({
+      apiBase,
+      sendingDomain: domain,
+      runAt: new Date(scheduleAt).toISOString(),
+    });
+    if (result.ok) {
       setScheduleOpen(false);
-      toast.success(`Newsletter scheduled for ${formatWhen(updated.scheduledAt)}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not schedule");
+      toast.success(`Newsletter scheduled for ${formatWhen(result.newsletter.scheduledAt)}`);
+    } else {
+      toast.error(result.error);
     }
   }
 
   async function handleCancelSchedule() {
-    try {
-      const updated = await studioApi.cancelSchedule(newsletterId);
-      setNewsletter(updated);
+    const result = await detailStore.cancelSchedule();
+    if (result.ok) {
       toast.success("Schedule cancelled. Newsletter reverted to draft.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Cannot cancel: Newsletter dispatch has already begun.");
+    } else {
+      toast.error(result.error);
     }
   }
 

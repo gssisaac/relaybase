@@ -10,7 +10,6 @@ import { desktopAwareFetch } from "@/lib/desktop/api";
 import { loadDraftAttachmentBytes } from "@/email/lib/attachments/draft-attachment-store";
 import { saveDraftAttachmentBytes as uploadDraftAttachmentBytes } from "@/mail-platform/account-state";
 import { UI_FILES } from "@/email/lib/disk/user-ui-disk";
-import { saveRemoteBroadcastDrafts } from "@/lib/dashboard/broadcast-drafts-disk";
 import {
   draftsFromValue,
   isValidMarker,
@@ -121,18 +120,6 @@ async function uploadDraftAttachments(drafts: DraftEmail[]): Promise<void> {
   }
 }
 
-/**
- * Broadcast drafts-in-progress live under the dashboard's own `productId`
- * (usually `"desktop"` for the owner console, same as everything else here).
- * Best-effort and independent of the rest — a miss here does not abort the
- * primary backfill.
- */
-async function uploadBroadcastDrafts(): Promise<void> {
-  const value = await readJsonAtDesktopPath(`${OPERATOR_ID}/broadcast-drafts.json`);
-  if (value == null) return;
-  await saveRemoteBroadcastDrafts(value);
-}
-
 async function runBackfill(): Promise<void> {
   if (!isDesktopRuntime()) return;
   if (await readMarker()) return;
@@ -140,18 +127,6 @@ async function runBackfill(): Promise<void> {
   const { items, drafts } = await collectAccountStateItems();
   await bulkImport(items);
   await uploadDraftAttachments(drafts);
-
-  try {
-    await uploadBroadcastDrafts();
-  } catch (err) {
-    // Broadcast drafts are owner/console-only and non-critical — log and
-    // continue so the (more important) mail/UI state backfill still counts
-    // as done.
-    console.error(
-      "[relaybase] account-state migration: broadcast-drafts upload failed",
-      err,
-    );
-  }
 
   await writeMarker();
 }

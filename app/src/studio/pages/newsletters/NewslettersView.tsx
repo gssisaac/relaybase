@@ -7,7 +7,7 @@ import {
   newsletterDetailFromSearch,
   newslettersSectionFromLocation,
 } from "@/studio/lib/paths";
-import { NewsletterDetailProvider } from "@/studio/pages/newsletters/NewsletterDetailContext";
+import { NewsletterDetailProvider } from "@/studio/stores/NewsletterDetailContext";
 import { NewsletterDetailSwitch } from "@/studio/pages/newsletters/NewsletterDetailSwitch";
 import { NewsletterInProgressView } from "@/studio/pages/newsletters/NewsletterInProgressView";
 import { NewsletterSentOverviewView } from "@/studio/pages/newsletters/NewsletterSentOverviewView";

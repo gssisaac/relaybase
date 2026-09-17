@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthPageBrandMark } from "@/console/components/setup/AuthPageBrandMark";
 import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
 import { cn } from "@/lib/utils";
 import { hqSignup } from "@/lib/hq-auth/session";
@@ -134,12 +135,15 @@ export function HqStudioSignupView() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Create Relaybase Studio account</h1>
-          <p className="text-sm text-muted-foreground">
-            Step {step} of 2 —{" "}
-            {step === 1 ? "Verify your Worker" : "Your Studio profile"}
-          </p>
+        <div className="flex flex-col items-center space-y-4 text-center">
+          <AuthPageBrandMark />
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Create Relaybase Studio account</h1>
+            <p className="text-sm text-muted-foreground">
+              Step {step} of 2 —{" "}
+              {step === 1 ? "Verify your Worker" : "Your Studio profile"}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">

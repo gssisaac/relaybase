@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthPageBrandMark } from "@/console/components/setup/AuthPageBrandMark";
 import { hqLogin } from "@/lib/hq-auth/session";
 
 function redirectAfterAuth(router: ReturnType<typeof useRouter>, next: string | null) {
@@ -52,9 +53,12 @@ export function HqStudioLoginView() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Relaybase Studio</h1>
-          <p className="text-sm text-muted-foreground">Sign in to your Studio account.</p>
+        <div className="flex flex-col items-center space-y-4 text-center">
+          <AuthPageBrandMark />
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Relaybase Studio</h1>
+            <p className="text-sm text-muted-foreground">Sign in to your Studio account.</p>
+          </div>
         </div>
 
         <form

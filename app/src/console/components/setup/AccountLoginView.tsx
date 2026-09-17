@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthPageBrandMark } from "@/console/components/setup/AuthPageBrandMark";
 import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
 import { cn } from "@/lib/utils";
 import { hasOwnerSession } from "@/lib/desktop/auth";
@@ -100,11 +101,14 @@ export function AccountLoginView({
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Relaybase</h1>
-          <p className="text-sm text-muted-foreground">
-            Sign in to your account.
-          </p>
+        <div className="flex flex-col items-center space-y-4 text-center">
+          <AuthPageBrandMark />
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Relaybase</h1>
+            <p className="text-sm text-muted-foreground">
+              Sign in to your account.
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 text-sm">

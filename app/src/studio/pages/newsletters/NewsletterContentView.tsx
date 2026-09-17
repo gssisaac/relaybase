@@ -114,7 +114,8 @@ export function NewsletterContentView() {
   });
 
   const saveState = mapSaveStatus(saveStatus);
-  const { setSaveState, registerSave } = useNewsletterContentChrome();
+  const { setSaveState, registerSave, settingsSheetOpen, setSettingsSheetOpen } =
+    useNewsletterContentChrome();
 
   useEffect(() => {
     setSaveState(saveState);
@@ -335,7 +336,9 @@ export function NewsletterContentView() {
         editable={Boolean(editable)}
         saveState={saveState}
         onSave={() => void handleSave()}
-        hideSaveButton
+        settingsPresentation="sheet"
+        settingsSheetOpen={settingsSheetOpen}
+        onSettingsSheetOpenChange={setSettingsSheetOpen}
         previewPersonaId={previewPersonaId}
         setPreviewPersonaId={setPreviewPersonaId}
         previewRecipient={previewRecipient}

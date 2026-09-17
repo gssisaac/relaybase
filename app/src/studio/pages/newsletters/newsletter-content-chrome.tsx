@@ -16,12 +16,15 @@ type NewsletterContentChromeCtx = {
   setSaveState: (state: NewsletterContentSaveState) => void;
   requestSave: () => Promise<void>;
   registerSave: (fn: () => Promise<void>) => void;
+  settingsSheetOpen: boolean;
+  setSettingsSheetOpen: (open: boolean) => void;
 };
 
 const Ctx = createContext<NewsletterContentChromeCtx | null>(null);
 
 export function NewsletterContentChromeProvider({ children }: { children: ReactNode }) {
   const [saveState, setSaveState] = useState<NewsletterContentSaveState>("idle");
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
   const saveRef = useRef<(() => Promise<void>) | null>(null);
 
   const registerSave = useCallback((fn: () => Promise<void>) => {
@@ -33,7 +36,16 @@ export function NewsletterContentChromeProvider({ children }: { children: ReactN
   }, []);
 
   return (
-    <Ctx.Provider value={{ saveState, setSaveState, requestSave, registerSave }}>
+    <Ctx.Provider
+      value={{
+        saveState,
+        setSaveState,
+        requestSave,
+        registerSave,
+        settingsSheetOpen,
+        setSettingsSheetOpen,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

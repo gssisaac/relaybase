@@ -6,6 +6,7 @@ import {
   BarChart3,
   Loader2,
   Mail,
+  PanelRightOpen,
   Send,
   Settings,
   Users,
@@ -55,7 +56,7 @@ export function NewsletterDetailShell({
   const { newsletters } = useStudioPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { newsletterId, newsletter, notFound, refreshing } = useNewsletterDetail();
-  const { saveState, requestSave } = useNewsletterContentChrome();
+  const { setSettingsSheetOpen } = useNewsletterContentChrome();
   const showContentSave = section === "content" && newsletter?.status === "draft";
 
   const title =
@@ -76,11 +77,14 @@ export function NewsletterDetailShell({
         end={
           showContentSave ? (
             <Button
+              type="button"
               size="sm"
-              disabled={saveState === "saving"}
-              onClick={() => void requestSave()}
+              variant="outline"
+              aria-label="Layout and settings"
+              onClick={() => setSettingsSheetOpen(true)}
             >
-              {saveState === "saving" ? "Saving…" : "Save"}
+              <PanelRightOpen className="size-4" aria-hidden />
+              Settings
             </Button>
           ) : null
         }

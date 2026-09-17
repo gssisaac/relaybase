@@ -61,6 +61,7 @@ export function NewsletterComposeSidebar({
   onTemplateSourceSaved,
   collapsed,
   onCollapsedChange,
+  presentation = "aside",
   mergeTagSections,
   onInsertMergeTag,
   triggerPreviewValues,
@@ -91,6 +92,8 @@ export function NewsletterComposeSidebar({
   onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
+  /** `panel` — full-height body for Sheet; `aside` — fixed column with collapse control. */
+  presentation?: "aside" | "panel";
   mergeTagSections?: ComposeMergeTagSection[];
   onInsertMergeTag?: (token: string) => void;
   triggerPreviewValues?: Record<string, string>;
@@ -119,7 +122,7 @@ export function NewsletterComposeSidebar({
     compliance,
   });
 
-  if (collapsed) {
+  if (presentation === "aside" && collapsed) {
     return (
       <div className="flex shrink-0 flex-col items-center border-border py-2 lg:border-l">
         <Button
@@ -135,20 +138,27 @@ export function NewsletterComposeSidebar({
     );
   }
 
+  const shellClassName =
+    presentation === "panel"
+      ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+      : "flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-border lg:w-[280px] lg:border-l";
+
   return (
     <>
-      <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-border lg:w-[280px] lg:border-l">
-        <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1">
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Collapse sidebar"
-            onClick={() => onCollapsedChange(true)}
-          >
-            <PanelRightClose className="size-4" />
-          </Button>
-        </div>
+      <aside className={shellClassName}>
+        {presentation === "aside" ? (
+          <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Collapse sidebar"
+              onClick={() => onCollapsedChange(true)}
+            >
+              <PanelRightClose className="size-4" />
+            </Button>
+          </div>
+        ) : null}
         <Tabs defaultValue="templates" className="flex min-h-0 flex-1 flex-col gap-0">
           <div className="shrink-0 border-b border-border px-2 py-2">
             <TabsList variant="line" className="h-8 w-full justify-start gap-0 px-0">

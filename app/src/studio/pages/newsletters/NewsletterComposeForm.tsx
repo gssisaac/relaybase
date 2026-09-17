@@ -9,6 +9,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ComposeMergeTagInsertList } from "@/studio/components/ComposeMergeTagInsertList";
 import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
 import { NewsletterComposeSidebar } from "@/studio/pages/newsletters/NewsletterComposeSidebar";
@@ -23,6 +30,7 @@ import type { StudioAccountCompliance, StudioLayout } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
+import { cn } from "@/lib/utils";
 /**
  * Content editor for a newsletter — template, subject, body, preview, Save.
  * Recipients and Send live on the Publish tab.
@@ -66,6 +74,9 @@ export function NewsletterComposeForm({
   layoutVariablesSchema,
   triggerPreviewValues,
   hideSaveButton,
+  settingsPresentation = "inline",
+  settingsSheetOpen,
+  onSettingsSheetOpenChange,
 }: {
   /** Newsletter id — asset upload namespace (`/studio/newsletters/:id/assets`). */
   newsletterId: string;
@@ -108,8 +119,12 @@ export function NewsletterComposeForm({
   layoutVariablesSchema?: TemplateVariablesSchema | null;
   /** Sample values for pre-flight preview of `{{trigger.*}}` tags. */
   triggerPreviewValues?: Record<string, string>;
-  /** Hide the subject-row Save control (e.g. template edit saves from the page header). */
+  /** Hide the editor footer Save control (e.g. message template edit saves from the page header). */
   hideSaveButton?: boolean;
+  /** Newsletter detail: layout / variables / pre-flight in a header Sheet. */
+  settingsPresentation?: "inline" | "sheet";
+  settingsSheetOpen?: boolean;
+  onSettingsSheetOpenChange?: (open: boolean) => void;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
@@ -159,90 +174,117 @@ export function NewsletterComposeForm({
   const tagSections: ComposeMergeTagSection[] =
     mergeTagSections ?? composeBroadcastMergeTagSections(layoutVariablesSchema);
 
+  const settingsSidebar = editable ? (
+    <NewsletterComposeSidebar
+      newsletterId={newsletterId}
+      assetOwner={assetOwner}
+      preflightSettingsHref={assetOwner === "message" ? null : undefined}
+      templates={templates}
+      templateId={templateId}
+      setTemplateId={setTemplateId}
+      templateVariables={templateVariables}
+      setTemplateVariables={setTemplateVariables}
+      editable={editable}
+      subject={subject}
+      bodyMarkdown={bodyMarkdown}
+      fromEmail={previewFromEmail}
+      fromName={previewFromName}
+      compliance={compliance}
+      complianceIdentityId={complianceIdentityId}
+      accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
+      onComplianceIdentityChange={onComplianceIdentityChange}
+      onComplianceIdentitySaved={onComplianceIdentitySaved}
+      previewPersonaId={previewPersonaId}
+      setPreviewPersonaId={setPreviewPersonaId}
+      previewRecipient={previewRecipient}
+      personaOptions={personaOptions}
+      onTemplateImported={onTemplateImported}
+      onTemplateSourceSaved={onTemplateSourceSaved}
+      mergeTagSections={tagSections}
+      onInsertMergeTag={insertMergeTag}
+      triggerPreviewValues={triggerPreviewValues}
+      collapsed={sidebarCollapsed}
+      onCollapsedChange={setSidebarCollapsed}
+      presentation={settingsPresentation === "sheet" ? "panel" : "aside"}
+    />
+  ) : null;
+
+  const composeCardClassName =
+    "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm";
+
   return (
     <div
       data-allow-tab-focus
-      className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/15"
     >
-      <div className="flex min-h-0 flex-1 flex-col divide-y divide-border overflow-hidden lg:flex-row lg:divide-x lg:divide-y-0">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-2">
-            <span className="shrink-0 text-sm text-muted-foreground">Subject:</span>
-            <input
-              ref={subjectInputRef}
-              type="text"
-              value={subject}
-              onFocus={() => {
-                insertTargetRef.current = "subject";
-              }}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Subject…"
-              autoFocus={editable}
-              disabled={!editable}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              className="min-w-0 flex-1 border-0 bg-background py-1 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            {editable ? (
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      className="shrink-0"
-                      aria-label="Insert personalization tag"
-                      onMouseDown={(e) => {
-                        insertTargetRef.current = resolveInsertTarget();
-                        e.preventDefault();
-                      }}
-                    />
-                  }
-                >
-                  <Braces className="size-4" />
-                </PopoverTrigger>
-                <PopoverContent
-                  align="end"
-                  className="max-h-[min(420px,70vh)] w-[420px] max-w-[min(420px,calc(100vw-2rem))] overflow-y-auto p-2"
-                >
-                  <p className="mb-2 px-1 text-[11px] text-muted-foreground">
-                    Inserts at the cursor in the subject or body field you last focused.
-                  </p>
-                  <ComposeMergeTagInsertList
-                    compact
-                    sections={tagSections}
-                    onInsert={insertMergeTag}
-                  />
-                </PopoverContent>
-              </Popover>
-            ) : null}
-            {draftStatus ? (
-              <span className="hidden shrink-0 select-none text-xs text-muted-foreground/60 sm:inline">
-                {draftStatus}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:p-6">
+        <div className={composeCardClassName}>
+          <div className="flex shrink-0 flex-col divide-y divide-border/20 px-4">
+            <div className="flex min-h-10 shrink-0 items-center gap-2 py-1">
+              <span className="shrink-0 select-none text-xs font-medium text-muted-foreground">
+                Subject:
               </span>
-            ) : null}
-            {editable && !hideSaveButton ? (
-              <Button
-                size="sm"
-                onClick={onSave}
-                disabled={saveState === "saving"}
-                className="shrink-0 px-4"
-              >
-                {saveState === "saving" ? "Saving…" : "Save"}
-              </Button>
-            ) : null}
+              <input
+                ref={subjectInputRef}
+                type="text"
+                value={subject}
+                onFocus={() => {
+                  insertTargetRef.current = "subject";
+                }}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Subject…"
+                autoFocus={editable}
+                disabled={!editable}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              {editable ? (
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        aria-label="Insert personalization tag"
+                        onMouseDown={(e) => {
+                          insertTargetRef.current = resolveInsertTarget();
+                          e.preventDefault();
+                        }}
+                      />
+                    }
+                  >
+                    <Braces className="size-4" />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="max-h-[min(420px,70vh)] w-[420px] max-w-[min(420px,calc(100vw-2rem))] overflow-y-auto p-2"
+                  >
+                    <p className="mb-2 px-1 text-[11px] text-muted-foreground">
+                      Inserts at the cursor in the subject or body field you last focused.
+                    </p>
+                    <ComposeMergeTagInsertList
+                      compact
+                      sections={tagSections}
+                      onInsert={insertMergeTag}
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
           </div>
           <div
             ref={editorShellRef}
-            className="relative min-h-0 flex-1 overflow-hidden bg-background"
+            className="relative min-h-0 flex-1 overflow-hidden p-4 pt-2"
             onFocusCapture={() => {
               insertTargetRef.current = "body";
             }}
           >
-            <div className="absolute inset-0 bg-background">
+            <div className="absolute inset-4 top-2 bg-card">
               <MarkdownEditor
                 ref={editorRef}
                 key={newsletterId}
@@ -255,10 +297,27 @@ export function NewsletterComposeForm({
               />
             </div>
           </div>
+          {editable ? (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/20 bg-muted/10 px-4 py-3">
+              <span className="min-w-0 select-none truncate text-xs text-muted-foreground/60">
+                {draftStatus ?? ""}
+              </span>
+              {!hideSaveButton ? (
+                <Button
+                  size="sm"
+                  onClick={onSave}
+                  disabled={saveState === "saving"}
+                  className="shrink-0 px-4"
+                >
+                  {saveState === "saving" ? "Saving…" : "Save"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center justify-center gap-0.5 border-b border-border px-2 py-1">
+        <div className={cn(composeCardClassName, "overflow-hidden")}>
+          <div className="flex shrink-0 items-center justify-center gap-0.5 border-b border-border/20 px-2 py-2">
             <Button
               type="button"
               size="icon-sm"
@@ -281,56 +340,40 @@ export function NewsletterComposeForm({
             </Button>
           </div>
           <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc]"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl bg-[#f6f8fc] p-3"
             style={{ colorScheme: "light" }}
           >
-            <NewsletterEmailPreview
-              subject={previewSubject}
-              fromName={previewFromName}
-              fromEmail={previewFromEmail}
-              toEmail={previewToEmail}
-              bodyHtml={renderedPreview}
-              bodyPlainText={renderedPreview}
-              previewIsPlainText={previewIsPlainText}
-              device={device}
-            />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#dadce0]/80 bg-white shadow-sm">
+              <NewsletterEmailPreview
+                subject={previewSubject}
+                fromName={previewFromName}
+                fromEmail={previewFromEmail}
+                toEmail={previewToEmail}
+                bodyHtml={renderedPreview}
+                bodyPlainText={renderedPreview}
+                previewIsPlainText={previewIsPlainText}
+                device={device}
+              />
+            </div>
           </div>
         </div>
 
-        {editable ? (
-          <NewsletterComposeSidebar
-            newsletterId={newsletterId}
-            assetOwner={assetOwner}
-            preflightSettingsHref={assetOwner === "message" ? null : undefined}
-            templates={templates}
-            templateId={templateId}
-            setTemplateId={setTemplateId}
-            templateVariables={templateVariables}
-            setTemplateVariables={setTemplateVariables}
-            editable={editable}
-            subject={subject}
-            bodyMarkdown={bodyMarkdown}
-            fromEmail={previewFromEmail}
-            fromName={previewFromName}
-            compliance={compliance}
-            complianceIdentityId={complianceIdentityId}
-            accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
-            onComplianceIdentityChange={onComplianceIdentityChange}
-            onComplianceIdentitySaved={onComplianceIdentitySaved}
-            previewPersonaId={previewPersonaId}
-            setPreviewPersonaId={setPreviewPersonaId}
-            previewRecipient={previewRecipient}
-            personaOptions={personaOptions}
-            onTemplateImported={onTemplateImported}
-            onTemplateSourceSaved={onTemplateSourceSaved}
-            mergeTagSections={tagSections}
-            onInsertMergeTag={insertMergeTag}
-            triggerPreviewValues={triggerPreviewValues}
-            collapsed={sidebarCollapsed}
-            onCollapsedChange={setSidebarCollapsed}
-          />
-        ) : null}
+        {editable && settingsPresentation === "inline" ? settingsSidebar : null}
       </div>
+
+      {editable && settingsPresentation === "sheet" ? (
+        <Sheet open={settingsSheetOpen} onOpenChange={onSettingsSheetOpenChange}>
+          <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+            <SheetHeader className="border-b border-border">
+              <SheetTitle>Layout & settings</SheetTitle>
+              <SheetDescription>
+                Template, variables, preview persona, and pre-flight checks.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{settingsSidebar}</div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </div>
   );
 }

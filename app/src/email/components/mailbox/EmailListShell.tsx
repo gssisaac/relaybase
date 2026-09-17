@@ -69,11 +69,13 @@ export function ListToolbar({
   search,
   onSearchChange,
   searchPlaceholder = "Search…",
+  leading,
   trailing,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
+  leading?: ReactNode;
   trailing?: ReactNode;
 }) {
   const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
@@ -95,6 +97,14 @@ export function ListToolbar({
         {...dragRegionProps}
       >
         <MobileNavTrigger />
+        {leading ? (
+          <div
+            className={cn("flex shrink-0 flex-wrap items-center gap-2", noDragClassName)}
+            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            {leading}
+          </div>
+        ) : null}
         <div
           {...dragRegionProps}
           className={cn("relative min-w-0 flex-1", dragRegionClassName)}

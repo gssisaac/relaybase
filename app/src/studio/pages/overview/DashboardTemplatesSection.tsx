@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CatalogTemplatePreviewDialog } from "@/studio/components/templates/CatalogTemplatePreviewDialog";
+import { TemplatesCatalogDialog } from "@/studio/components/templates/TemplatesCatalogDialog";
 import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
-import { studioApi, type StudioLayout, type StudioTemplate } from "@/studio/api";
+import { useTemplatesCatalog } from "@/studio/stores/templates-catalog";
+import { useStudioPaths } from "@/studio/lib/paths";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
 
@@ -16,34 +18,23 @@ export function DashboardTemplatesSection({
 }: {
   refreshKey?: string;
 }) {
-  const browseTemplatesHref = "/studio/newsletters?new=1";
-  const [templates, setTemplates] = useState<StudioTemplate[]>([]);
-  const [layouts, setLayouts] = useState<StudioLayout[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [previewTemplate, setPreviewTemplate] = useState<StudioTemplate | null>(null);
+  const { newsletters } = useStudioPaths();
+  const templatesCatalog = useTemplatesCatalog();
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogInitialTemplateId, setCatalogInitialTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void Promise.all([studioApi.listTemplates(), studioApi.listLayouts()])
-      .then(([templateRes, layoutRes]) => {
-        if (cancelled) return;
-        setTemplates(templateRes.templates);
-        setLayouts(layoutRes.layouts);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTemplates([]);
-          setLayouts([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    if (refreshKey) {
+      void templatesCatalog.refreshCatalog({ force: true }).catch(() => {
+        toast.error("Could not load templates");
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
+      return;
+    }
+    templatesCatalog.ensureCatalogLoaded();
+  }, [refreshKey, templatesCatalog]);
+
+  const { templates, resolvedLayouts: layouts } = templatesCatalog;
+  const loading = templatesCatalog.catalogShowPlaceholder;
 
   const sorted = useMemo(
     () => [...templates].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
@@ -52,6 +43,11 @@ export function DashboardTemplatesSection({
 
   const visible = sorted.slice(0, DASHBOARD_TEMPLATE_LIMIT);
   const remaining = Math.max(0, sorted.length - DASHBOARD_TEMPLATE_LIMIT);
+
+  function openCatalog(initialTemplateId?: string) {
+    setCatalogInitialTemplateId(initialTemplateId ?? null);
+    setCatalogOpen(true);
+  }
 
   return (
     <Card>
@@ -64,15 +60,16 @@ export function DashboardTemplatesSection({
               : "Choose a pre-built template or curated layout to draft and send emails faster."}
           </CardDescription>
         </div>
-        {remaining > 0 ? (
-          <Link href={browseTemplatesHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            View more ({remaining})
-          </Link>
-        ) : (
-          <Link href={browseTemplatesHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            Browse templates
-          </Link>
-        )}
+        {sorted.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => openCatalog()}
+          >
+            {remaining > 0 ? `View more (${remaining})` : "Browse templates"}
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -82,7 +79,10 @@ export function DashboardTemplatesSection({
             <p className="text-sm text-muted-foreground">
               No message templates yet. Create your first template or explore presets.
             </p>
-            <Link href={browseTemplatesHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Link
+              href={`${newsletters}?new=1`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
               New newsletter from template
             </Link>
           </div>
@@ -90,18 +90,20 @@ export function DashboardTemplatesSection({
           <TemplateThumbnailGrid
             templates={visible}
             layouts={layouts}
-            onTemplateSelect={setPreviewTemplate}
+            onTemplateSelect={(template) => openCatalog(template.id)}
           />
         )}
       </CardContent>
 
-      <CatalogTemplatePreviewDialog
-        template={previewTemplate}
-        layouts={layouts}
-        open={previewTemplate !== null}
-        onOpenChange={(open) => {
-          if (!open) setPreviewTemplate(null);
+      <TemplatesCatalogDialog
+        open={catalogOpen}
+        onOpenChange={(next) => {
+          setCatalogOpen(next);
+          if (!next) setCatalogInitialTemplateId(null);
         }}
+        initialTemplateId={catalogInitialTemplateId}
+        title="Templates"
+        description="Browse ready-to-use templates and preview before you use them."
       />
     </Card>
   );

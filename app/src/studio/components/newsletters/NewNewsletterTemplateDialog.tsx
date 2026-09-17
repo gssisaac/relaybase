@@ -30,6 +30,7 @@ import { newsletterDetailHref } from "@/studio/lib/paths";
 import { catalogTemplateSnapshot } from "@/studio/lib/templates/catalog-template-snapshot";
 import { createNewsletterFromHubTemplate } from "@/studio/lib/templates/hub-template-launch";
 import { newslettersHubStore } from "@/studio/stores/newsletters-hub";
+import { useTemplatesCatalog } from "@/studio/stores/templates-catalog";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";
 import { studioApi, StudioApiError, studioSubscriberApi, type StudioTemplate } from "@/studio/api";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
@@ -51,12 +52,7 @@ export function NewNewsletterTemplateDialog({
   trigger,
 }: NewNewsletterTemplateDialogProps) {
   const router = useRouter();
-  const [templates, setTemplates] = useState<StudioTemplate[]>([]);
-  const [layouts, setLayouts] = useState<Awaited<ReturnType<typeof studioApi.listLayouts>>["layouts"]>(
-    [],
-  );
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const templatesCatalog = useTemplatesCatalog();
   const [search, setSearch] = useState("");
   const [step, setStep] = useState<DialogStep>("gallery");
   const [selection, setSelection] = useState<NewsletterTemplatePick | null>(null);
@@ -71,23 +67,13 @@ export function NewNewsletterTemplateDialog({
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const loadCatalog = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    else setLoadingCatalog(true);
+  const refreshCatalog = useCallback(async (force?: boolean) => {
     try {
-      const [templateRes, layoutRes] = await Promise.all([
-        studioApi.listTemplates(),
-        studioApi.listLayouts(),
-      ]);
-      setTemplates(templateRes.templates);
-      setLayouts(layoutRes.layouts);
+      await templatesCatalog.refreshCatalog(force ? { force: true } : undefined);
     } catch {
       toast.error("Could not load templates");
-    } finally {
-      setLoadingCatalog(false);
-      setRefreshing(false);
     }
-  }, []);
+  }, [templatesCatalog]);
 
   function resetForm() {
     setSearch("");
@@ -123,14 +109,18 @@ export function NewNewsletterTemplateDialog({
   useEffect(() => {
     if (!open) return;
     resetForm();
-    void loadCatalog();
+    templatesCatalog.ensureCatalogLoaded();
     setSubscriberGroupsLoading(true);
     studioSubscriberApi
       .listGroups()
       .then(({ groups }) => setSubscriberGroups(groups))
       .catch(() => toast.error("Could not load subscriber groups"))
       .finally(() => setSubscriberGroupsLoading(false));
-  }, [open, loadCatalog]);
+  }, [open, templatesCatalog]);
+
+  const { templates, resolvedLayouts: layouts } = templatesCatalog;
+  const loadingCatalog = templatesCatalog.catalogShowPlaceholder;
+  const refreshing = templatesCatalog.catalogRefreshing;
 
   const filteredTemplates = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -302,7 +292,7 @@ export function NewNewsletterTemplateDialog({
                       variant="outline"
                       size="sm"
                       disabled={refreshing || loadingCatalog}
-                      onClick={() => void loadCatalog(true)}
+                      onClick={() => void refreshCatalog(true)}
                     >
                       <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden />
                     </Button>

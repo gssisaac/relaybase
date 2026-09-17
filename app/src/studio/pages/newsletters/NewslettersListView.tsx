@@ -28,16 +28,22 @@ import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
 import type { Newsletter, NewsletterStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
-export type NewsletterFilter = "draft" | "sent" | "in_progress" | "all";
+export type NewsletterFilter =
+  | "draft"
+  | "scheduled"
+  | "sent"
+  | "archived"
+  | "all";
 
-const FILTER_OPTIONS: { value: Exclude<NewsletterFilter, "all">; label: string }[] = [
+const FILTER_OPTIONS: { value: NewsletterFilter; label: string }[] = [
   { value: "draft", label: "Draft" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "sent", label: "Sent" },
-  { value: "in_progress", label: "In progress" },
+  { value: "archived", label: "Archived" },
+  { value: "all", label: "All" },
 ];
 
 function filterLabel(filter: NewsletterFilter): string {
-  if (filter === "all") return "All";
   return FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
 }
 
@@ -48,10 +54,11 @@ function matchesNewsletterFilter(
   switch (filter) {
     case "draft":
       return status === "draft";
+    case "scheduled":
+      return status === "scheduled" || status === "sending";
     case "sent":
       return status === "sent";
-    case "in_progress":
-      return status === "scheduled" || status === "sending";
+    case "archived":
     case "all":
     default:
       return true;
@@ -109,7 +116,7 @@ export function NewslettersListView() {
   const newsletters = hub.newsletters;
   const layouts = hub.layouts;
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<NewsletterFilter>("all");
+  const [filter, setFilter] = useState<NewsletterFilter>("draft");
   const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(
@@ -140,22 +147,28 @@ export function NewslettersListView() {
   }, [searchParams, router]);
 
   const counts = useMemo(() => {
-    const visible = newsletters.filter((b) => b.listStatus !== "archived");
+    const active = newsletters.filter((b) => b.listStatus !== "archived");
+    const archived = newsletters.filter((b) => b.listStatus === "archived");
     return {
-      draft: visible.filter((b) => b.status === "draft").length,
-      sent: visible.filter((b) => b.status === "sent").length,
-      in_progress: visible.filter(
+      draft: active.filter((b) => b.status === "draft").length,
+      scheduled: active.filter(
         (b) => b.status === "scheduled" || b.status === "sending",
       ).length,
-      all: visible.length,
+      sent: active.filter((b) => b.status === "sent").length,
+      archived: archived.length,
+      all: active.length,
     };
   }, [newsletters]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return newsletters.filter((b) => {
-      if (b.listStatus === "archived") return false;
-      if (!matchesNewsletterFilter(b.status, filter)) return false;
+      if (filter === "archived") {
+        if (b.listStatus !== "archived") return false;
+      } else {
+        if (b.listStatus === "archived") return false;
+        if (!matchesNewsletterFilter(b.status, filter)) return false;
+      }
 
       if (!q) return true;
       return (
@@ -167,9 +180,39 @@ export function NewslettersListView() {
     });
   }, [newsletters, filter, search]);
 
-  function toggleFilter(next: Exclude<NewsletterFilter, "all">) {
-    setFilter((prev) => (prev === next ? "all" : next));
-  }
+  const filterPills = (
+    <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
+      {FILTER_OPTIONS.map((opt) => {
+        const count = counts[opt.value];
+        const isSelected = filter === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setFilter(opt.value)}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors",
+              isSelected
+                ? "bg-background font-medium text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span>{opt.label}</span>
+            <span
+              className={cn(
+                "text-[10px] tabular-nums",
+                isSelected
+                  ? "font-medium text-foreground/80"
+                  : "text-muted-foreground/70",
+              )}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const showPlaceholder = hub.listShowPlaceholder;
 
@@ -221,15 +264,15 @@ export function NewslettersListView() {
                 value={String(counts.draft)}
                 hint={`${counts.all} total newsletters`}
                 selected={filter === "draft"}
-                onClick={() => toggleFilter("draft")}
+                onClick={() => setFilter("draft")}
               />
               <OverviewKpiCard
                 icon={Clock}
                 label="In progress"
-                value={String(counts.in_progress)}
+                value={String(counts.scheduled)}
                 hint="Filter scheduled & sending"
-                selected={filter === "in_progress"}
-                onClick={() => toggleFilter("in_progress")}
+                selected={filter === "scheduled"}
+                onClick={() => setFilter("scheduled")}
                 footer={
                   <Link
                     href={newslettersSectionHref("in-progress")}
@@ -245,7 +288,7 @@ export function NewslettersListView() {
                 value={String(counts.sent)}
                 hint="Filter finished campaigns"
                 selected={filter === "sent"}
-                onClick={() => toggleFilter("sent")}
+                onClick={() => setFilter("sent")}
                 footer={
                   <Link
                     href={newslettersSectionHref("sent")}
@@ -262,41 +305,7 @@ export function NewslettersListView() {
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search newsletters…"
-            trailing={
-              filter !== "all" ? (
-                <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
-                  {FILTER_OPTIONS.map((opt) => {
-                    const count = counts[opt.value];
-                    const isSelected = filter === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => toggleFilter(opt.value)}
-                        className={cn(
-                          "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors",
-                          isSelected
-                            ? "bg-background font-medium text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        <span>{opt.label}</span>
-                        <span
-                          className={cn(
-                            "text-[10px] tabular-nums",
-                            isSelected
-                              ? "font-medium text-foreground/80"
-                              : "text-muted-foreground/70",
-                          )}
-                        >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null
-            }
+            leading={filterPills}
           />
 
           {filtered.length > 0 ? (
@@ -332,7 +341,7 @@ export function NewslettersListView() {
                     size="sm"
                     onClick={() => {
                       setSearch("");
-                      setFilter("all");
+                      setFilter("draft");
                     }}
                   >
                     Reset filters

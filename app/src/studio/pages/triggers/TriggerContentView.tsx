@@ -341,10 +341,6 @@ export function TriggerContentView() {
         editable={Boolean(editable)}
         saveState={saveState}
         onSave={() => void handleSave()}
-        previewPersonaId="sample-named"
-        setPreviewPersonaId={() => {}}
-        previewRecipient={PREVIEW_RECIPIENT}
-        personaOptions={[{ value: "sample-named" as const, label: PREVIEW_RECIPIENT.label }]}
         compliance={compliance}
         complianceIdentityId={trigger.complianceIdentityId ?? null}
         accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
@@ -365,7 +361,6 @@ export function TriggerContentView() {
           if (forked) setTemplateId(nextId);
         }}
         mergeTagSections={mergeTagSections}
-        triggerPreviewValues={triggerPreviewValues}
       />
     </div>
   );

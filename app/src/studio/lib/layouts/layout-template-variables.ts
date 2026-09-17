@@ -24,6 +24,39 @@ export type TemplateVariablesSchema = {
   fields: TemplateVariableField[];
 };
 
+const LOGO_FOOTER_VARIABLE_KEYS = new Set([
+  "brand.logo",
+  "header.logo",
+  "brand.organization_name",
+  "header.organization_name",
+]);
+
+/** Shared brand + compliance fields — not per-layout content variables. */
+export function isLogoFooterTemplateVariableField(field: TemplateVariableField): boolean {
+  if (LOGO_FOOTER_VARIABLE_KEYS.has(field.key)) return true;
+  return (
+    field.defaultFrom === "compliance.organizationName" && field.key.startsWith("brand.")
+  );
+}
+
+export function splitTemplateVariableFields(
+  schema: TemplateVariablesSchema | null | undefined,
+): {
+  logoFooterSchema: TemplateVariablesSchema | null;
+  layoutSchema: TemplateVariablesSchema | null;
+} {
+  const fields = schema?.fields ?? [];
+  if (!fields.length) {
+    return { logoFooterSchema: null, layoutSchema: null };
+  }
+  const logoFooterFields = fields.filter(isLogoFooterTemplateVariableField);
+  const layoutFields = fields.filter((f) => !isLogoFooterTemplateVariableField(f));
+  return {
+    logoFooterSchema: logoFooterFields.length ? { fields: logoFooterFields } : null,
+    layoutSchema: layoutFields.length ? { fields: layoutFields } : null,
+  };
+}
+
 export function templateVariableToken(key: string): string {
   return `{{vars.${key}}}`;
 }

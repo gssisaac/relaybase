@@ -21,6 +21,8 @@ import {
 } from "react";
 
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
+import { getNewsletterEditorSlashMenuItems } from "@/lib/markdown-editor/components/newsletter-slash-menu-items";
+import { newsletterEditorSchema } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 import { fingerprintEditorDocument, markdownFlushStrategy } from "@/lib/markdown-editor/utils/flush";
 import {
@@ -39,6 +41,7 @@ import {
   enhancePreviewHtml,
   serializeEditorMarkdown,
 } from "@/lib/markdown-editor/utils/editor-markdown";
+import { promoteEmailButtonBlocks } from "@/lib/markdown-editor/utils/email-button-markdown";
 import { promotePageMediaBlocks } from "@/lib/markdown-editor/utils/media-markdown";
 import { markdownSelectAllExtension } from "@/lib/markdown-editor/utils/select-all";
 import { resolveNewsletterAssetPath } from "@/lib/markdown-editor/utils/assets";
@@ -121,8 +124,10 @@ async function setEditorMarkdown(
   try {
     let blocks: unknown[];
     try {
-      blocks = promotePageMediaBlocks(
-        linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(markdown)),
+      blocks = promoteEmailButtonBlocks(
+        promotePageMediaBlocks(
+          linkifyParsedBlocks(await editor.tryParseMarkdownToBlocks(markdown)),
+        ),
       );
     } catch (err) {
       console.error("Failed to parse markdown for editor", err);
@@ -245,6 +250,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   );
 
   const editor = useCreateBlockNote({
+    schema: newsletterEditorSchema,
     animations: false,
     extensions: [markdownSelectAllExtension],
     links: { onClick: () => true },
@@ -483,6 +489,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
           <SuggestionMenuController
             triggerCharacter="/"
             floatingUIOptions={slashMenuFloatingOptions}
+            getItems={(query) => getNewsletterEditorSlashMenuItems(editor, query)}
             shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
           />
           <TableHandlesController tableHandle={TableHandleWithIcons} />

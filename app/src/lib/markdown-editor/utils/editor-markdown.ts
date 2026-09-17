@@ -1,5 +1,7 @@
 import type { BlockNoteEditor } from "@blocknote/core";
 
+import { serializeEmailButtonBlockMarkdown } from "./email-button-markdown";
+import { transformEmailButtonMarkersToBulletproof } from "./email-button-html";
 import { serializePageMediaMarkdown } from "./media-markdown";
 
 /** Round-trips as an empty paragraph (BlockNote drops truly empty blocks in lossy MD). */
@@ -36,6 +38,11 @@ export function serializeEditorMarkdown(editor: BlockNoteEditor): string {
       chunks.push(EMPTY_PARAGRAPH_MD);
       continue;
     }
+    const buttonMd = serializeEmailButtonBlockMarkdown(block);
+    if (buttonMd) {
+      chunks.push(buttonMd);
+      continue;
+    }
     const piece = editor.blocksToMarkdownLossy([block as never]).trim();
     if (piece) chunks.push(piece);
   }
@@ -69,8 +76,10 @@ export function applyGmailContentLinkStyles(html: string): string {
 /** Make empty paragraphs visible in email-style HTML previews. */
 export function enhancePreviewHtml(html: string): string {
   return applyGmailContentLinkStyles(
-    html
-      .replace(/<p>\s*<\/p>/gi, "<p>&nbsp;</p>")
-      .replace(/<p><br\s*\/?><\/p>/gi, "<p>&nbsp;</p>"),
+    transformEmailButtonMarkersToBulletproof(
+      html
+        .replace(/<p>\s*<\/p>/gi, "<p>&nbsp;</p>")
+        .replace(/<p><br\s*\/?><\/p>/gi, "<p>&nbsp;</p>"),
+    ),
   );
 }

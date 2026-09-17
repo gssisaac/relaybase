@@ -1,4 +1,7 @@
-import { missingRequiredTemplateVariables } from "@/studio/lib/layouts/layout-template-variables";
+import {
+  isLogoFooterTemplateVariableField,
+  missingRequiredTemplateVariables,
+} from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
 import type { StudioAccountCompliance, TemplateVariablesSchema } from "@/studio/api";
 
@@ -90,15 +93,35 @@ export function runNewsletterPreflight(input: {
   ];
 
   if (input.templateVariablesSchema?.fields.length) {
+    const missingTabHint = (() => {
+      if (!missingVars.length) return "";
+      const allLogoFooter = missingVars.every(isLogoFooterTemplateVariableField);
+      const anyLogoFooter = missingVars.some(isLogoFooterTemplateVariableField);
+      if (allLogoFooter) return "Logo & Footer tab";
+      if (anyLogoFooter) return "Logo & Footer or Variables tab";
+      return "Variables tab";
+    })();
     checks.splice(1, 0, {
       id: "template-vars",
       label: "Template variables",
       status: missingVars.length ? "fail" : "pass",
       detail: missingVars.length
-        ? `Fill required fields: ${missingVars.map((f) => f.label).join(", ")} (Variables tab).`
+        ? `Fill required fields: ${missingVars.map((f) => f.label).join(", ")} (${missingTabHint}).`
         : "Required layout variables are set.",
     });
   }
 
   return checks;
+}
+
+export function preflightStatusLabel(checks: PreflightCheck[]): string {
+  const failCount = checks.filter((c) => c.status === "fail").length;
+  const warnCount = checks.filter((c) => c.status === "warn").length;
+  if (failCount) {
+    const parts = [`${failCount} block${failCount === 1 ? "" : "s"}`];
+    if (warnCount) parts.push(`${warnCount} warn${warnCount === 1 ? "" : "s"}`);
+    return parts.join(" · ");
+  }
+  if (warnCount) return `${warnCount} warn${warnCount === 1 ? "" : "s"}`;
+  return "Ready";
 }

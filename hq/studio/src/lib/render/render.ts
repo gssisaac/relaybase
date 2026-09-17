@@ -10,6 +10,7 @@ import {
 } from "../templates/variable-schema";
 import { resolveStudioAssetUrl } from "../assets/resolve-url";
 import { applyGmailContentLinkStyles } from "./gmail-link-style";
+import { transformEmailButtonMarkersToBulletproof } from "./email-button-html.js";
 import { wrapLayoutBodyHtml } from "./layout-content-theme";
 import { markdownToPlainEmailText } from "./markdown-to-plain-email-text";
 
@@ -21,7 +22,8 @@ import { markdownToPlainEmailText } from "./markdown-to-plain-email-text";
 
 export function markdownToHtml(markdown: string): string {
   const out = marked.parse(markdown ?? "", { gfm: true, breaks: true });
-  return typeof out === "string" ? out : "";
+  const html = typeof out === "string" ? out : "";
+  return transformEmailButtonMarkersToBulletproof(html);
 }
 
 /** Mirrors app/src/lib/markdown-editor/utils/assets.ts newsletterAssetStem (no DOM/browser deps here). */

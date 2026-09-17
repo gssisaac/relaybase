@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SubscriberGroupCmdDropdown } from "@/studio/components/SubscriberGroupCmdDropdown";
+import { NewsletterPublishPreflightSection } from "@/studio/components/newsletters/NewsletterPublishPreflightSection";
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { studioSubscriberDetailHref, newsletterDetailHref } from "@/studio/lib/paths";
@@ -411,6 +412,8 @@ export function NewsletterPublishView() {
           </div>
         </CardContent>
       </Card>
+
+      <NewsletterPublishPreflightSection />
 
       <Card>
         <CardHeader>

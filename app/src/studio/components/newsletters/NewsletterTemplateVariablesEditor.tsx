@@ -140,6 +140,7 @@ export function NewsletterTemplateVariablesEditor({
   onChange,
   editable,
   complianceOrganizationName,
+  emptyMessage = "This template has no layout variables.",
 }: {
   newsletterId: string;
   assetOwner?: CrmContentAssetOwner;
@@ -148,12 +149,13 @@ export function NewsletterTemplateVariablesEditor({
   onChange: (next: Record<string, string>) => void;
   editable: boolean;
   complianceOrganizationName?: string | null;
+  /** When `null`, render nothing if the schema has no fields. */
+  emptyMessage?: string | null;
 }) {
   if (!schema?.fields.length) {
+    if (emptyMessage === null) return null;
     return (
-      <p className="px-0.5 text-[11px] leading-snug text-muted-foreground">
-        This template has no layout variables.
-      </p>
+      <p className="px-0.5 text-[11px] leading-snug text-muted-foreground">{emptyMessage}</p>
     );
   }
 

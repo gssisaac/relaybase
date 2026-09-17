@@ -6,9 +6,9 @@ import {
   BarChart3,
   Loader2,
   Mail,
-  PanelRightOpen,
   Send,
   Settings,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -56,7 +56,7 @@ export function NewsletterDetailShell({
   const { newsletters } = useStudioPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { newsletterId, newsletter, notFound, refreshing } = useNewsletterDetail();
-  const { setSettingsSheetOpen } = useNewsletterContentChrome();
+  const { settingsSheetOpen, setSettingsSheetOpen } = useNewsletterContentChrome();
   const showContentSave = section === "content" && newsletter?.status === "draft";
 
   const title =
@@ -79,12 +79,14 @@ export function NewsletterDetailShell({
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              aria-label="Layout and settings"
-              onClick={() => setSettingsSheetOpen(true)}
+              variant="ghost"
+              aria-label="Customize"
+              aria-expanded={settingsSheetOpen}
+              aria-pressed={settingsSheetOpen}
+              onClick={() => setSettingsSheetOpen(!settingsSheetOpen)}
             >
-              <PanelRightOpen className="size-4" aria-hidden />
-              Settings
+              <SlidersHorizontal className="size-4" aria-hidden />
+              Customize
             </Button>
           ) : null
         }

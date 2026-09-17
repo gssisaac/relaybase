@@ -56,19 +56,14 @@ export function NewsletterEmailPreview({
   const displaySubject = subject.trim() || "(No subject)";
   const gmailBodyHtml = applyGmailContentLinkStyles(bodyHtml);
 
-  return (
-    <div
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc] text-[#202124]"
-      style={{ colorScheme: "light" }}
-    >
-      <div
-        className={cn(
-          "mx-auto flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden",
-          device === "mobile" ? "max-w-[375px]" : "max-w-none",
-        )}
-      >
-        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white">
-          <div className="shrink-0 border-b border-[#e0e0e0] px-4 pb-3 pt-4">
+  const pane = (
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white text-[#202124]">
+          <div
+            className={cn(
+              "shrink-0 border-b border-[#e0e0e0] px-4 pb-3",
+              device === "mobile" ? "pt-12" : "pt-4",
+            )}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -146,6 +141,44 @@ export function NewsletterEmailPreview({
             )}
           </div>
         </div>
+  );
+
+  if (device === "mobile") {
+    return (
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-950"
+        style={{ colorScheme: "light" }}
+      >
+        <div className="flex min-h-full items-center justify-center p-6 sm:p-8">
+          <div
+            className="relative w-[min(390px,calc(100%-2rem))] shrink-0 aspect-[390/844] rounded-[2.75rem] border border-[#3f3f46] bg-[#18181b] p-[11px] shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_12px_40px_rgba(0,0,0,0.55),0_40px_100px_rgba(0,0,0,0.75),0_64px_160px_rgba(0,0,0,0.65)]"
+            role="img"
+            aria-label="Mobile preview frame"
+          >
+            <div
+              className="pointer-events-none absolute left-1/2 top-[14px] z-20 h-[26px] w-[96px] -translate-x-1/2 rounded-full bg-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+              aria-hidden
+            />
+            <div className="absolute inset-[11px] flex flex-col overflow-hidden rounded-[2.15rem] bg-white">
+              {pane}
+            </div>
+            <div
+              className="pointer-events-none absolute bottom-[14px] left-1/2 z-20 h-1 w-[34%] max-w-[128px] -translate-x-1/2 rounded-full bg-white/35"
+              aria-hidden
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc] text-[#202124]"
+      style={{ colorScheme: "light" }}
+    >
+      <div className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
+        {pane}
       </div>
     </div>
   );

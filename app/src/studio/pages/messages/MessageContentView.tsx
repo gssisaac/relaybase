@@ -4,9 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   applyNewsletterMergeTags,
-  previewPersonaOptions,
   resolvePreviewRecipient,
-  type PreviewPersonaId,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import {
   applyTemplateVariablesToComposeContent,
@@ -71,8 +69,6 @@ export function MessageContentView() {
   const [layoutId, setLayoutId] = useState("");
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [previewPersonaId, setPreviewPersonaId] = useState<PreviewPersonaId>("sample-named");
-
   const editable = Boolean(message);
 
   const bridge = useMemo<NewsletterPersistBridge>(
@@ -134,11 +130,7 @@ export function MessageContentView() {
     void refreshComplianceContext();
   }, [refreshComplianceContext, messageId]);
 
-  const personaOptions = useMemo(() => previewPersonaOptions([]), []);
-  const previewRecipient = useMemo(
-    () => resolvePreviewRecipient(previewPersonaId, []),
-    [previewPersonaId],
-  );
+  const previewRecipient = useMemo(() => resolvePreviewRecipient("sample-named", []), []);
 
   useEffect(() => {
     syncDraft({
@@ -290,10 +282,6 @@ export function MessageContentView() {
         saveState={saveState}
         onSave={() => void handleSave()}
         hideSaveButton
-        previewPersonaId={previewPersonaId}
-        setPreviewPersonaId={setPreviewPersonaId}
-        previewRecipient={previewRecipient}
-        personaOptions={personaOptions}
         compliance={compliance}
         complianceIdentityId={previewComplianceIdentityId}
         accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}

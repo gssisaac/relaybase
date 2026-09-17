@@ -22,10 +22,6 @@ import { NewsletterComposeSidebar } from "@/studio/pages/newsletters/NewsletterC
 import { composeBroadcastMergeTagSections } from "@/studio/lib/layouts/compose-merge-tag-sections";
 import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-template-variables";
 import type { ComposeMergeTagSection } from "@/studio/lib/triggers/trigger-merge-tags";
-import {
-  type PreviewPersonaId,
-  type PreviewRecipient,
-} from "@/studio/lib/newsletters/newsletter-merge-tags";
 import type { StudioAccountCompliance, StudioLayout } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
@@ -59,10 +55,6 @@ export function NewsletterComposeForm({
   editable,
   saveState,
   onSave,
-  previewPersonaId,
-  setPreviewPersonaId,
-  previewRecipient,
-  personaOptions,
   compliance,
   complianceIdentityId,
   accountDefaultComplianceIdentityId,
@@ -72,7 +64,6 @@ export function NewsletterComposeForm({
   onTemplateSourceSaved,
   mergeTagSections,
   layoutVariablesSchema,
-  triggerPreviewValues,
   hideSaveButton,
   settingsPresentation = "inline",
   settingsSheetOpen,
@@ -102,10 +93,6 @@ export function NewsletterComposeForm({
   editable: boolean;
   saveState: "idle" | "saving" | "error";
   onSave: () => void;
-  previewPersonaId: PreviewPersonaId;
-  setPreviewPersonaId: (id: PreviewPersonaId) => void;
-  previewRecipient: PreviewRecipient;
-  personaOptions: { value: PreviewPersonaId; label: string }[];
   compliance: StudioAccountCompliance | null;
   complianceIdentityId: string | null;
   accountDefaultComplianceIdentityId: string | null;
@@ -117,11 +104,9 @@ export function NewsletterComposeForm({
   mergeTagSections?: ComposeMergeTagSection[];
   /** Active layout schema — adds `{{vars.*}}` to the tag picker when mergeTagSections is omitted. */
   layoutVariablesSchema?: TemplateVariablesSchema | null;
-  /** Sample values for pre-flight preview of `{{trigger.*}}` tags. */
-  triggerPreviewValues?: Record<string, string>;
   /** Hide the editor footer Save control (e.g. message template edit saves from the page header). */
   hideSaveButton?: boolean;
-  /** Newsletter detail: layout / variables / pre-flight in a header Sheet. */
+  /** Newsletter detail: layout and variables in a header Sheet. */
   settingsPresentation?: "inline" | "sheet";
   settingsSheetOpen?: boolean;
   onSettingsSheetOpenChange?: (open: boolean) => void;
@@ -178,31 +163,21 @@ export function NewsletterComposeForm({
     <NewsletterComposeSidebar
       newsletterId={newsletterId}
       assetOwner={assetOwner}
-      preflightSettingsHref={assetOwner === "message" ? null : undefined}
       templates={templates}
       templateId={templateId}
       setTemplateId={setTemplateId}
       templateVariables={templateVariables}
       setTemplateVariables={setTemplateVariables}
       editable={editable}
-      subject={subject}
-      bodyMarkdown={bodyMarkdown}
-      fromEmail={previewFromEmail}
-      fromName={previewFromName}
       compliance={compliance}
       complianceIdentityId={complianceIdentityId}
       accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
       onComplianceIdentityChange={onComplianceIdentityChange}
       onComplianceIdentitySaved={onComplianceIdentitySaved}
-      previewPersonaId={previewPersonaId}
-      setPreviewPersonaId={setPreviewPersonaId}
-      previewRecipient={previewRecipient}
-      personaOptions={personaOptions}
       onTemplateImported={onTemplateImported}
       onTemplateSourceSaved={onTemplateSourceSaved}
       mergeTagSections={tagSections}
       onInsertMergeTag={insertMergeTag}
-      triggerPreviewValues={triggerPreviewValues}
       collapsed={sidebarCollapsed}
       onCollapsedChange={setSidebarCollapsed}
       presentation={settingsPresentation === "sheet" ? "panel" : "aside"}
@@ -217,10 +192,10 @@ export function NewsletterComposeForm({
       data-allow-tab-focus
       className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/15"
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:p-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:px-6 lg:pb-6">
         <div className={composeCardClassName}>
           <div className="flex shrink-0 flex-col divide-y divide-border/20 px-4">
-            <div className="flex min-h-10 shrink-0 items-center gap-2 py-1">
+            <div className="flex min-h-10 shrink-0 items-center gap-2 pt-3 pb-1">
               <span className="shrink-0 select-none text-xs font-medium text-muted-foreground">
                 Subject:
               </span>
@@ -340,21 +315,22 @@ export function NewsletterComposeForm({
             </Button>
           </div>
           <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl bg-[#f6f8fc] p-3"
+            className={cn(
+              "flex min-h-0 flex-1 flex-col overflow-hidden",
+              device === "mobile" ? "bg-neutral-950" : "bg-[#f6f8fc]",
+            )}
             style={{ colorScheme: "light" }}
           >
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#dadce0]/80 bg-white shadow-sm">
-              <NewsletterEmailPreview
-                subject={previewSubject}
-                fromName={previewFromName}
-                fromEmail={previewFromEmail}
-                toEmail={previewToEmail}
-                bodyHtml={renderedPreview}
-                bodyPlainText={renderedPreview}
-                previewIsPlainText={previewIsPlainText}
-                device={device}
-              />
-            </div>
+            <NewsletterEmailPreview
+              subject={previewSubject}
+              fromName={previewFromName}
+              fromEmail={previewFromEmail}
+              toEmail={previewToEmail}
+              bodyHtml={renderedPreview}
+              bodyPlainText={renderedPreview}
+              previewIsPlainText={previewIsPlainText}
+              device={device}
+            />
           </div>
         </div>
 
@@ -363,11 +339,14 @@ export function NewsletterComposeForm({
 
       {editable && settingsPresentation === "sheet" ? (
         <Sheet open={settingsSheetOpen} onOpenChange={onSettingsSheetOpenChange}>
-          <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+          <SheetContent
+            className="flex h-full flex-col gap-0 p-0 sm:max-w-[600px]"
+            style={{ width: "min(600px, 100vw)", maxWidth: 600 }}
+          >
             <SheetHeader className="border-b border-border">
-              <SheetTitle>Layout & settings</SheetTitle>
+              <SheetTitle>Customize</SheetTitle>
               <SheetDescription>
-                Template, variables, preview persona, and pre-flight checks.
+                Layout, logo & footer, and template variables.
               </SheetDescription>
             </SheetHeader>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{settingsSidebar}</div>

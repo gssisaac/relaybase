@@ -9,7 +9,6 @@ import { newsletterDetailHref } from "@/studio/lib/paths";
 
 import {
   applyNewsletterMergeTags,
-  previewPersonaOptions,
   resolvePreviewRecipient,
   type PreviewPersonaId,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
@@ -88,7 +87,7 @@ export function NewsletterContentView() {
     newsletter?.templateVariables ?? {},
   );
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [previewPersonaId, setPreviewPersonaId] = useState<PreviewPersonaId>("sample-named");
+  const previewPersonaId: PreviewPersonaId = "sample-named";
   const [duplicating, setDuplicating] = useState(false);
 
   const editable = newsletter?.status === "draft";
@@ -123,7 +122,6 @@ export function NewsletterContentView() {
 
   useEffect(() => {
     setPreviewHtml("");
-    setPreviewPersonaId("sample-named");
   }, [newsletterId]);
 
   useEffect(() => {
@@ -148,11 +146,6 @@ export function NewsletterContentView() {
   useEffect(() => {
     void refreshComplianceContext();
   }, [refreshComplianceContext, newsletterId]);
-
-  const personaOptions = useMemo(
-    () => previewPersonaOptions(subscriberMembers),
-    [subscriberMembers],
-  );
 
   const previewRecipient = useMemo(
     () => resolvePreviewRecipient(previewPersonaId, subscriberMembers),
@@ -339,10 +332,6 @@ export function NewsletterContentView() {
         settingsPresentation="sheet"
         settingsSheetOpen={settingsSheetOpen}
         onSettingsSheetOpenChange={setSettingsSheetOpen}
-        previewPersonaId={previewPersonaId}
-        setPreviewPersonaId={setPreviewPersonaId}
-        previewRecipient={previewRecipient}
-        personaOptions={personaOptions}
         compliance={compliance}
         complianceIdentityId={newsletter.complianceIdentityId ?? null}
         accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}

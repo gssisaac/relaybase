@@ -15,6 +15,7 @@ import { studioApi, type StudioOverview } from "@/studio/api";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
 import { cn } from "@/lib/utils";
 
+import { DashboardSendingNewslettersSection } from "./DashboardSendingNewslettersSection";
 import { DashboardTemplatesSection } from "./DashboardTemplatesSection";
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
 import {
@@ -46,6 +47,11 @@ export function StudioDashboardView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const scheduledUpcoming =
+    data?.schedule.upcomingList.filter((row) => row.status === "scheduled") ?? [];
+  const nextScheduled =
+    data?.schedule.nextUpcoming?.status === "scheduled" ? data.schedule.nextUpcoming : null;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -86,6 +92,8 @@ export function StudioDashboardView() {
 
           {data ? (
             <>
+              <DashboardSendingNewslettersSection />
+
               <DashboardTemplatesSection refreshKey={data.generatedAt} />
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -94,8 +102,8 @@ export function StudioDashboardView() {
                     <div>
                       <CardTitle className="text-base">Scheduled campaigns</CardTitle>
                       <CardDescription>
-                        {data.schedule.upcomingCount > 0
-                          ? `${data.schedule.upcomingCount} queued in the next 7 days`
+                        {scheduledUpcoming.length > 0
+                          ? `${scheduledUpcoming.length} queued in the next 7 days`
                           : "No campaigns queued in the next 7 days"}
                       </CardDescription>
                     </div>
@@ -105,22 +113,22 @@ export function StudioDashboardView() {
                   </CardHeader>
                   <CardContent>
                     <OverviewExpandableBody className="space-y-3">
-                      {data.schedule.nextUpcoming ? (
+                      {nextScheduled ? (
                         <div className={overviewInsetHighlightClassName}>
                           <p className="text-xs font-medium text-muted-foreground">Next scheduled broadcast</p>
-                          <p className="font-medium">{data.schedule.nextUpcoming.name}</p>
-                          <p className="text-xs text-muted-foreground">{data.schedule.nextUpcoming.subject}</p>
+                          <p className="font-medium">{nextScheduled.name}</p>
+                          <p className="text-xs text-muted-foreground">{nextScheduled.subject}</p>
                           <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                            {formatOverviewWhen(data.schedule.nextUpcoming.scheduledAt)} ·{" "}
-                            {data.schedule.nextUpcoming.subscriberGroupName ?? "Subscriber group"} ·{" "}
-                            {data.schedule.nextUpcoming.recipientCount.toLocaleString()} subscribers
+                            {formatOverviewWhen(nextScheduled.scheduledAt)} ·{" "}
+                            {nextScheduled.subscriberGroupName ?? "Subscriber group"} ·{" "}
+                            {nextScheduled.recipientCount.toLocaleString()} subscribers
                           </p>
                         </div>
                       ) : (
                         <p className="text-sm text-muted-foreground">No upcoming email campaigns scheduled yet.</p>
                       )}
                       <ul className="space-y-2">
-                        {data.schedule.upcomingList.map((row) => (
+                        {scheduledUpcoming.map((row) => (
                           <li key={row.id}>
                             <Link
                               href={newsletterDetailHref(row.id, "publish", row.status)}

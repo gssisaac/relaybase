@@ -1,5 +1,6 @@
 import { assetKindFromHref } from "./assets";
 import { isYouTubeUrl } from "./youtube";
+import { DEFAULT_EMBEDDED_VIDEO_PROPS } from "@/lib/markdown-editor/utils/default-video-props";
 
 const VIDEO_IMAGE_MD_RE =
   /!\[([^\]]*)\]\(([^)\s]+\.(?:mp4|webm|ogv|mov|mkv|m4v|avi|wmv|flv))\)/gi;
@@ -113,6 +114,7 @@ function promotePageMediaBlock(block: unknown): unknown {
           name: props.name || "",
           caption: props.caption || "",
           showPreview: true,
+          previewWidth: DEFAULT_EMBEDDED_VIDEO_PROPS.previewWidth,
           backgroundColor: "default",
           textAlignment: "left",
         },
@@ -145,6 +147,7 @@ function promotePageMediaBlock(block: unknown): unknown {
         name,
         caption: "",
         showPreview: true,
+        previewWidth: DEFAULT_EMBEDDED_VIDEO_PROPS.previewWidth,
         backgroundColor: "default",
         textAlignment: "left",
       },

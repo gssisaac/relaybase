@@ -34,11 +34,4 @@ export function YouTubeEmbedFrame({
   );
 }
 
-export const DEFAULT_EMBEDDED_VIDEO_PROPS = {
-  showPreview: true,
-  previewWidth: 560,
-  textAlignment: "left" as const,
-  backgroundColor: "default" as const,
-  caption: "" as const,
-  name: "" as const,
-};
+export { DEFAULT_EMBEDDED_VIDEO_PROPS } from "@/lib/markdown-editor/utils/default-video-props";

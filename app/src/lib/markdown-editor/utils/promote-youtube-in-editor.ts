@@ -13,10 +13,10 @@ export function promoteYouTubeBlocksInEditor(editor: NewsletterEditor): boolean 
         editor.updateBlock(block, {
           type: "video",
           props: {
+            ...DEFAULT_EMBEDDED_VIDEO_PROPS,
             url,
             name: block.props.name ?? "",
             caption: block.props.caption ?? "",
-            ...DEFAULT_EMBEDDED_VIDEO_PROPS,
             previewWidth: block.props.previewWidth ?? DEFAULT_EMBEDDED_VIDEO_PROPS.previewWidth,
           },
         });

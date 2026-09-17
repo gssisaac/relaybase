@@ -112,7 +112,11 @@ export function getNewsletterEditorSlashMenuItems(
     }),
   );
 
-  const defaultItems = getDefaultReactSlashMenuItems(editor).map((item) => {
+  // BlockNote still spreads `key` onto slash items at runtime; the React type omits it.
+  type SlashMenuItemWithKey = DefaultReactSuggestionItem & { key?: string };
+  const defaultItems = (
+    getDefaultReactSlashMenuItems(editor) as SlashMenuItemWithKey[]
+  ).map((item) => {
     if (item.key === "video") {
       return {
         ...item,

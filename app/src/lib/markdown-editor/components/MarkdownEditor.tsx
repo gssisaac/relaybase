@@ -8,6 +8,7 @@ import {
 } from "@blocknote/react";
 import { MarkdownBlockNoteView } from "@/lib/markdown-editor/components/MarkdownBlockNoteView";
 import { autoPlacement, offset, shift, size } from "@floating-ui/react";
+import { Code2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import {
   forwardRef,
@@ -18,6 +19,8 @@ import {
   useState,
   type MutableRefObject,
 } from "react";
+
+import { Button } from "@/components/ui/button";
 
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
 import { getNewsletterEditorSlashMenuItems } from "@/lib/markdown-editor/components/newsletter-slash-menu-items";
@@ -59,6 +62,10 @@ import "@/lib/markdown-editor/css/markdown-shared.css";
 
 export type MarkdownEditorHandle = EditorSnapshotProvider;
 
+export type MarkdownSourceView = "wysiwyg" | "raw";
+
+const RAW_HYDRATE_MS = 400;
+
 type MarkdownEditorProps = {
   /** Real newsletter id — asset upload/resolution namespace (`/studio/newsletters/:newsletterId/assets`). */
   newsletterId: string;
@@ -76,6 +83,9 @@ type MarkdownEditorProps = {
   editable?: boolean;
   onChange: (payload: { markdown: string; html: string }) => void;
   className?: string;
+  /** Controlled raw-source toggle. Omit to manage the view inside the editor. */
+  sourceView?: MarkdownSourceView;
+  onSourceViewChange?: (view: MarkdownSourceView) => void;
 };
 
 function blockIdAtPoint(clientX: number, clientY: number): string | null {
@@ -205,11 +215,15 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     editable = true,
     onChange,
     className,
+    sourceView: sourceViewProp,
+    onSourceViewChange,
   },
   ref,
 ) {
   const { resolvedTheme } = useTheme();
   const [ready, setReady] = useState(false);
+  const [uncontrolledSourceView, setUncontrolledSourceView] = useState<MarkdownSourceView>("wysiwyg");
+  const sourceView = sourceViewProp ?? uncontrolledSourceView;
   const onChangeRef = useRef(onChange);
   const valueRef = useRef(value);
   const syncingRef = useRef(false);
@@ -221,11 +235,18 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const hydratedRef = useRef(false);
   const hydratedFingerprintRef = useRef<string | null>(null);
   const hydrateGenRef = useRef(0);
+  const sourceViewRef = useRef(sourceView);
+  const rawDraftRef = useRef(value);
+  const rawTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const rawHydrateTimerRef = useRef<number | null>(null);
+  const [rawDraft, setRawDraft] = useState(value);
 
   onChangeRef.current = onChange;
   valueRef.current = value;
   newsletterIdRef.current = newsletterId;
   assetOwnerRef.current = assetOwner;
+  sourceViewRef.current = sourceView;
+  rawDraftRef.current = rawDraft;
 
   const ingestFile = useCallback(async (file: File) => {
     return ingestNewsletterFile({
@@ -317,12 +338,33 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     [],
   );
 
+  const clearRawHydrateTimer = useCallback(() => {
+    if (rawHydrateTimerRef.current != null) {
+      window.clearTimeout(rawHydrateTimerRef.current);
+      rawHydrateTimerRef.current = null;
+    }
+  }, []);
+
+  const setSourceView = useCallback(
+    (next: MarkdownSourceView) => {
+      if (sourceViewProp != null) {
+        onSourceViewChange?.(next);
+        return;
+      }
+      setUncontrolledSourceView(next);
+      onSourceViewChange?.(next);
+    },
+    [onSourceViewChange, sourceViewProp],
+  );
+
   const readPersistedBody = useCallback((): string => {
+    if (sourceViewRef.current === "raw") return rawDraftRef.current;
     return pendingEditorMarkdownRef.current ?? valueRef.current;
   }, []);
 
   const flushBody = useCallback(
     (editorInstance?: NewsletterEditor | null): string => {
+      if (sourceViewRef.current === "raw") return rawDraftRef.current;
       const inst = editorInstance ?? editorRef.current;
       if (!inst || !editorMountedRef.current || !hydratedRef.current) {
         return readPersistedBody();
@@ -340,7 +382,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     [readPersistedBody],
   );
 
-  const syncMarkdownFromValue = useCallback(async (markdown: string) => {
+  const syncMarkdownFromValue = useCallback(async (
+    markdown: string,
+    options?: { preserveMarkdown?: boolean },
+  ) => {
     const editorInstance = editorRef.current;
     if (!editorInstance || !editorMountedRef.current) return;
     const gen = ++hydrateGenRef.current;
@@ -351,7 +396,11 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     hydratedRef.current = true;
     hydratedFingerprintRef.current = fingerprintEditorDocument(editorInstance.document);
     // Seed parent preview HTML — notifyEditorChange skips unchanged fingerprints.
-    emitChange(serializeEditorMarkdown(editorInstance), editorInstance);
+    // Raw source keeps the typed markdown; only refresh HTML from BlockNote.
+    emitChange(
+      options?.preserveMarkdown ? markdown : serializeEditorMarkdown(editorInstance),
+      editorInstance,
+    );
   }, [emitChange]);
 
   const notifyEditorChange = useCallback(
@@ -386,6 +435,21 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   useEffect(() => {
     if (!editor || !editorMountedRef.current) return;
     const pending = pendingEditorMarkdownRef.current;
+    if (sourceViewRef.current === "raw") {
+      if (pending !== null && value === pending) {
+        pendingEditorMarkdownRef.current = null;
+        return;
+      }
+      if (rawDraftRef.current === value) {
+        pendingEditorMarkdownRef.current = null;
+        return;
+      }
+      pendingEditorMarkdownRef.current = null;
+      setRawDraft(value);
+      rawDraftRef.current = value;
+      void syncMarkdownFromValue(value, { preserveMarkdown: true });
+      return;
+    }
     const currentMarkdown = serializeEditorMarkdown(editor);
     if (pending !== null && (value === pending || currentMarkdown === value)) {
       pendingEditorMarkdownRef.current = null;
@@ -405,6 +469,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   }, [editor, notifyEditorChange]);
 
   const pullSnapshot = useCallback((): string | null => {
+    if (sourceViewRef.current === "raw") {
+      const body = rawDraftRef.current;
+      const editorInstance = editorRef.current;
+      if (editorInstance) emitChange(body, editorInstance);
+      else onChangeRef.current({ markdown: body, html: "" });
+      return body;
+    }
     const editorInstance = editorRef.current;
     if (!editorInstance || !editorMountedRef.current || syncingRef.current || !hydratedRef.current) {
       return null;
@@ -420,10 +491,76 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     return body;
   }, [emitChange, flushBody]);
 
+  const emitRawChange = useCallback(
+    (body: string) => {
+      pendingEditorMarkdownRef.current = body;
+      setRawDraft(body);
+      rawDraftRef.current = body;
+      const editorInstance = editorRef.current;
+      if (!editorInstance) {
+        onChangeRef.current({ markdown: body, html: "" });
+        return;
+      }
+      onChangeRef.current({
+        markdown: body,
+        html: enhancePreviewHtml(
+          normalizeNewsletterAssetUrlsInHtml(editorInstance.blocksToHTMLLossy()),
+        ),
+      });
+      clearRawHydrateTimer();
+      rawHydrateTimerRef.current = window.setTimeout(() => {
+        rawHydrateTimerRef.current = null;
+        void syncMarkdownFromValue(body, { preserveMarkdown: true });
+      }, RAW_HYDRATE_MS);
+    },
+    [clearRawHydrateTimer, syncMarkdownFromValue],
+  );
+
+  const toggleSourceView = useCallback(() => {
+    setSourceView(sourceViewRef.current === "raw" ? "wysiwyg" : "raw");
+  }, [setSourceView]);
+
+  const prevSourceViewRef = useRef(sourceView);
+  useEffect(() => {
+    const prev = prevSourceViewRef.current;
+    if (prev === sourceView) return;
+    prevSourceViewRef.current = sourceView;
+    clearRawHydrateTimer();
+    if (sourceView === "raw") {
+      const inst = editorRef.current;
+      const body =
+        inst && editorMountedRef.current && hydratedRef.current
+          ? serializeEditorMarkdown(inst)
+          : valueRef.current;
+      setRawDraft(body);
+      rawDraftRef.current = body;
+      pendingEditorMarkdownRef.current = body;
+      requestAnimationFrame(() => rawTextareaRef.current?.focus());
+      return;
+    }
+    void syncMarkdownFromValue(rawDraftRef.current);
+  }, [clearRawHydrateTimer, sourceView, syncMarkdownFromValue]);
+
   const insertTextAtCursor = useCallback(
     (text: string) => {
+      if (!editable || !text) return;
+      if (sourceViewRef.current === "raw") {
+        const textarea = rawTextareaRef.current;
+        const current = rawDraftRef.current;
+        const start = textarea?.selectionStart ?? current.length;
+        const end = textarea?.selectionEnd ?? start;
+        const next = `${current.slice(0, start)}${text}${current.slice(end)}`;
+        emitRawChange(next);
+        requestAnimationFrame(() => {
+          if (!textarea) return;
+          textarea.focus();
+          const pos = start + text.length;
+          textarea.setSelectionRange(pos, pos);
+        });
+        return;
+      }
       const editorInstance = editorRef.current;
-      if (!editorInstance || !editorMountedRef.current || !editable || !text) return;
+      if (!editorInstance || !editorMountedRef.current) return;
       try {
         editorInstance.focus();
         editorInstance.insertInlineContent([{ type: "text", text, styles: {} }]);
@@ -432,7 +569,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
         console.error("Failed to insert text in editor", err);
       }
     },
-    [editable, notifyEditorChange],
+    [editable, emitRawChange, notifyEditorChange],
   );
 
   useImperativeHandle(
@@ -455,11 +592,26 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     };
   }, [pullSnapshot]);
 
+  useEffect(() => {
+    prevSourceViewRef.current = "wysiwyg";
+    setUncontrolledSourceView("wysiwyg");
+    setRawDraft(valueRef.current);
+    rawDraftRef.current = valueRef.current;
+    clearRawHydrateTimer();
+  }, [clearRawHydrateTimer, documentId]);
+
+  useEffect(() => () => clearRawHydrateTimer(), [clearRawHydrateTimer]);
+
   const isDark = ready && resolvedTheme === "dark";
+  const showSourceToggle = editable && sourceViewProp == null;
+  const isRaw = sourceView === "raw";
 
   return (
     <div
-      className={cn("gtm-md-editor gtm-md-editor-fill h-full min-h-0 w-full px-3 py-3", className)}
+      className={cn(
+        "gtm-md-editor gtm-md-editor-fill relative flex h-full min-h-0 w-full flex-col px-3 py-3",
+        className,
+      )}
       data-theme={isDark ? "dark" : "light"}
       onContextMenu={(e) => e.stopPropagation()}
       onDragOverCapture={(event) => {
@@ -481,27 +633,57 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       }}
       onClick={openExternalLink}
     >
-      {ready ? (
-        <MarkdownBlockNoteView
-          editor={editor}
-          editable={editable}
-          sideMenu={false}
-          slashMenu={false}
-          tableHandles={false}
-          theme={isDark ? "dark" : "light"}
-          className="gtm-md-editor-view h-full min-h-0"
-        >
-          <SuggestionMenuController
-            triggerCharacter="/"
-            floatingUIOptions={slashMenuFloatingOptions}
-            getItems={(query) => getNewsletterEditorSlashMenuItems(editor, query)}
-            shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
+      {showSourceToggle ? (
+        <div className="mb-1 flex shrink-0 justify-end">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={isRaw ? "secondary" : "ghost"}
+            aria-label={isRaw ? "Rich text" : "Edit source"}
+            aria-pressed={isRaw}
+            title={isRaw ? "Rich text" : "Edit source"}
+            onClick={toggleSourceView}
+          >
+            <Code2 className={cn("size-4", !isRaw && "text-muted-foreground")} />
+          </Button>
+        </div>
+      ) : null}
+      <div className="relative min-h-0 flex-1">
+        {isRaw ? (
+          <textarea
+            ref={rawTextareaRef}
+            value={rawDraft}
+            onChange={(event) => emitRawChange(event.target.value)}
+            spellCheck={false}
+            disabled={!editable}
+            aria-label="Markdown source"
+            className="h-full min-h-0 w-full resize-none overflow-auto border-0 bg-transparent font-mono text-[13px] leading-relaxed text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60"
           />
-          <TableHandlesController tableHandle={TableHandleWithIcons} />
-        </MarkdownBlockNoteView>
-      ) : (
-        <div className="min-h-[12rem]" aria-hidden />
-      )}
+        ) : null}
+        {ready ? (
+          <div className={cn("h-full min-h-0", isRaw && "hidden")}>
+            <MarkdownBlockNoteView
+              editor={editor}
+              editable={editable && !isRaw}
+              sideMenu={false}
+              slashMenu={false}
+              tableHandles={false}
+              theme={isDark ? "dark" : "light"}
+              className="gtm-md-editor-view h-full min-h-0"
+            >
+              <SuggestionMenuController
+                triggerCharacter="/"
+                floatingUIOptions={slashMenuFloatingOptions}
+                getItems={(query) => getNewsletterEditorSlashMenuItems(editor, query)}
+                shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
+              />
+              <TableHandlesController tableHandle={TableHandleWithIcons} />
+            </MarkdownBlockNoteView>
+          </div>
+        ) : (
+          <div className="min-h-[12rem]" aria-hidden />
+        )}
+      </div>
     </div>
   );
 });

@@ -1,7 +1,7 @@
 "use client";
 
-import { Braces, Monitor, Smartphone } from "lucide-react";
-import { useCallback, useRef, useState, type RefObject } from "react";
+import { Braces, Code2, Monitor, Smartphone } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,9 @@ import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-templa
 import type { ComposeMergeTagSection } from "@/studio/lib/triggers/trigger-merge-tags";
 import type { StudioAccountCompliance, StudioLayout } from "@/studio/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
-import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
+import MarkdownEditor, {
+  type MarkdownSourceView,
+} from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 import { cn } from "@/lib/utils";
 /**
@@ -112,9 +114,14 @@ export function NewsletterComposeForm({
   onSettingsSheetOpenChange?: (open: boolean) => void;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sourceView, setSourceView] = useState<MarkdownSourceView>("wysiwyg");
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const editorShellRef = useRef<HTMLDivElement>(null);
   const insertTargetRef = useRef<"subject" | "body">("body");
+
+  useEffect(() => {
+    setSourceView("wysiwyg");
+  }, [newsletterId]);
 
   const resolveInsertTarget = useCallback((): "subject" | "body" => {
     const active = document.activeElement;
@@ -217,6 +224,20 @@ export function NewsletterComposeForm({
                 className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
               />
               {editable ? (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant={sourceView === "raw" ? "secondary" : "ghost"}
+                  className="shrink-0"
+                  aria-label={sourceView === "raw" ? "Rich text" : "Edit source"}
+                  aria-pressed={sourceView === "raw"}
+                  title={sourceView === "raw" ? "Rich text" : "Edit source"}
+                  onClick={() => setSourceView((view) => (view === "raw" ? "wysiwyg" : "raw"))}
+                >
+                  <Code2 className={cn("size-4", sourceView !== "raw" && "text-muted-foreground")} />
+                </Button>
+              ) : null}
+              {editable ? (
                 <Popover>
                   <PopoverTrigger
                     render={
@@ -269,6 +290,8 @@ export function NewsletterComposeForm({
                 value={bodyMarkdown}
                 onChange={onBodyChange}
                 editable={editable}
+                sourceView={sourceView}
+                onSourceViewChange={setSourceView}
               />
             </div>
           </div>

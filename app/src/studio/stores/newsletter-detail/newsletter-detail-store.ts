@@ -3,6 +3,7 @@
 import { makeAutoObservable, runInAction } from "mobx";
 
 import { syncStudioSendCredentials } from "@/studio/lib/send/sync-studio-send-credentials";
+import { newslettersHubStore } from "@/studio/stores/newsletters-hub";
 import {
   studioApi,
   StudioApiError,
@@ -39,6 +40,7 @@ export class NewsletterDetailStore {
   templates: StudioLayout[] = [];
   subscriberMembers: NewsletterMember[] = [];
   loading = true;
+  refreshing = false;
   notFound = false;
 
   recipients: NewsletterRecipient[] = [];
@@ -102,9 +104,22 @@ export class NewsletterDetailStore {
     if (this.newsletterId === newsletterId) return;
     this.stopPolling();
     this.newsletterId = newsletterId;
-    this.newsletter = null;
-    this.loading = true;
     this.notFound = false;
+
+    const cached = newslettersHubStore.getNewsletter(newsletterId);
+    if (newslettersHubStore.layouts.length > 0) {
+      this.templates = newslettersHubStore.layouts;
+    }
+    if (cached) {
+      this.newsletter = cached;
+      this.loading = false;
+      this.refreshing = true;
+      this.seedDraft(cached);
+    } else {
+      this.newsletter = null;
+      this.loading = true;
+      this.refreshing = false;
+    }
     this.recipients = [];
     this.trackingEvents = [];
     this.linkClicks = [];
@@ -125,6 +140,7 @@ export class NewsletterDetailStore {
   setNewsletter(n: Newsletter) {
     this.newsletter = n;
     this.seedDraft(n);
+    newslettersHubStore.upsertNewsletter(n);
   }
 
   private seedDraft(n: Newsletter) {
@@ -166,6 +182,7 @@ export class NewsletterDetailStore {
         const updated = await studioApi.updateNewsletter(this.newsletterId, patch);
         runInAction(() => {
           this.newsletter = updated;
+          newslettersHubStore.upsertNewsletter(updated);
           this.lastSavedSubject = this.draftSubject;
           this.lastSavedBody = this.draftBody;
           this.lastSavedTemplateId = this.draftTemplateId;
@@ -186,13 +203,19 @@ export class NewsletterDetailStore {
 
   async refresh(): Promise<void> {
     if (!this.newsletterId) return;
+    const hadNewsletter = this.newsletter !== null;
+    if (hadNewsletter) {
+      this.refreshing = true;
+    }
     try {
       const data = await studioApi.getNewsletter(this.newsletterId);
       runInAction(() => {
         this.newsletter = data;
         this.loading = false;
+        this.refreshing = false;
         this.notFound = false;
         this.seedDraft(data);
+        newslettersHubStore.upsertNewsletter(data);
       });
       if (data.status === "sending") {
         this.startPolling();
@@ -202,6 +225,7 @@ export class NewsletterDetailStore {
     } catch (err) {
       runInAction(() => {
         this.loading = false;
+        this.refreshing = false;
         if (err instanceof StudioApiError && err.status === 404) {
           this.notFound = true;
         }
@@ -210,10 +234,14 @@ export class NewsletterDetailStore {
   }
 
   async refreshTemplates(): Promise<void> {
+    if (newslettersHubStore.layouts.length > 0) {
+      this.templates = newslettersHubStore.layouts;
+    }
     try {
       const { layouts } = await studioApi.listLayouts();
       runInAction(() => {
         this.templates = layouts;
+        newslettersHubStore.setLayouts(layouts);
       });
     } catch {
       // Non-fatal
@@ -244,6 +272,7 @@ export class NewsletterDetailStore {
       const updated = await studioApi.updateNewsletter(this.newsletterId, { subscriberGroupId: groupId });
       runInAction(() => {
         this.newsletter = updated;
+        newslettersHubStore.upsertNewsletter(updated);
       });
       await this.refreshSubscribers();
       return { ok: true };
@@ -265,6 +294,7 @@ export class NewsletterDetailStore {
       const res = await studioApi.sendNewsletter(this.newsletterId);
       runInAction(() => {
         this.newsletter = res.newsletter;
+        newslettersHubStore.upsertNewsletter(res.newsletter);
         this.sendInFlight = false;
       });
       this.startPolling();
@@ -305,6 +335,7 @@ export class NewsletterDetailStore {
       const updated = await studioApi.scheduleNewsletter(this.newsletterId, input.runAt);
       runInAction(() => {
         this.newsletter = updated;
+        newslettersHubStore.upsertNewsletter(updated);
       });
       return { ok: true, newsletter: updated };
     } catch (err) {
@@ -327,6 +358,7 @@ export class NewsletterDetailStore {
       const res = await studioApi.sendNewsletter(this.newsletterId);
       runInAction(() => {
         this.newsletter = res.newsletter;
+        newslettersHubStore.upsertNewsletter(res.newsletter);
         this.sendInFlight = false;
       });
       this.startPolling();
@@ -347,6 +379,7 @@ export class NewsletterDetailStore {
       const updated = await studioApi.cancelSchedule(this.newsletterId);
       runInAction(() => {
         this.newsletter = updated;
+        newslettersHubStore.upsertNewsletter(updated);
       });
       return { ok: true };
     } catch (err) {
@@ -379,6 +412,7 @@ export class NewsletterDetailStore {
       const data = await studioApi.getNewsletterStats(this.newsletterId);
       runInAction(() => {
         this.newsletter = data.newsletter;
+        newslettersHubStore.upsertNewsletter(data.newsletter);
         this.dispatch = data.dispatch;
         this.recipients = data.recipients;
         this.trackingEvents = data.trackingEvents;
@@ -398,6 +432,7 @@ export class NewsletterDetailStore {
       const data = await studioApi.getNewsletterStats(this.newsletterId);
       runInAction(() => {
         this.newsletter = data.newsletter;
+        newslettersHubStore.upsertNewsletter(data.newsletter);
         this.dispatch = data.dispatch;
         this.recipients = data.recipients;
         this.trackingEvents = data.trackingEvents;

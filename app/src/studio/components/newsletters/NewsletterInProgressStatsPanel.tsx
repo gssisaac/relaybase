@@ -2,7 +2,7 @@
 
 import { Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { NewsletterInProgressBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
-import { studioApi, type InProgressOverview } from "@/studio/api";
+import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
 
 function formatWhen(value?: string | null): string {
   if (!value) return "—";
@@ -26,32 +26,28 @@ function formatWhen(value?: string | null): string {
 
 /** Live sending queue + scheduled dispatches (stats, not list filters). */
 export function NewsletterInProgressStatsPanel({ active }: { active: boolean }) {
-  const [data, setData] = useState<InProgressOverview | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const hub = useNewslettersHub();
+  const data = hub.inProgress;
 
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    try {
-      setData(await studioApi.getInProgressOverview());
-    } catch {
+  const load = useCallback(
+    async (force?: boolean) => {
+      try {
+        await hub.refreshInProgress({ force });
+      } catch {
+        toast.error("Could not load send progress");
+      }
+    },
+    [hub],
+  );
+
+  useEffect(() => {
+    if (!active) return;
+    void hub.refreshInProgress().catch(() => {
       toast.error("Could not load send progress");
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!active) return;
-    void load();
-  }, [active, load]);
-
-  useEffect(() => {
-    if (!active) return;
-    const interval = setInterval(() => {
-      void load();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [active, load]);
+    });
+    hub.beginInProgressPolling();
+    return () => hub.endInProgressPolling();
+  }, [active, hub]);
 
   const sendingCount = data?.sending.length ?? 0;
   const scheduledCount = data?.scheduled.length ?? 0;
@@ -62,14 +58,14 @@ export function NewsletterInProgressStatsPanel({ active }: { active: boolean }) 
         <p className="text-sm text-muted-foreground">
           Sending pipelines and scheduled dispatches update every few seconds.
         </p>
-        <Button variant="outline" size="sm" disabled={refreshing} onClick={() => void load(true)}>
-          <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} aria-hidden />
+        <Button variant="outline" size="sm" disabled={hub.inProgressFetching} onClick={() => void load(true)}>
+          <RefreshCw className={hub.inProgressRefreshing ? "size-4 animate-spin" : "size-4"} aria-hidden />
         </Button>
       </div>
 
-      {!data ? (
+      {hub.inProgressShowPlaceholder ? (
         <NewsletterInProgressBodySkeleton />
-      ) : (
+      ) : data ? (
         <>
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {sendingCount > 0 ? (
@@ -205,7 +201,7 @@ export function NewsletterInProgressStatsPanel({ active }: { active: boolean }) 
             )}
           </Card>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { NewsletterInProgressView } from "@/studio/pages/newsletters/NewsletterI
 import { NewsletterSentOverviewView } from "@/studio/pages/newsletters/NewsletterSentOverviewView";
 import { NewslettersRouteFallbackSkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { NewsletterCloudflareLimitsAlertProvider } from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
+import { NewslettersHubProvider } from "@/studio/stores/newsletters-hub";
 import { NewslettersListView } from "@/studio/pages/newsletters/NewslettersListView";
 
 function NewslettersRoute() {
@@ -38,10 +39,12 @@ function NewslettersRoute() {
 
 export function NewslettersView() {
   return (
-    <NewsletterCloudflareLimitsAlertProvider>
-      <Suspense fallback={<NewslettersRouteFallbackSkeleton />}>
-        <NewslettersRoute />
-      </Suspense>
-    </NewsletterCloudflareLimitsAlertProvider>
+    <NewslettersHubProvider>
+      <NewsletterCloudflareLimitsAlertProvider>
+        <Suspense fallback={<NewslettersRouteFallbackSkeleton />}>
+          <NewslettersRoute />
+        </Suspense>
+      </NewsletterCloudflareLimitsAlertProvider>
+    </NewslettersHubProvider>
   );
 }

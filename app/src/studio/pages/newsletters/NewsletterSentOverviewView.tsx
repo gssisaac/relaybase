@@ -2,7 +2,7 @@
 
 import { ExternalLink, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -17,7 +17,7 @@ import { NewslettersSectionNav } from "@/studio/components/newsletters/Newslette
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { NewsletterSentOverviewBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
-import { studioApi, type AccountSentOverview } from "@/studio/api";
+import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
 
 function rateLabel(value: number): string {
   return `${value.toFixed(1)}%`;
@@ -37,23 +37,25 @@ function formatWeek(value: string): string {
 }
 
 export function NewsletterSentOverviewView() {
-  const [data, setData] = useState<AccountSentOverview | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const hub = useNewslettersHub();
+  const data = hub.sentOverview;
 
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    try {
-      setData(await studioApi.getSentOverview());
-    } catch {
-      toast.error("Could not load sent statistics");
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (force?: boolean) => {
+      try {
+        await hub.refreshSentOverview({ force });
+      } catch {
+        toast.error("Could not load sent statistics");
+      }
+    },
+    [hub],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void hub.refreshSentOverview().catch(() => {
+      toast.error("Could not load sent statistics");
+    });
+  }, [hub]);
 
   const maxWeek = Math.max(1, ...(data?.byWeek.map((w) => w.sent) ?? [1]));
 
@@ -68,9 +70,9 @@ export function NewsletterSentOverviewView() {
               variant="outline"
               size="sm"
               onClick={() => void load(true)}
-              disabled={refreshing}
+              disabled={hub.sentOverviewFetching}
             >
-              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+              <RefreshCw className={hub.sentOverviewRefreshing ? "size-4 animate-spin" : "size-4"} />
             </Button>
           </>
         }
@@ -84,9 +86,9 @@ export function NewsletterSentOverviewView() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
           <NewsletterCloudflareLimitsAlertBanner />
-          {!data ? (
+          {hub.sentOverviewShowPlaceholder ? (
             <NewsletterSentOverviewBodySkeleton />
-          ) : data.totals.newsletters === 0 ? (
+          ) : data && data.totals.newsletters === 0 ? (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">No sent newsletters yet</CardTitle>
@@ -95,7 +97,7 @@ export function NewsletterSentOverviewView() {
                 </CardDescription>
               </CardHeader>
             </Card>
-          ) : (
+          ) : data ? (
             <>
               <p className="text-xs text-muted-foreground">
                 {formatWhen(data.period.from)} – {formatWhen(data.period.to)} ·{" "}
@@ -264,7 +266,7 @@ export function NewsletterSentOverviewView() {
                 </Card>
               ) : null}
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

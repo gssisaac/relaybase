@@ -29,6 +29,7 @@ import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { catalogTemplateSnapshot } from "@/studio/lib/templates/catalog-template-snapshot";
 import { createNewsletterFromHubTemplate } from "@/studio/lib/templates/hub-template-launch";
+import { newslettersHubStore } from "@/studio/stores/newsletters-hub";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";
 import { studioApi, StudioApiError, studioSubscriberApi, type StudioTemplate } from "@/studio/api";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
@@ -183,6 +184,8 @@ export function NewNewsletterTemplateDialog({
           ...(workerUrl ? { workerUrl } : {}),
         });
         toast.success(`Newsletter "${created.name}" created`);
+        newslettersHubStore.upsertNewsletter(created);
+        void newslettersHubStore.refreshList();
         onOpenChange(false);
         router.push(newsletterDetailHref(created.id, "content"));
         return;
@@ -196,6 +199,8 @@ export function NewNewsletterTemplateDialog({
         snapshot: catalogTemplateSnapshot(selection),
       });
       toast.success(`Newsletter "${created.name}" created`);
+      newslettersHubStore.upsertNewsletter(created);
+      void newslettersHubStore.refreshList();
       onOpenChange(false);
       router.push(newsletterDetailHref(created.id, "content"));
     } catch (err) {

@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   BarChart3,
+  Loader2,
   Mail,
   Send,
   Settings,
@@ -41,7 +42,7 @@ export function NewsletterDetailShell({
 }) {
   const { newsletters } = useStudioPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const { newsletterId, newsletter, notFound } = useNewsletterDetail();
+  const { newsletterId, newsletter, notFound, refreshing } = useNewsletterDetail();
 
   const title =
     newsletter?.name?.trim() ||
@@ -102,6 +103,12 @@ export function NewsletterDetailShell({
                 );
               })}
             </nav>
+            {refreshing ? (
+              <Loader2
+                className="size-4 shrink-0 animate-spin text-muted-foreground"
+                aria-label="Refreshing newsletter"
+              />
+            ) : null}
             {newsletter ? (
               <NewsletterStatusBadge
                 status={newsletter.status}

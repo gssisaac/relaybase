@@ -24,12 +24,8 @@ import { newslettersSectionHref } from "@/studio/lib/paths";
 import { OverviewKpiCard } from "@/studio/pages/overview/OverviewKpiCard";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { EmptyListState } from "@/email/components/mailbox/EmailListShell";
-import {
-  studioApi,
-  type Newsletter,
-  type NewsletterStatus,
-  type StudioLayout,
-} from "@/studio/api";
+import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
+import type { Newsletter, NewsletterStatus } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export type NewsletterFilter = "draft" | "sent" | "in_progress" | "all";
@@ -109,37 +105,32 @@ function statsLine(b: Newsletter): string {
 export function NewslettersListView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
-  const [layouts, setLayouts] = useState<StudioLayout[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const hub = useNewslettersHub();
+  const newsletters = hub.newsletters;
+  const layouts = hub.layouts;
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<NewsletterFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
 
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const [list, layoutRes] = await Promise.all([
-        studioApi.listNewsletters(),
-        studioApi.listLayouts(),
-      ]);
-      setNewsletters(list.newsletters);
-      setLayouts(layoutRes.layouts);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not load newsletters";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (force?: boolean) => {
+      try {
+        await hub.refreshList({ force });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not load newsletters";
+        toast.error(message);
+      }
+    },
+    [hub],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void hub.refreshList().catch((err) => {
+      const message = err instanceof Error ? err.message : "Could not load newsletters";
+      toast.error(message);
+    });
+  }, [hub]);
 
   useEffect(() => {
     if (searchParams.get("new")?.trim() === "1") {
@@ -147,19 +138,6 @@ export function NewslettersListView() {
       router.replace("/studio/newsletters");
     }
   }, [searchParams, router]);
-
-  const hasSending = useMemo(
-    () => newsletters.some((b) => b.status === "sending"),
-    [newsletters],
-  );
-
-  useEffect(() => {
-    if (!hasSending) return;
-    const interval = setInterval(() => {
-      void load(false);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [hasSending, load]);
 
   const counts = useMemo(() => {
     const visible = newsletters.filter((b) => b.listStatus !== "archived");
@@ -193,7 +171,7 @@ export function NewslettersListView() {
     setFilter((prev) => (prev === next ? "all" : next));
   }
 
-  const initialLoad = loading && newsletters.length === 0;
+  const showPlaceholder = hub.listShowPlaceholder;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -216,9 +194,9 @@ export function NewslettersListView() {
               variant="outline"
               size="sm"
               onClick={() => void load(true)}
-              disabled={refreshing}
+              disabled={hub.listFetching}
             >
-              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+              <RefreshCw className={hub.listRefreshing ? "size-4 animate-spin" : "size-4"} />
             </Button>
           </>
         }
@@ -233,7 +211,7 @@ export function NewslettersListView() {
         <div className={dashboardScrollBodyClassName("space-y-4")}>
           <NewsletterCloudflareLimitsAlertBanner />
 
-          {initialLoad ? (
+          {showPlaceholder ? (
             <NewsletterListKpiSkeleton />
           ) : (
             <div className="grid gap-3 sm:grid-cols-3">
@@ -327,7 +305,7 @@ export function NewslettersListView() {
               layouts={layouts}
               statsLine={statsLine}
             />
-          ) : !loading ? (
+          ) : !hub.listFetching || newsletters.length > 0 ? (
             newsletters.length === 0 ? (
               <EmptyListState
                 icon={Mail}
@@ -362,7 +340,7 @@ export function NewslettersListView() {
                 }
               />
             )
-          ) : initialLoad ? (
+          ) : showPlaceholder ? (
             <NewsletterGallerySkeleton />
           ) : null}
         </div>

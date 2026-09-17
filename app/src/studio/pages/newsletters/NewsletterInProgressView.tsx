@@ -2,7 +2,7 @@
 
 import { Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -13,13 +13,13 @@ import {
   NewsletterCloudflareLimitsAlertBanner,
   NewsletterCloudflareLimitsAlertShowButton,
 } from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
+import { NewsletterInProgressBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { NewsletterInProgressBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
-import { studioApi, type InProgressOverview } from "@/studio/api";
+import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
 
 function formatWhen(value?: string | null): string {
   if (!value) return "—";
@@ -32,27 +32,27 @@ function formatWhen(value?: string | null): string {
 }
 
 export function NewsletterInProgressView() {
-  const [data, setData] = useState<InProgressOverview | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const hub = useNewslettersHub();
+  const data = hub.inProgress;
 
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    try {
-      setData(await studioApi.getInProgressOverview());
-    } catch {
-      toast.error("Could not load in-progress newsletters");
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (force?: boolean) => {
+      try {
+        await hub.refreshInProgress({ force });
+      } catch {
+        toast.error("Could not load in-progress newsletters");
+      }
+    },
+    [hub],
+  );
 
   useEffect(() => {
-    void load();
-    const interval = setInterval(() => {
-      void load();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [load]);
+    void hub.refreshInProgress().catch(() => {
+      toast.error("Could not load in-progress newsletters");
+    });
+    hub.beginInProgressPolling();
+    return () => hub.endInProgressPolling();
+  }, [hub]);
 
   const sendingCount = data?.sending.length ?? 0;
   const scheduledCount = data?.scheduled.length ?? 0;
@@ -68,9 +68,9 @@ export function NewsletterInProgressView() {
               variant="outline"
               size="sm"
               onClick={() => void load(true)}
-              disabled={refreshing}
+              disabled={hub.inProgressFetching}
             >
-              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+              <RefreshCw className={hub.inProgressRefreshing ? "size-4 animate-spin" : "size-4"} />
             </Button>
           </>
         }
@@ -84,9 +84,9 @@ export function NewsletterInProgressView() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
           <NewsletterCloudflareLimitsAlertBanner />
-          {!data ? (
+          {hub.inProgressShowPlaceholder ? (
             <NewsletterInProgressBodySkeleton />
-          ) : (
+          ) : data ? (
             <>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 {sendingCount > 0 ? (
@@ -214,7 +214,7 @@ export function NewsletterInProgressView() {
                 )}
               </Card>
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

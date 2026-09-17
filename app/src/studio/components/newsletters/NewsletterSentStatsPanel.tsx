@@ -2,7 +2,7 @@
 
 import { ExternalLink, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { NewsletterSentOverviewBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
-import { studioApi, type AccountSentOverview } from "@/studio/api";
+import { useNewslettersHub } from "@/studio/stores/newsletters-hub";
 
 function rateLabel(value: number): string {
   return `${value.toFixed(1)}%`;
@@ -31,38 +31,40 @@ function formatWeek(value: string): string {
 
 /** Account-wide sent newsletter analytics (stats, not list filters). */
 export function NewsletterSentStatsPanel({ active }: { active: boolean }) {
-  const [data, setData] = useState<AccountSentOverview | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const hub = useNewslettersHub();
+  const data = hub.sentOverview;
 
-  const load = useCallback(async (force?: boolean) => {
-    if (force) setRefreshing(true);
-    try {
-      setData(await studioApi.getSentOverview());
-    } catch {
-      toast.error("Could not load sent statistics");
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (force?: boolean) => {
+      try {
+        await hub.refreshSentOverview({ force });
+      } catch {
+        toast.error("Could not load sent statistics");
+      }
+    },
+    [hub],
+  );
 
   useEffect(() => {
     if (!active) return;
-    void load();
-  }, [active, load]);
+    void hub.refreshSentOverview().catch(() => {
+      toast.error("Could not load sent statistics");
+    });
+  }, [active, hub]);
 
   const maxWeek = Math.max(1, ...(data?.byWeek.map((w) => w.sent) ?? [1]));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <Button variant="outline" size="sm" disabled={refreshing} onClick={() => void load(true)}>
-          <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} aria-hidden />
+        <Button variant="outline" size="sm" disabled={hub.sentOverviewFetching} onClick={() => void load(true)}>
+          <RefreshCw className={hub.sentOverviewRefreshing ? "size-4 animate-spin" : "size-4"} aria-hidden />
         </Button>
       </div>
 
-      {!data ? (
+      {hub.sentOverviewShowPlaceholder ? (
         <NewsletterSentOverviewBodySkeleton />
-      ) : data.totals.newsletters === 0 ? (
+      ) : data && data.totals.newsletters === 0 ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">No sent newsletters yet</CardTitle>
@@ -71,7 +73,7 @@ export function NewsletterSentStatsPanel({ active }: { active: boolean }) {
             </CardDescription>
           </CardHeader>
         </Card>
-      ) : (
+      ) : data ? (
         <>
           <p className="text-xs text-muted-foreground">
             {formatWhen(data.period.from)} – {formatWhen(data.period.to)} · {data.totals.newsletters}{" "}
@@ -249,7 +251,7 @@ export function NewsletterSentStatsPanel({ active }: { active: boolean }) {
             </Card>
           ) : null}
         </>
-      )}
+      ) : null}
     </div>
   );
 }

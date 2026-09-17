@@ -48,6 +48,7 @@ type NewsletterDetailHookValue = {
   templates: StudioLayout[];
   subscriberMembers: NewsletterMember[];
   loading: boolean;
+  refreshing: boolean;
   notFound: boolean;
   setNewsletter: (newsletter: Newsletter) => void;
   refresh: () => Promise<void>;
@@ -73,6 +74,7 @@ export function useNewsletterDetail(): NewsletterDetailHookValue {
         templates: store.templates,
         subscriberMembers: store.subscriberMembers,
         loading: store.loading,
+        refreshing: store.refreshing,
         notFound: store.notFound,
         sendInFlight: store.sendInFlight,
         dispatch: store.dispatch,
@@ -87,6 +89,7 @@ export function useNewsletterDetail(): NewsletterDetailHookValue {
     templates: store.templates,
     subscriberMembers: store.subscriberMembers,
     loading: store.loading,
+    refreshing: store.refreshing,
     notFound: store.notFound,
     setNewsletter: store.setNewsletter,
     refresh: store.refresh,

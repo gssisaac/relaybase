@@ -28,6 +28,7 @@ import { EmailButtonFormattingToolbar } from "@/lib/markdown-editor/components/e
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
 import { getNewsletterEditorSlashMenuItems } from "@/lib/markdown-editor/components/newsletter-slash-menu-items";
 import { newsletterEditorSchema, type NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
+import type { ComposeMergeTagSection } from "@/studio/lib/triggers/trigger-merge-tags";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 import { fingerprintEditorDocument, markdownFlushStrategy } from "@/lib/markdown-editor/utils/flush";
 import {
@@ -89,6 +90,8 @@ type MarkdownEditorProps = {
   /** Controlled raw-source toggle. Omit to manage the view inside the editor. */
   sourceView?: MarkdownSourceView;
   onSourceViewChange?: (view: MarkdownSourceView) => void;
+  /** Personalization / layout / trigger merge tag sections to display at the top of the slash menu. */
+  mergeTagSections?: ComposeMergeTagSection[];
 };
 
 function blockIdAtPoint(clientX: number, clientY: number): string | null {
@@ -220,6 +223,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     className,
     sourceView: sourceViewProp,
     onSourceViewChange,
+    mergeTagSections,
   },
   ref,
 ) {
@@ -235,6 +239,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const editorRef = useRef<NewsletterEditor | null>(null);
   const newsletterIdRef = useRef(newsletterId);
   const assetOwnerRef = useRef(assetOwner);
+  const mergeTagSectionsRef = useRef(mergeTagSections);
   const hydratedRef = useRef(false);
   const hydratedFingerprintRef = useRef<string | null>(null);
   const hydrateGenRef = useRef(0);
@@ -248,6 +253,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   valueRef.current = value;
   newsletterIdRef.current = newsletterId;
   assetOwnerRef.current = assetOwner;
+  mergeTagSectionsRef.current = mergeTagSections;
   sourceViewRef.current = sourceView;
   rawDraftRef.current = rawDraft;
 
@@ -681,7 +687,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
                 <SuggestionMenuController
                   triggerCharacter="/"
                   floatingUIOptions={slashMenuFloatingOptions}
-                  getItems={(query) => getNewsletterEditorSlashMenuItems(editor, query)}
+                  getItems={(query) =>
+                    getNewsletterEditorSlashMenuItems(
+                      editor,
+                      query,
+                      mergeTagSectionsRef.current,
+                    )
+                  }
                   shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
                 />
                 <TableHandlesController tableHandle={TableHandleWithIcons} />

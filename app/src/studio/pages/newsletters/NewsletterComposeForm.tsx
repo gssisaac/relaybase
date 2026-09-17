@@ -292,6 +292,7 @@ export function NewsletterComposeForm({
                 editable={editable}
                 sourceView={sourceView}
                 onSourceViewChange={setSourceView}
+                mergeTagSections={tagSections}
               />
             </div>
           </div>

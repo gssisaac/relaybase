@@ -24,7 +24,7 @@ export const NewsletterSuggestionMenuRoot = forwardRef<
       id={id}
       role="listbox"
       className={cn(
-        "bn-suggestion-menu z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-36 overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
+        "bn-suggestion-menu z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-56 max-w-sm overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10",
         className,
       )}
       ref={ref}
@@ -44,7 +44,10 @@ export const NewsletterSuggestionMenuLabel = forwardRef<
 
   return (
     <div
-      className={cn("px-1.5 py-1 text-xs text-muted-foreground", className)}
+      className={cn(
+        "px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80",
+        className,
+      )}
       ref={ref}
     >
       {children}
@@ -78,6 +81,7 @@ export const NewsletterSuggestionMenuItem = forwardRef<
   }, [isSelected]);
 
   const compact = item.size === "small";
+  const isTagToken = item.title.startsWith("{{") && item.title.endsWith("}}");
 
   return (
     <div
@@ -103,8 +107,12 @@ export const NewsletterSuggestionMenuItem = forwardRef<
       <div className="min-w-0 flex-1">
         <div
           className={cn(
-            "truncate text-sm leading-snug",
-            compact ? "font-normal" : "font-medium text-foreground",
+            "truncate leading-snug",
+            isTagToken
+              ? "font-mono text-xs font-semibold tracking-tight text-foreground"
+              : compact
+                ? "text-sm font-normal"
+                : "text-sm font-medium text-foreground",
             isSelected && "text-accent-foreground",
           )}
         >

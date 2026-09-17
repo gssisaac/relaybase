@@ -21,41 +21,17 @@ import {
   renderNewsletterForRecipient,
   resolveBroadcastSubject,
 } from "../lib/render/render";
-import { resolveTemplateVariableDefaults } from "../lib/templates/variable-schema";
+import {
+  resolveTemplateVariableDefaults,
+  sanitizeTemplateVariables,
+} from "../lib/templates/variable-schema";
+import { applyMergeTagValues, recipientDisplayName } from "../lib/messages/merge-tags";
+import { isValidEmail } from "../lib/shared/email";
 import { newId, newToken } from "../lib/shared/ids";
 import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
 import { messageFileStore } from "../lib/messages/message-file-store";
 
 export const studioMessages = new Hono();
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function applyMergeTagValues(text: string, mergeTags: Record<string, string>): string {
-  let out = text;
-  for (const [key, value] of Object.entries(mergeTags)) {
-    const k = key.trim();
-    if (!k) continue;
-    out = out.replaceAll(`{{${k}}}`, value);
-  }
-  return out;
-}
-
-function recipientDisplayName(mergeTags: Record<string, string>, email: string): string {
-  const named = mergeTags["contact.name"]?.trim();
-  if (named) return named;
-  return email.split("@")[0]?.trim() || email;
-}
-
-function sanitizeTemplateVariables(raw: Record<string, string> | undefined): Record<string, string> {
-  if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (typeof value !== "string") continue;
-    if (!/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)*$/.test(key)) continue;
-    out[key] = value.trim();
-  }
-  return out;
-}
 
 studioMessages.get("/", (c) => {
   const rows = messageFileStore
@@ -167,11 +143,11 @@ studioMessages.post("/:id/test-send", async (c) => {
   }
 
   const to = body.to?.trim();
-  if (!to || !EMAIL_RE.test(to)) {
+  if (!to || !isValidEmail(to)) {
     return c.json({ error: "Please enter a valid email address" }, 400);
   }
   const fromEmail = body.fromEmail?.trim();
-  if (!fromEmail || !EMAIL_RE.test(fromEmail)) {
+  if (!fromEmail || !isValidEmail(fromEmail)) {
     return c.json({ error: "Select a valid sender email" }, 400);
   }
 

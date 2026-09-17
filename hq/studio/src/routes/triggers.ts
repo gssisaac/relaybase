@@ -22,42 +22,16 @@ import {
 } from "../lib/triggers/trigger-defaults";
 import { buildTriggerStatsOverview } from "../lib/triggers/trigger-stats-overview";
 import { validateTriggerForActivation } from "../lib/triggers/validate";
+import {
+  defaultFromForDomain,
+  mergeTriggerPatch,
+  purposeFromInput,
+} from "../lib/triggers/patch";
+import { sanitizeTemplateVariables } from "../lib/templates/variable-schema";
+import { isValidEmail } from "../lib/shared/email";
 import { newId, newToken } from "../lib/shared/ids";
 
 export const studioTriggers = new Hono();
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function sanitizeTemplateVariables(raw: Record<string, string> | undefined): Record<string, string> {
-  if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (typeof value !== "string") continue;
-    if (!/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)*$/.test(key)) continue;
-    out[key] = value.trim();
-  }
-  return out;
-}
-
-function defaultFromForDomain(domain: string): string {
-  return `hello@${domain}`;
-}
-
-function purposeFromInput(raw: string | undefined): TriggerPurpose {
-  if (raw === "conversational" || raw === "marketing") return raw;
-  return "transactional";
-}
-
-function mergeTriggerPatch(
-  existing: TriggerSource,
-  patch: Partial<TriggerSource> | TriggerSource | undefined,
-): TriggerSource {
-  if (!patch || typeof patch !== "object") return existing;
-  if ("type" in patch && patch.type && patch.type !== existing.type) {
-    return patch as TriggerSource;
-  }
-  return { ...existing, ...patch } as TriggerSource;
-}
 
 studioTriggers.get("/", (c) => {
   const rows = store
@@ -191,7 +165,7 @@ studioTriggers.patch("/:id", async (c) => {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
-  if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
+  if (body.fromEmail && !isValidEmail(body.fromEmail)) {
     return c.json({ error: "Enter a valid sender email" }, 400);
   }
 
@@ -350,7 +324,7 @@ studioTriggers.post("/:id/test-send", async (c) => {
     /* empty */
   }
   const email = body.email?.trim().toLowerCase();
-  if (!email || !EMAIL_RE.test(email)) {
+  if (!email || !isValidEmail(email)) {
     return c.json({ error: "valid test email is required" }, 400);
   }
 

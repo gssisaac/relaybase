@@ -15,14 +15,9 @@ import {
   signupUser,
 } from "../lib/auth/hq-auth-service";
 import { verifyAccessToken } from "../lib/auth/jwt";
+import { bearerToken } from "../lib/auth/bearer-token";
 
 export const hqAuth = new Hono();
-
-function bearerToken(c: { req: { header: (name: string) => string | undefined } }): string | null {
-  const auth = c.req.header("Authorization")?.trim();
-  if (!auth?.startsWith("Bearer ")) return null;
-  return auth.slice(7).trim() || null;
-}
 
 hqAuth.post("/signup", async (c) => {
   try {

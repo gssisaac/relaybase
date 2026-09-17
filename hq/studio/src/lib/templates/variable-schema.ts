@@ -29,6 +29,20 @@ export type TemplateVariablesSchema = {
 
 const FIELD_KEY_RE = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)*$/;
 
+/** Sanitize user-supplied layout variable values from API PATCH bodies. */
+export function sanitizeTemplateVariables(
+  raw: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== "string") continue;
+    if (!FIELD_KEY_RE.test(key)) continue;
+    out[key] = value.trim();
+  }
+  return out;
+}
+
 export function normalizeTemplateVariablesSchema(
   input: TemplateVariablesSchema | null | undefined,
 ): TemplateVariablesSchema | null {

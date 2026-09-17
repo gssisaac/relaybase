@@ -1,8 +1,7 @@
 import { store } from "../../db/store";
 import type { Trigger, TriggerSource } from "../../db/types";
 import { requireMessage, triggerSource } from "../messages/resolve";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { EMAIL_RE } from "../shared/email";
 
 export type TriggerActivationIssue = { field: string; message: string };
 

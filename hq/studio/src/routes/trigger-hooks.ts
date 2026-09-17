@@ -8,13 +8,9 @@ import {
 } from "../lib/triggers/matcher";
 import { verifyTriggerWebhookSecret } from "../lib/triggers/trigger-auth";
 import { triggerSource } from "../lib/messages/resolve";
-export const studioTriggerHooks = new Hono();
+import { parseJsonBody } from "../lib/shared/parse-json-body";
 
-function parseJsonBody<T extends Record<string, unknown>>(c: {
-  req: { json: () => Promise<T> };
-}): Promise<T | null> {
-  return c.req.json().catch(() => null);
-}
+export const studioTriggerHooks = new Hono();
 
 // POST /studio/hooks/trigger/:triggerId — http_webhook
 studioTriggerHooks.post("/trigger/:triggerId", async (c) => {

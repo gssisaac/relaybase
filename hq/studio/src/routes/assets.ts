@@ -8,14 +8,9 @@ import { DEFAULT_BRAND_LOGO_FILENAME } from "../lib/templates/brand-logo";
 import { newsletterAssetKey } from "../lib/assets/key";
 import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
 import { newId } from "../lib/shared/ids";
+import { FALLBACK_BRAND_LOGO_PNG } from "../lib/assets/fallback-brand-logo";
 
 export const studioAssets = new Hono();
-
-/** Fallback when `public/brand/relaybase-icon.png` is missing (local dev). */
-const FALLBACK_BRAND_LOGO_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FABJADveWkH6AAAAAElFTkSuQmCC",
-  "base64",
-);
 
 // GET /studio/brand/relaybase-icon.png — default template logo when none uploaded
 studioAssets.get("/brand/relaybase-icon.png", (c) => {

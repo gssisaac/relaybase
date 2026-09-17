@@ -4,21 +4,13 @@ import type { Layout } from "../db/types";
 import { newId } from "../lib/shared/ids";
 import { serializeLayout } from "../lib/templates/layout-serialize";
 import { prepareTemplateImport } from "../lib/templates/prepare-import";
-import { messageFileStore } from "../lib/messages/message-file-store";
+import {
+  canAccessCustomLayout,
+  layoutReferencedByMessages,
+  nextCustomForkName,
+} from "../lib/templates/layout-access";
 
 export const studioTemplates = new Hono();
-
-function canAccessCustomLayout(row: Layout): boolean {
-  return row.accountLinkId === DEV_ACCOUNT_LINK_ID || row.accountLinkId === null;
-}
-
-function nextCustomForkName(layouts: Layout[], baseName: string): string {
-  const first = `${baseName} (custom)`;
-  if (!layouts.some((t) => t.name === first)) return first;
-  let n = 2;
-  while (layouts.some((t) => t.name === `${baseName} (custom ${n})`)) n += 1;
-  return `${baseName} (custom ${n})`;
-}
 
 // GET /studio/templates — built-in (shared) + this account's custom HTML layouts
 studioTemplates.get("/", async (c) => {
@@ -176,10 +168,6 @@ studioTemplates.patch("/:id/source", async (c) => {
   });
 });
 
-function layoutReferencedByMessages(_data: ReturnType<typeof store.read>, layoutId: string): boolean {
-  return messageFileStore.layoutIsReferenced(layoutId);
-}
-
 // DELETE /studio/layouts/:id — custom layouts only
 studioTemplates.delete("/:id", (c) => {
   const id = c.req.param("id");
@@ -192,7 +180,7 @@ studioTemplates.delete("/:id", (c) => {
   if (!canAccessCustomLayout(existing)) {
     return c.json({ error: "forbidden" }, 403);
   }
-  if (layoutReferencedByMessages(data, id)) {
+  if (layoutReferencedByMessages(id)) {
     return c.json({ error: "layout is used by one or more message templates" }, 409);
   }
 

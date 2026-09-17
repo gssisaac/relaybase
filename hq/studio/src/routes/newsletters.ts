@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { Newsletter } from "../db/types";
+import { isValidEmail } from "../lib/shared/email";
+import { claimNewsletterForSend, resolveTestSendUnsubscribeToken } from "../lib/newsletters/send-claim";
+import { sanitizeTemplateVariables } from "../lib/templates/variable-schema";
 import { createMessageForOwner, patchMessage } from "../lib/messages/message";
 import { requireMessage } from "../lib/messages/resolve";
 import { resolveActiveAudienceContacts } from "../lib/audience-groups/resolver";
@@ -29,49 +32,6 @@ import { newId, newToken } from "../lib/shared/ids";
 import { studioNewsletterAudience } from "./newsletter-audience";
 
 export const studioNewsletters = new Hono();
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function resolveTestSendUnsubscribeToken(broadcast: Newsletter, toEmail: string): string {
-  if (!broadcast.audienceGroupId) return newToken();
-  const group = findAudienceGroup(broadcast.audienceGroupId);
-  const normalized = toEmail.trim().toLowerCase();
-  const contact = group?.contacts.find((c) => c.email.trim().toLowerCase() === normalized);
-  return contact?.unsubscribeToken ?? newToken();
-}
-
-/** Atomically move draft → sending so duplicate POST /send cannot double-dispatch. */
-function claimNewsletterForSend(id: string): Newsletter | null {
-  let claimed: Newsletter | null = null;
-  store.update((draft) => {
-    const idx = draft.newsletters.findIndex((r) => r.id === id);
-    if (idx < 0) return;
-    const row = draft.newsletters[idx]!;
-    if (row.status !== "draft") return;
-    const now = new Date().toISOString();
-    claimed = {
-      ...row,
-      status: "sending",
-      sentAt: now,
-      startedAt: now,
-      finishedAt: null,
-      updatedAt: now,
-    };
-    draft.newsletters[idx] = claimed;
-  });
-  return claimed;
-}
-
-function sanitizeTemplateVariables(raw: Record<string, string> | undefined): Record<string, string> {
-  if (!raw || typeof raw !== "object") return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (typeof value !== "string") continue;
-    if (!/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)*$/.test(key)) continue;
-    out[key] = value.trim();
-  }
-  return out;
-}
 
 // GET /studio/broadcasts
 studioNewsletters.get("/", (c) => {
@@ -151,7 +111,7 @@ studioNewsletters.post("/", async (c) => {
     draft.account.domain = domain;
     if (workerUrl) draft.account.workerUrl = workerUrl;
   });
-  if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
+  if (body.fromEmail && !isValidEmail(body.fromEmail)) {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
   }
 
@@ -278,7 +238,7 @@ studioNewsletters.patch("/:id", async (c) => {
     }
   }
 
-  if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
+  if (body.fromEmail && !isValidEmail(body.fromEmail)) {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
   }
 

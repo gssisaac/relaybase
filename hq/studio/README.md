@@ -18,21 +18,22 @@ Listens on `http://localhost:32831` (override with `PORT`).
 
 | Path | Contents |
 |------|----------|
-| `data/store.json` | Account, layouts, newsletters, triggers, audience, assets metadata |
-| `data/templates/*.yaml` | Message templates (preset + user); loaded dynamically at runtime |
+| `data/store/*.json` | Sharded dev store (account, layouts, newsletters, triggers, audience, …) |
+| `data/templates/*.yaml` | Read-only template gallery blueprints |
+| `data/messages/*.yaml` | Editable message bodies (newsletters, triggers, library copies) |
 
-Override directories with `STUDIO_DATA_DIR` and `STUDIO_TEMPLATES_DIR`.
+Override the data root with `STUDIO_DATA_DIR`.
 
-Legacy `templates[]` inside `store.json` is imported once on startup, written to YAML, then removed from the JSON file.
+Legacy monolithic `data/store.json` is migrated once on startup into `data/store/`. Legacy `templates[]` in that file is imported to YAML, then removed.
 
 ## HQ Cloud auth (`/auth/*`)
 
-User records live in `data/auth.json` (same directory as `store.json`). The web app
+User records live in `data/auth.json` (same directory as the store shards). The web app
 proxies `/auth/*` to this service in local dev.
 
 | Route | Purpose |
 |-------|---------|
-| `POST /auth/signup` | 2-step signup payload: Worker proof + name + email + password (+ confirm) → links `store.json` worker URL |
+| `POST /auth/signup` | 2-step signup payload: Worker proof + name + email + password (+ confirm) → links account worker URL in store |
 | `POST /auth/login` | Same |
 | `POST /auth/refresh` | RTR refresh cookie rotation |
 | `POST /auth/logout` | Revoke refresh + clear cookie |

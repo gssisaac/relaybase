@@ -9,18 +9,19 @@ import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtu
 import { ensureOwnerMessageFiles } from "../lib/messages/ensure-owner-message-files";
 import { messageFileStore } from "../lib/messages/message-file-store";
 import { templateCatalogStore } from "../lib/templates/template-catalog-store";
+import { messageIdForOwner } from "../lib/messages/resolve";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
-import type { AccountComplianceSettings, Message, StudioDataStore, Template } from "./types";
+import {
+  hasPersistedStore,
+  readPersistedStoreShards,
+  writePersistedStoreShards,
+} from "./store-persistence";
+import type { AccountComplianceSettings, Message, Newsletter, StudioDataStore, Template, Trigger } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
 
-const DATA_DIR =
-  process.env.STUDIO_DATA_DIR ??
-  process.env.STUDIO_DATA_DIR ??
-  path.join(process.cwd(), "data");
-
-const STORE_FILE = path.join(DATA_DIR, "store.json");
+const DATA_DIR = process.env.STUDIO_DATA_DIR ?? path.join(process.cwd(), "data");
 
 function defaultCompliance(now: string): AccountComplianceSettings {
   return {
@@ -115,6 +116,13 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   if (!store.newsletterAssets) store.newsletterAssets = [];
   if (!store.triggerAssets) store.triggerAssets = [];
 
+  if (!store.scheduledJobs) store.scheduledJobs = [];
+  if (!store.accountSuppressions) store.accountSuppressions = [];
+  if (!store.recipients) store.recipients = [];
+  if (!store.trackingEvents) store.trackingEvents = [];
+  if (!store.pipelineCards) store.pipelineCards = [];
+  if (!store.activities) store.activities = [];
+
   for (const job of store.scheduledJobs) {
     if (job.kind === "broadcast") job.kind = "newsletter";
   }
@@ -125,6 +133,10 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   }
 
   for (const row of store.newsletters) {
+    const legacy = row as Newsletter & { templateId?: string };
+    if (!row.messageId) {
+      row.messageId = legacy.templateId ?? messageIdForOwner(row.id);
+    }
     if (!row.audienceGroupId) row.audienceGroupId = "";
     if (!row.domain) {
       const group = store.audienceGroups.find((g) => g.id === row.audienceGroupId);
@@ -216,6 +228,10 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   }
 
   for (const row of store.triggers) {
+    const legacy = row as Trigger & { templateId?: string };
+    if (!row.messageId) {
+      row.messageId = legacy.templateId ?? messageIdForOwner(row.id);
+    }
     if (row.cooldownSeconds === undefined) row.cooldownSeconds = 86_400;
     if (row.applyMarketingSuppression === undefined) {
       row.applyMarketingSuppression = row.purpose !== "transactional";
@@ -245,17 +261,18 @@ function ensureDataDir() {
 
 function readStore(): StudioDataStore {
   ensureDataDir();
-  if (!fs.existsSync(STORE_FILE)) {
+  if (!hasPersistedStore(DATA_DIR)) {
     const initial = hydrateTemplates(defaultStore());
     writeStore(initial);
     return initial;
   }
-  const raw = fs.readFileSync(STORE_FILE, "utf8");
   try {
-    const parsed = JSON.parse(raw) as StudioDataStore;
+    const partial = readPersistedStoreShards(DATA_DIR);
+    const legacyTemplates = (partial as { templates?: Template[] }).templates;
+    const parsed = { ...defaultStore(), ...partial } as StudioDataStore;
     let migratedLegacyTemplates = false;
-    if (Array.isArray(parsed.templates) && parsed.templates.length > 0) {
-      const legacy = parsed.templates as (Template & {
+    if (Array.isArray(legacyTemplates) && legacyTemplates.length > 0) {
+      const legacy = legacyTemplates as (Template & {
         isPreset?: boolean;
         accountLinkId?: string;
       })[];
@@ -290,7 +307,10 @@ function readStore(): StudioDataStore {
       writeStore(store);
     }
     return store;
-  } catch {
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[store] readStore failed, resetting dev store:", err);
+    }
     const initial = hydrateTemplates(defaultStore());
     writeStore(initial);
     return initial;
@@ -298,13 +318,12 @@ function readStore(): StudioDataStore {
 }
 
 function writeStore(store: StudioDataStore) {
-  ensureDataDir();
   const {
     templates: _templates,
     messages: _messages,
     ...persisted
   } = store;
-  fs.writeFileSync(STORE_FILE, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
+  writePersistedStoreShards(DATA_DIR, persisted);
 }
 
 function hydrateTemplates(store: StudioDataStore): StudioDataStore {

@@ -1,5 +1,5 @@
 /**
- * Studio dev store types (`data/store.json` + `data/template-catalog/*.yaml` + `data/messages/*.yaml`).
+ * Studio dev store types (`data/store/*.json` + `data/templates/*.yaml` + `data/messages/*.yaml`).
  *
  * Layout — HTML frame · Template — read-only catalog blueprint · Message — editable copy ·
  * Trigger — event send · Newsletter — audience send.
@@ -66,7 +66,7 @@ export type Layout = {
 };
 
 // ============================================================================
-// Templates (read-only catalog — `data/template-catalog/<id>.yaml`)
+// Templates (read-only catalog — `data/templates/<id>.yaml`)
 // ============================================================================
 
 export type TemplateCategory =
@@ -508,9 +508,9 @@ export type StudioDataStore = {
   account: AccountLink;
   complianceIdentities: ComplianceIdentity[];
   layouts: Layout[];
-  /** Hydrated catalog blueprints (not persisted in store.json). */
+  /** Hydrated catalog blueprints (not persisted under `data/store/`). */
   templates: Template[];
-  /** Hydrated user messages (not persisted in store.json). */
+  /** Hydrated user messages (not persisted under `data/store/`). */
   messages: Message[];
   newsletters: Newsletter[];
   recipients: Recipient[];

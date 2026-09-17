@@ -8,45 +8,53 @@ import { fileURLToPath } from "node:url";
 import { stringify as stringifyYaml } from "yaml";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.STUDIO_DATA_DIR ?? path.join(__dirname, "../data");
-const STORE = path.join(DATA_DIR, "store.json");
-const TEMPLATES_DIR = process.env.STUDIO_TEMPLATES_DIR ?? path.join(DATA_DIR, "templates");
+import { readStoreJson, writeStoreJson, resolveDataDir, legacyStoreFile } from "./store-json.mjs";
 
-function writeTemplate(row) {
+const DATA_DIR = resolveDataDir();
+const CATALOG_DIR = path.join(DATA_DIR, "templates");
+const MESSAGES_DIR = path.join(DATA_DIR, "messages");
+
+function writeYamlRow(row, dir) {
   const yaml = stringifyYaml(row, {
     lineWidth: 0,
     defaultKeyType: "PLAIN",
     defaultStringType: "BLOCK_LITERAL",
   });
-  fs.writeFileSync(path.join(TEMPLATES_DIR, `${row.id}.yaml`), `${yaml}\n`, "utf8");
+  fs.writeFileSync(path.join(dir, `${row.id}.yaml`), `${yaml}\n`, "utf8");
 }
 
-if (!fs.existsSync(STORE)) {
-  console.error(`Missing ${STORE}`);
+if (!fs.existsSync(legacyStoreFile(DATA_DIR)) && !fs.existsSync(path.join(DATA_DIR, "store", "layouts.json"))) {
+  console.error(`Missing store data under ${DATA_DIR}`);
   process.exit(1);
 }
 
-const store = JSON.parse(fs.readFileSync(STORE, "utf8"));
+const store = readStoreJson(DATA_DIR);
 const templates = store.templates ?? [];
 
-fs.mkdirSync(TEMPLATES_DIR, { recursive: true });
+fs.mkdirSync(CATALOG_DIR, { recursive: true });
+fs.mkdirSync(MESSAGES_DIR, { recursive: true });
 
 let exported = 0;
 for (const row of templates) {
   if (!row?.id) continue;
-  writeTemplate(row);
+  const dir =
+    row.isPreset === true || String(row.id).startsWith("msgtpl_preset_")
+      ? CATALOG_DIR
+      : MESSAGES_DIR;
+  writeYamlRow(row, dir);
   exported += 1;
 }
 
 delete store.templates;
-fs.writeFileSync(STORE, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+writeStoreJson(store, DATA_DIR);
 
 console.log(
   JSON.stringify(
     {
       exported,
-      templatesDir: TEMPLATES_DIR,
-      store: STORE,
+      catalogDir: CATALOG_DIR,
+      messagesDir: MESSAGES_DIR,
+      storeDir: path.join(DATA_DIR, "store"),
     },
     null,
     2,

@@ -9,7 +9,7 @@ import { getPresetTemplates } from "../messages/preset-templates";
 
 function resolveCatalogDir(): string {
   const dataDir = process.env.STUDIO_DATA_DIR ?? path.join(process.cwd(), "data");
-  return path.join(dataDir, "template-catalog");
+  return path.join(dataDir, "templates");
 }
 
 function normalizeCatalogTemplate(row: Template): Template {
@@ -64,7 +64,7 @@ function readCatalogFile(filePath: string): Template | null {
     }
     return null;
   } catch (err) {
-    console.error(`[template-catalog] Failed to parse ${filePath}:`, err);
+    console.error(`[templates] Failed to parse catalog ${filePath}:`, err);
     return null;
   }
 }

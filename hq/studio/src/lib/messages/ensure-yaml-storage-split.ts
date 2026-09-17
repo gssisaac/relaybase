@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { parse as parseYaml } from "yaml";
+import { isOwnedMessageId } from "./message-library";
 
 function dataRoot(): string {
   return process.env.STUDIO_DATA_DIR ?? path.join(process.cwd(), "data");
@@ -11,51 +11,61 @@ function ensureDir(dir: string) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object");
+function yamlFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((name) => name.endsWith(".yaml") || name.endsWith(".yml"));
+}
+
+function copyYamlFile(from: string, toDir: string) {
+  ensureDir(toDir);
+  const dest = path.join(toDir, path.basename(from));
+  if (!fs.existsSync(dest)) {
+    fs.copyFileSync(from, dest);
+  }
 }
 
 /**
- * One-time move from legacy `data/templates/` into
- * `data/template-catalog/` (presets) and `data/messages/` (editable).
+ * Retired `data/template-catalog/` → every file is a gallery blueprint under `data/templates/`.
+ * Owned ids also get an editable copy under `data/messages/` when missing.
  */
-export function ensureYamlStorageSplit(): void {
-  const root = dataRoot();
-  const legacyDir = path.join(root, "templates");
-  const catalogDir = path.join(root, "template-catalog");
-  const messagesDir = path.join(root, "messages");
+function migrateObsoleteTemplateCatalog(
+  obsoleteCatalogDir: string,
+  templatesDir: string,
+  messagesDir: string,
+) {
+  if (!fs.existsSync(obsoleteCatalogDir)) return;
 
-  if (!fs.existsSync(legacyDir)) return;
-
-  const legacyFiles = fs
-    .readdirSync(legacyDir)
-    .filter((name) => name.endsWith(".yaml") || name.endsWith(".yml"));
-  if (legacyFiles.length === 0) return;
-
-  const messagesAlready =
-    fs.existsSync(messagesDir) &&
-    fs.readdirSync(messagesDir).some((name) => name.endsWith(".yaml") || name.endsWith(".yml"));
-  const catalogAlready =
-    fs.existsSync(catalogDir) &&
-    fs.readdirSync(catalogDir).some((name) => name.endsWith(".yaml") || name.endsWith(".yml"));
-
-  if (messagesAlready && catalogAlready) {
-    return;
-  }
-
-  ensureDir(catalogDir);
-  ensureDir(messagesDir);
-
-  for (const file of legacyFiles) {
-    const from = path.join(legacyDir, file);
-    const raw = fs.readFileSync(from, "utf8");
-    const parsed = parseYaml(raw);
-    const isPreset = isRecord(parsed) && parsed.isPreset === true;
-    const destDir = isPreset ? catalogDir : messagesDir;
-    const dest = path.join(destDir, file);
-    if (!fs.existsSync(dest)) {
-      fs.copyFileSync(from, dest);
+  for (const file of yamlFiles(obsoleteCatalogDir)) {
+    const from = path.join(obsoleteCatalogDir, file);
+    copyYamlFile(from, templatesDir);
+    const id = file.replace(/\.(yaml|yml)$/, "");
+    if (isOwnedMessageId(id)) {
+      copyYamlFile(from, messagesDir);
     }
     fs.unlinkSync(from);
   }
+
+  if (yamlFiles(obsoleteCatalogDir).length === 0) {
+    try {
+      fs.rmdirSync(obsoleteCatalogDir);
+    } catch {
+      /* not empty */
+    }
+  }
+}
+
+/**
+ * Gallery blueprints live in `data/templates/`; editable bodies in `data/messages/`.
+ * The same `msgtpl_*` id may exist in both directories (catalog vs runtime copy).
+ */
+export function ensureYamlStorageSplit(): void {
+  const root = dataRoot();
+  const templatesDir = path.join(root, "templates");
+  const messagesDir = path.join(root, "messages");
+  const obsoleteCatalogDir = path.join(root, "template-catalog");
+
+  ensureDir(templatesDir);
+  ensureDir(messagesDir);
+
+  migrateObsoleteTemplateCatalog(obsoleteCatalogDir, templatesDir, messagesDir);
 }

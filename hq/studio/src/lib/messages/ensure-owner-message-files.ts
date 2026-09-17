@@ -35,8 +35,8 @@ export function ensureOwnerMessageFiles(store: StudioDataStore): boolean {
   const now = new Date().toISOString();
   let repaired = false;
 
-  const ensure = (messageId: string, name: string, accountLinkId: string, createdAt: string) => {
-    if (!messageId.startsWith("msgtpl_")) return;
+  const ensure = (messageId: string | undefined, name: string, accountLinkId: string, createdAt: string) => {
+    if (!messageId?.startsWith("msgtpl_")) return;
     if (fs.existsSync(messageYamlPath(messageId))) return;
     messageFileStore.save(materializeOwnerMessage(messageId, name, accountLinkId, createdAt, now));
     repaired = true;

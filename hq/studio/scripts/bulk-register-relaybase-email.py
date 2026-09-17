@@ -9,7 +9,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-STORE = ROOT / "data" / "store.json"
+DATA = ROOT / "data"
+STORE = DATA / "store.json"
+STORE_DIR = DATA / "store"
 BASE = os.environ.get("RELAYBASE_WORKER_URL", "https://relaybase-api.gssisaac.workers.dev")
 PASS = os.environ.get("RELAYBASE_PASSTOKEN", "")
 DOMAIN = "relaybase.email"
@@ -69,12 +71,23 @@ def collect_emails(data: dict) -> dict[str, str]:
     return emails
 
 
+def load_store() -> dict:
+    if STORE.is_file():
+        return json.loads(STORE.read_text())
+    if STORE_DIR.is_dir():
+        out: dict = {}
+        for path in sorted(STORE_DIR.glob("*.json")):
+            out[path.stem] = json.loads(path.read_text())
+        return out
+    raise FileNotFoundError(f"No store data under {DATA}")
+
+
 def main() -> int:
     if not PASS:
         print("Set RELAYBASE_PASSTOKEN", file=sys.stderr)
         return 1
 
-    data = json.loads(STORE.read_text())
+    data = load_store()
     emails = collect_emails(data)
     local_parts = sorted({e.split("@")[0] for e in emails})
     display_names = {e.split("@")[0]: emails[e] for e in emails if emails[e]}

@@ -1,6 +1,6 @@
 import type { Template } from "../../db/types";
 
-/** Built-in catalog blueprints seeded into `data/template-catalog/`. */
+/** Built-in catalog blueprints seeded into `data/templates/`. */
 export function getPresetTemplates(now: string): Template[] {
   return [
     {

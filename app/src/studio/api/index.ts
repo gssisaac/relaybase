@@ -413,7 +413,7 @@ export async function studioFetch<T>(path: string, init?: RequestInit): Promise<
   if (body === null) {
     throw new StudioApiError(
       res.status,
-      "Studio API returned a non-JSON response — is hq/studio running on port 32831?",
+      "Studio API returned a non-JSON response — is hq/studio running on port 32832?",
       null,
     );
   }

@@ -58,7 +58,7 @@ export function ScheduleView() {
       const merged = mergeNewsletterSnapshots(list, overview.scheduled);
       setItems(upcomingNewsletterScheduleItems(merged));
     } catch {
-      toast.error("Could not load schedule — is hq/studio running on port 32831?");
+      toast.error("Could not load schedule — is hq/studio running on port 32832?");
     } finally {
       setLoading(false);
       setRefreshing(false);

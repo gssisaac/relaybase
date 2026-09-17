@@ -1,10 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ExternalLink, TriangleAlert } from "lucide-react";
+import { ExternalLink, TriangleAlert, X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+export const CF_LIMITS_ALERT_HIDDEN_STORAGE_KEY = "studio.newsletters.cf-limits-alert.hidden";
 
 /** Cloudflare Email Service — daily limits & limit-increase form (docs-linked). */
 export const CF_EMAIL_SENDING_LIMITS_URL =
@@ -26,7 +29,13 @@ function DocLink({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
-export function NewsletterCloudflareSendingLimitsCard({ className }: { className?: string }) {
+export function NewsletterCloudflareSendingLimitsCard({
+  className,
+  onDismiss,
+}: {
+  className?: string;
+  onDismiss?: () => void;
+}) {
   return (
     <Card
       className={cn(
@@ -40,7 +49,7 @@ export function NewsletterCloudflareSendingLimitsCard({ className }: { className
             className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400"
             aria-hidden
           />
-          <div className="min-w-0 space-y-1.5">
+          <div className="min-w-0 flex-1 space-y-1.5">
             <CardTitle className="text-sm font-medium text-amber-950 dark:text-amber-50">
               Cloudflare daily send quota
             </CardTitle>
@@ -62,6 +71,18 @@ export function NewsletterCloudflareSendingLimitsCard({ className }: { className
               <DocLink href={CF_EMAIL_SENDING_PRICING_URL}>Pricing</DocLink>
             </p>
           </div>
+          {onDismiss ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-amber-900/70 hover:bg-amber-500/15 hover:text-amber-950 dark:text-amber-100/80 dark:hover:text-amber-50"
+              aria-label="Dismiss Cloudflare quota notice"
+              onClick={onDismiss}
+            >
+              <X className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
     </Card>

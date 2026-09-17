@@ -12,7 +12,7 @@ pnpm install
 pnpm dev
 ```
 
-Listens on `http://localhost:32831` (override with `PORT`).
+Listens on `http://localhost:32832` (override with `PORT`). Port **32831** is used by the desktop app’s CF OAuth loopback — do not run hq/studio on 32831 while Relaybase.app is open.
 
 ## Dev data
 

@@ -205,7 +205,7 @@ export function normalizeEntryPath(path: string): string {
   }
   const studioNewsletterSection = pathname.match(/^\/studio\/newsletters\/(sent|in-progress)\/?$/);
   if (studioNewsletterSection) {
-    return `/studio/newsletters?view=${studioNewsletterSection[1]}`;
+    return `/studio/newsletters/${studioNewsletterSection[1]}`;
   }
 
   const studioNewsletterMatch = pathname.match(
@@ -289,11 +289,11 @@ export function normalizeEntryPath(path: string): string {
 
   const studioBroadcastSection = pathname.match(/^\/studio\/broadcasts\/(sent|in-progress)\/?$/);
   if (studioBroadcastSection) {
-    return `/studio/newsletters?view=${studioBroadcastSection[1]}`;
+    return `/studio/newsletters/${studioBroadcastSection[1]}`;
   }
   const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyBroadcastSection) {
-    return `/studio/newsletters?view=${legacyBroadcastSection[1]}`;
+    return `/studio/newsletters/${legacyBroadcastSection[1]}`;
   }
   const broadcastMatch = pathname.match(
     /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,

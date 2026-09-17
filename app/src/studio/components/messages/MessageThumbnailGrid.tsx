@@ -10,12 +10,12 @@ import type { StudioLayout, StudioMessage } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
 export function resolveMessageLayout(
-  message: StudioMessage,
+  row: Pick<StudioMessage, "layoutId"> & { defaultLayoutId?: string | null },
   layouts: StudioLayout[],
 ): StudioLayout | null {
-  const layoutId = message.layoutId ?? layouts[0]?.id;
+  const layoutId = row.layoutId ?? row.defaultLayoutId ?? layouts[0]?.id;
   if (!layoutId) return null;
-  return layouts.find((row) => row.id === layoutId) ?? null;
+  return layouts.find((layout) => layout.id === layoutId) ?? null;
 }
 
 export function MessageThumbnailGrid({
@@ -33,8 +33,8 @@ export function MessageThumbnailGrid({
         const layout = resolveMessageLayout(message, layouts);
         const href = messagePreviewHref(message.id);
         return (
-          <li key={message.id} className="min-w-0">
-            <div className="group flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card transition hover:border-primary/40 hover:shadow-sm">
+          <li key={message.id} className="flex min-h-0 min-w-0">
+            <div className="group flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden rounded-lg border bg-card transition hover:border-primary/40 hover:shadow-sm">
               <Link href={href} className="flex min-w-0 flex-col outline-none">
                 <MessageThumbnailPreview messageId={message.id} message={message} layout={layout} />
                 <div className="space-y-1.5 border-t px-3 py-2.5">

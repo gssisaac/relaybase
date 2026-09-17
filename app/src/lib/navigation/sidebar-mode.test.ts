@@ -110,22 +110,22 @@ describe("normalizeEntryPath", () => {
   });
 
   it("rewrites legacy /studio/broadcasts paths to /studio/newsletters", () => {
-    assert.equal(normalizeEntryPath("/studio/broadcasts/sent"), "/studio/newsletters?view=sent");
+    assert.equal(normalizeEntryPath("/studio/broadcasts/sent"), "/studio/newsletters/sent");
     assert.equal(normalizeEntryPath("/studio/automations/edit"), "/studio/triggers/edit");
   });
 
-  it("rewrites reserved broadcast section paths into ?view=", () => {
+  it("keeps newsletter section sub-routes for sidebar highlighting", () => {
     assert.equal(
       normalizeEntryPath("/studio/newsletters/sent"),
-      "/studio/newsletters?view=sent",
+      "/studio/newsletters/sent",
     );
     assert.equal(
       normalizeEntryPath("/studio/newsletters/in-progress"),
-      "/studio/newsletters?view=in-progress",
+      "/studio/newsletters/in-progress",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/sent"),
-      "/studio/newsletters?view=sent",
+      "/studio/newsletters/sent",
     );
     assert.equal(
       normalizeEntryPath("/studio/newsletters/broadcast_abc/stats"),

@@ -68,8 +68,8 @@ export function NewsletterInProgressView() {
           </Button>
         }
       >
-        <div className="min-w-0 space-y-2">
-          <h1 className="truncate text-lg font-semibold tracking-tight">In progress</h1>
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <h1 className="truncate text-lg font-semibold tracking-tight">Newsletters</h1>
           <NewslettersSectionNav active="in-progress" />
         </div>
       </DesktopTitleBar>

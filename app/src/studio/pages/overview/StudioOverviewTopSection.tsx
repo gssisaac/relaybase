@@ -15,7 +15,7 @@ import {
 
 type StudioOverviewPaths = {
   schedule: string;
-  templates: string;
+  templateBrowseHref: string;
   triggers: string;
   newsletters: string;
   subscribers: string;
@@ -35,11 +35,11 @@ export function StudioOverviewTopSection({
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <OverviewKpiCard
-          href={paths.templates}
+          href={paths.templateBrowseHref}
           icon={LayoutTemplate}
           label="Templates"
           value={String(paths.templateCount)}
-          hint="Reusable message content"
+          hint="Catalog blueprints for new campaigns"
         />
         <OverviewKpiCard
           href={paths.triggers}

@@ -7,7 +7,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CatalogTemplatePreviewDialog } from "@/studio/components/templates/CatalogTemplatePreviewDialog";
 import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
-import { templatesRootHref } from "@/studio/lib/templates/template-paths";
 import { studioApi, type StudioLayout, type StudioTemplate } from "@/studio/api";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
@@ -17,7 +16,7 @@ export function DashboardTemplatesSection({
 }: {
   refreshKey?: string;
 }) {
-  const templatesHref = templatesRootHref();
+  const browseTemplatesHref = "/studio/newsletters?new=1";
   const [templates, setTemplates] = useState<StudioTemplate[]>([]);
   const [layouts, setLayouts] = useState<StudioLayout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,12 +65,12 @@ export function DashboardTemplatesSection({
           </CardDescription>
         </div>
         {remaining > 0 ? (
-          <Link href={templatesHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          <Link href={browseTemplatesHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
             View more ({remaining})
           </Link>
         ) : (
-          <Link href={templatesHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            View all templates
+          <Link href={browseTemplatesHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            Browse templates
           </Link>
         )}
       </CardHeader>
@@ -83,8 +82,8 @@ export function DashboardTemplatesSection({
             <p className="text-sm text-muted-foreground">
               No message templates yet. Create your first template or explore presets.
             </p>
-            <Link href={templatesHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Browse templates
+            <Link href={browseTemplatesHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              New newsletter from template
             </Link>
           </div>
         ) : (

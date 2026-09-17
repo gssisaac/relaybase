@@ -5,7 +5,8 @@ import { startScheduler } from "./scheduler";
 import { store } from "./db/store";
 
 const env = readEnv();
-const port = Number(env.PORT ?? 32831);
+/** Default 32832 — 32831 is reserved for desktop CF OAuth loopback (Tauri). */
+const port = Number(env.PORT ?? 32832);
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`relaybase-studio listening on http://localhost:${info.port}`);

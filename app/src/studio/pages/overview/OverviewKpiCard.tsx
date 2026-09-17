@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ export function OverviewKpiCard({
   label,
   value,
   hint,
+  footer,
 }: {
   href?: string;
   onClick?: () => void;
@@ -31,12 +33,10 @@ export function OverviewKpiCard({
   label: string;
   value: string;
   hint: string;
+  footer?: ReactNode;
 }) {
-  const tileClassName = cn(
-    overviewKpiClassName,
-    onClick && "cursor-pointer text-left",
-    selected && "bg-secondary/50 ring-2 ring-primary dark:bg-accent/55",
-  );
+  const selectedRing =
+    selected && "bg-secondary/50 ring-2 ring-primary dark:bg-accent/55";
 
   const inner = (
     <div className="flex items-start justify-between gap-3">
@@ -51,26 +51,37 @@ export function OverviewKpiCard({
     </div>
   );
 
-  if (href) {
+  function wrapTile(content: ReactNode, className?: string) {
     return (
-      <Link href={href} className={tileClassName}>
+      <div className={cn(overviewKpiClassName, selectedRing, "flex flex-col p-0", className)}>
+        {content}
+        {footer ? (
+          <div className="border-t border-border/80 px-4 py-2.5">{footer}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (href) {
+    return wrapTile(
+      <Link href={href} className="block px-4 py-4 hover:bg-secondary/50 dark:hover:bg-accent/55">
         {inner}
-      </Link>
+      </Link>,
     );
   }
 
   if (onClick) {
-    return (
+    return wrapTile(
       <button
         type="button"
         onClick={onClick}
-        className={cn(tileClassName, "w-full")}
+        className="w-full cursor-pointer px-4 py-4 text-left hover:bg-secondary/50 dark:hover:bg-accent/55"
         aria-pressed={selected}
       >
         {inner}
-      </button>
+      </button>,
     );
   }
 
-  return <div className={tileClassName}>{inner}</div>;
+  return wrapTile(<div className="px-4 py-4">{inner}</div>);
 }

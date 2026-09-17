@@ -1,5 +1,5 @@
-import { TemplatesView } from "@/studio/pages/templates/TemplatesView";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <TemplatesView />;
+  redirect("/studio/newsletters");
 }

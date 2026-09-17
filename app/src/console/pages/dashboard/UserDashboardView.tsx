@@ -41,7 +41,7 @@ type UserStatsResponse = {
   totals: {
     domains: number;
     addresses: number;
-    audience: number;
+    subscribers: number;
     broadcasts: number;
     drafts: number;
     sent: number;
@@ -86,8 +86,8 @@ const KPI_CARDS = [
     path: "broadcasts" as const,
   },
   {
-    key: "audience" as const,
-    label: "Audience",
+    key: "subscribers" as const,
+    label: "Subscribers",
     description: "Contact groups for Studio",
     path: "audience" as const,
   },

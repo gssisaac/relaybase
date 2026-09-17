@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 export function MessagesListView() {
   const router = useRouter();
-  const { layouts: layoutsPath, templates: templatesPath } = useStudioPaths();
+  const { layouts: layoutsPath } = useStudioPaths();
   const [messages, setMessages] = useState<StudioMessage[]>([]);
   const [layouts, setLayouts] = useState<StudioLayout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,9 +69,6 @@ export function MessagesListView() {
         className="px-4 py-3"
         end={
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={templatesPath} />}>
-              Templates
-            </Button>
             <Button size="sm" variant="outline" nativeButton={false} render={<Link href={layoutsPath} />}>
               <LayoutTemplate className="size-4" />
               Layouts

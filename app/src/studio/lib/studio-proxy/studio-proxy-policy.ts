@@ -7,6 +7,7 @@ const STUDIO_UI_GET_PATHS = new Set([
   "/studio/analytics",
   "/studio/subscribers",
   "/studio/newsletters",
+  /** Next.js App Router pages (not hq/studio UI). */
   "/studio/newsletters/sent",
   "/studio/newsletters/in-progress",
   "/studio/triggers",

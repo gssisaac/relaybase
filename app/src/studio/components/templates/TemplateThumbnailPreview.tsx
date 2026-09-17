@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 
 import { TemplateWireframe } from "@/studio/components/templates/TemplateWireframe";
+import { resolveLayoutThumbnailPublicPath } from "@/studio/lib/layouts/layout-thumbnail-paths";
 import { resolveMessageTemplateThumbnailPublicPath } from "@/studio/lib/templates/message-template-thumbnail-paths";
 import { useMessageTemplateThumbnailObjectUrl } from "@/studio/lib/templates/use-message-template-thumbnail-object-url";
 import type { StudioLayout, StudioTemplate } from "@/studio/api";
@@ -27,8 +28,14 @@ export function TemplateThumbnailPreview({
   const [inView, setInView] = useState(false);
   const [staticFailed, setStaticFailed] = useState(false);
 
-  const staticSrc = resolveMessageTemplateThumbnailPublicPath({ templateId, isPreset });
-  const shouldCapture = !isPreset || staticFailed || !staticSrc;
+  const layoutId = template.layoutId ?? layout?.id ?? null;
+  const isBuiltinLayout = Boolean(layout?.isBuiltin ?? (layoutId && layoutId.startsWith("tpl-")));
+  const staticSrc =
+    resolveMessageTemplateThumbnailPublicPath({ templateId, isPreset }) ||
+    (layoutId && isBuiltinLayout
+      ? resolveLayoutThumbnailPublicPath({ layoutId, isBuiltin: true })
+      : null);
+  const shouldCapture = staticFailed || !staticSrc;
 
   useEffect(() => {
     if (!shouldCapture) return;
@@ -53,7 +60,7 @@ export function TemplateThumbnailPreview({
 
   const imageClass = cn("aspect-[640/452] w-full object-cover object-top", imageClassName);
 
-  if (isPreset && staticSrc && !staticFailed) {
+  if (staticSrc && !staticFailed) {
     return (
       <div
         ref={rootRef}

@@ -25,7 +25,7 @@ import {
 import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 
 export function StudioDashboardView() {
-  const { schedule, templates, newsletters, subscribers } = useStudioPaths();
+  const { schedule, newsletters, subscribers } = useStudioPaths();
   const [data, setData] = useState<StudioOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +36,7 @@ export function StudioDashboardView() {
     try {
       setData(await studioApi.getOverview());
     } catch {
-      toast.error("Could not load Studio dashboard — is hq/studio running on port 32831?");
+      toast.error("Could not load Studio dashboard — is hq/studio running on port 32832?");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -53,9 +53,6 @@ export function StudioDashboardView() {
         className="shrink-0 px-4 py-3"
         end={
           <div className="flex items-center gap-2">
-            <Link href={templates} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Templates
-            </Link>
             <Link href={`${newsletters}?new=1`} className={buttonVariants({ variant: "outline", size: "sm" })}>
               New newsletter
             </Link>

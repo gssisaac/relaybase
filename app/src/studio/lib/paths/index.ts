@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Layers,
   LayoutDashboard,
-  LayoutTemplate,
   Mail,
   Users,
   Zap,
@@ -42,7 +41,6 @@ export function useStudioPaths() {
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: analytics, label: "Analytics", icon: BarChart3 },
-    { href: templates, label: "Templates", icon: LayoutTemplate },
     { href: messages, label: "Messages", icon: Mail },
     { href: triggers, label: "Triggers", icon: Zap },
     { href: newsletters, label: "Newsletters", icon: Mail },

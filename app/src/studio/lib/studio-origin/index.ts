@@ -16,22 +16,30 @@ const LOCAL_DEV_APP =
 
 /**
  * Origin for browser/server Studio API calls (`studioFetch`, editor asset uploads).
- * Local dev uses the Next app origin so middleware can proxy to hq/studio on :32831.
+ * Local dev uses the Next app origin so middleware can proxy to hq/studio on :32832.
  * Production defaults to relaybase.email unless NEXT_PUBLIC_STUDIO_API_BASE is set.
  */
-export function getStudioApiBase(): string {
-  const explicit = process.env.NEXT_PUBLIC_STUDIO_API_BASE?.replace(/\/$/, "");
-  if (explicit) return explicit;
+function isLocalDevHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
 
+export function getStudioApiBase(): string {
   if (typeof window !== "undefined") {
     const { hostname, origin } = window.location;
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
+    if (isLocalDevHost(hostname)) {
       return origin;
     }
   }
 
   if (process.env.NODE_ENV === "development") {
     return LOCAL_DEV_APP;
+  }
+
+  const explicit = process.env.NEXT_PUBLIC_STUDIO_API_BASE?.replace(/\/$/, "");
+  if (explicit) return explicit;
+
+  if (typeof window !== "undefined") {
+    return window.location.origin;
   }
 
   return "https://relaybase.email";

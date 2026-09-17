@@ -98,7 +98,7 @@ export function TriggersListView() {
     if (overviewResult.status === "fulfilled") {
       setOverview(overviewResult.value);
     } else if (!force) {
-      toast.error("Could not load overview stats — is hq/studio running on port 32831?");
+      toast.error("Could not load overview stats — is hq/studio running on port 32832?");
     }
 
     setLoading(false);

@@ -83,10 +83,12 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!res.ok) {
-    throw new AuthFetchError(
-      res.status,
-      body?.error ?? `Request failed (${res.status})`,
-    );
+    let message = body?.error ?? `Request failed (${res.status})`;
+    if (res.status === 404 && path.startsWith("/auth/")) {
+      message =
+        "Studio auth API not found — start hq/studio on port 32832 (not 32831; that port is used by Relaybase desktop OAuth).";
+    }
+    throw new AuthFetchError(res.status, message);
   }
   if (body === null) {
     throw new Error("Empty response");

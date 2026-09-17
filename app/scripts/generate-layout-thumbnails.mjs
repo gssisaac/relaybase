@@ -56,6 +56,20 @@ async function loadDefaultBrandLogoDataUrl() {
   return `data:image/png;base64,${buf.toString("base64")}`;
 }
 
+async function loadLayouts() {
+  const layoutsPath = path.join(appRoot, "../hq/studio/data/store/layouts.json");
+  const storePath = path.join(appRoot, "../hq/studio/data/store.json");
+  try {
+    const raw = await fs.readFile(layoutsPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : (parsed.layouts ?? []);
+  } catch {
+    const raw = await fs.readFile(storePath, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : (parsed.layouts ?? []);
+  }
+}
+
 async function main() {
   const defaultBrandLogoUrl = await loadDefaultBrandLogoDataUrl();
 
@@ -64,9 +78,8 @@ async function main() {
   );
   const { isPlainTextTemplate } = await import("../src/studio/lib/layouts/layout-catalog.ts");
 
-  const storeRaw = await fs.readFile(storePath, "utf8");
-  const store = JSON.parse(storeRaw);
-  const layouts = (store.layouts ?? []).filter((row) => row.isBuiltin);
+  const allLayouts = await loadLayouts();
+  const layouts = allLayouts.filter((row) => row.isBuiltin);
 
   if (!layouts.length) {
     console.error("No built-in layouts found in store.json");

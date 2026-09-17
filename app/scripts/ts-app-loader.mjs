@@ -14,7 +14,7 @@ if (!globalThis.__rbTsAppLoader) {
 }
 
 async function resolveWithExtensions(basePath, context, nextResolve) {
-  for (const ext of [".ts", ".tsx", ""]) {
+  for (const ext of [".ts", ".tsx", "/index.ts", "/index.tsx", ""]) {
     const candidate = ext ? `${basePath}${ext}` : basePath;
     try {
       return await nextResolve(pathToFileURL(candidate).href, context);
@@ -34,10 +34,12 @@ export async function resolve(specifier, context, nextResolve) {
 
   const isRelative = specifier.startsWith("./") || specifier.startsWith("../");
   if (isRelative && !path.extname(specifier)) {
-    try {
-      return await nextResolve(`${specifier}.ts`, context);
-    } catch {
-      return nextResolve(specifier, context);
+    for (const ext of [".ts", ".tsx", "/index.ts", "/index.tsx"]) {
+      try {
+        return await nextResolve(`${specifier}${ext}`, context);
+      } catch {
+        // try next
+      }
     }
   }
 

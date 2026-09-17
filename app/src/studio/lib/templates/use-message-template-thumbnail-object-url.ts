@@ -69,16 +69,14 @@ export function useMessageTemplateThumbnailObjectUrl(input: {
 
     let cancelled = false;
     setFailed(false);
-    setObjectUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
+
     void loadOrCaptureThumbnail(input)
       .then((blob) => {
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         const prev = objectUrlRef.current;
         if (prev) URL.revokeObjectURL(prev);
+        objectUrlRef.current = url;
         setObjectUrl(url);
       })
       .catch(() => {

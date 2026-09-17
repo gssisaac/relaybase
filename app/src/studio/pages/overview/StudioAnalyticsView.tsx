@@ -21,7 +21,8 @@ import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 import { StudioOverviewTopSection } from "./StudioOverviewTopSection";
 
 export function StudioAnalyticsView() {
-  const { schedule, templates, triggers, newsletters, subscribers } = useStudioPaths();
+  const { schedule, newsletters, triggers, subscribers } = useStudioPaths();
+  const templateBrowseHref = `${newsletters}?new=1`;
   const [data, setData] = useState<StudioOverview | null>(null);
   const [templateCount, setTemplateCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ export function StudioAnalyticsView() {
       const next = await studioApi.getOverview();
       setData(next);
     } catch {
-      toast.error("Could not load Studio analytics — is hq/studio running on port 32831?");
+      toast.error("Could not load Studio analytics — is hq/studio running on port 32832?");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,7 +89,14 @@ export function StudioAnalyticsView() {
             <>
               <StudioOverviewTopSection
                 data={data}
-                paths={{ schedule, templates, triggers, newsletters, subscribers, templateCount }}
+                paths={{
+                  schedule,
+                  templateBrowseHref,
+                  triggers,
+                  newsletters,
+                  subscribers,
+                  templateCount,
+                }}
               />
 
               <div className="grid gap-4 lg:grid-cols-2">

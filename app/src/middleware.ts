@@ -2,14 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { shouldProxyRequestToStudio } from "@/studio/lib/studio-proxy/studio-proxy-policy";
 
-const DEFAULT_STUDIO_UPSTREAM = "http://127.0.0.1:32831";
+/** hq/studio dev server — not 32831 (desktop OAuth loopback). */
+const DEFAULT_STUDIO_UPSTREAM = "http://127.0.0.1:32832";
 
 function studioUpstreamOrigin(): string {
-  return (
+  const configured =
     process.env.STUDIO_UPSTREAM_URL?.replace(/\/$/, "") ??
-    process.env.STUDIO_INTERNAL_URL?.replace(/\/$/, "") ??
-    DEFAULT_STUDIO_UPSTREAM
-  );
+    process.env.STUDIO_INTERNAL_URL?.replace(/\/$/, "");
+  if (configured) {
+    // Stale local env often still points at desktop OAuth loopback (:32831).
+    if (
+      process.env.NODE_ENV === "development" &&
+      /:32831(?:\/|$)/.test(configured)
+    ) {
+      return DEFAULT_STUDIO_UPSTREAM;
+    }
+    return configured;
+  }
+  return DEFAULT_STUDIO_UPSTREAM;
 }
 
 function shouldProxyToStudioUpstream(pathname: string, method: string, headers: Headers): boolean {

@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { ExternalLink, MousePointerClick, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -70,6 +75,134 @@ function previewButtonClassName(
   );
 }
 
+function EmailButtonSettingsPanel(props: {
+  blockId: string;
+  text: string;
+  url: string;
+  variant: EmailButtonVariant;
+  alignment: EmailButtonAlign;
+  hasValidUrl: boolean;
+  textInputRef: RefObject<HTMLInputElement | null>;
+  onClose: () => void;
+  onChange: (patch: Partial<EmailButtonBlockProps>) => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
+          <MousePointerClick className="size-3.5 text-muted-foreground" />
+          Button settings
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {props.hasValidUrl ? (
+            <a
+              href={props.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              title="Test link in new tab"
+            >
+              <ExternalLink className="size-3" />
+              Test link
+            </a>
+          ) : null}
+          <Button
+            type="button"
+            size="xs"
+            variant="secondary"
+            className="h-6 px-2 text-[11px]"
+            onClick={props.onClose}
+          >
+            Done
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2.5">
+        <div className="space-y-1">
+          <Label htmlFor={`email-btn-text-${props.blockId}`} className="text-xs font-medium">
+            Button text
+          </Label>
+          <Input
+            ref={props.textInputRef}
+            id={`email-btn-text-${props.blockId}`}
+            value={props.text}
+            onChange={(e) => props.onChange({ text: e.target.value })}
+            placeholder="Read more"
+            className="h-8 text-xs"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor={`email-btn-url-${props.blockId}`} className="text-xs font-medium">
+            Link URL
+          </Label>
+          <Input
+            id={`email-btn-url-${props.blockId}`}
+            value={props.url}
+            onChange={(e) => props.onChange({ url: e.target.value })}
+            placeholder="https://example.com"
+            className="h-8 font-mono text-xs"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Style</Label>
+            <Select
+              value={props.variant}
+              onValueChange={(value) =>
+                props.onChange({ variant: normalizeEmailButtonVariant(value) })
+              }
+            >
+              <SelectTrigger className="h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[100]">
+                <SelectItem value="primary" className="text-xs">
+                  Solid
+                </SelectItem>
+                <SelectItem value="outline" className="text-xs">
+                  Outline
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Alignment</Label>
+            <Select
+              value={props.alignment}
+              onValueChange={(value) =>
+                props.onChange({ alignment: normalizeEmailButtonAlign(value) })
+              }
+            >
+              <SelectTrigger className="h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[100]">
+                <SelectItem value="left" className="text-xs">
+                  Left
+                </SelectItem>
+                <SelectItem value="center" className="text-xs">
+                  Center
+                </SelectItem>
+                <SelectItem value="full" className="text-xs">
+                  Full width
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-2 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
+        Press Esc or click outside to close
+      </p>
+    </>
+  );
+}
+
 function EmailButtonBlockRender(props: {
   block: {
     id: string;
@@ -78,9 +211,7 @@ function EmailButtonBlockRender(props: {
   editor: NewsletterEditor;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
-  const panelId = useId();
 
   const text = props.block.props?.text ?? "Button";
   const url = props.block.props?.url ?? "https://";
@@ -88,16 +219,12 @@ function EmailButtonBlockRender(props: {
   const alignment = normalizeEmailButtonAlign(props.block.props?.alignment);
   const label = (typeof text === "string" ? text.trim() : "") || "Button";
   const editable = props.editor?.isEditable ?? true;
+  const blockId = props.block?.id ?? "new";
 
   const previewAlign =
     alignment === "left" ? "justify-start" : alignment === "full" ? "justify-stretch" : "justify-center";
 
-  const panelAlignClass =
-    alignment === "left"
-      ? "left-0"
-      : alignment === "full"
-        ? "left-0 right-0"
-        : "left-1/2 -translate-x-1/2";
+  const popoverAlign = alignment === "left" ? "start" : "center";
 
   const updateProps = (patch: Partial<EmailButtonBlockProps>) => {
     if (!props.editor || !props.block) return;
@@ -117,37 +244,12 @@ function EmailButtonBlockRender(props: {
     (url.startsWith("http://") || url.startsWith("https://")) &&
     url.length > 8;
 
-  const toggleOpen = () => setOpen((prev) => !prev);
-
   useEffect(() => {
     if (!open) return;
-
     const focusTimer = window.setTimeout(() => {
       textInputRef.current?.focus();
     }, 0);
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-      }
-    };
-
-    const onPointerDown = (event: MouseEvent) => {
-      const root = rootRef.current;
-      if (!root || root.contains(event.target as Node)) return;
-      setOpen(false);
-    };
-
-    document.addEventListener("keydown", onKeyDown, true);
-    document.addEventListener("mousedown", onPointerDown, true);
-
-    return () => {
-      window.clearTimeout(focusTimer);
-      document.removeEventListener("keydown", onKeyDown, true);
-      document.removeEventListener("mousedown", onPointerDown, true);
-    };
+    return () => window.clearTimeout(focusTimer);
   }, [open]);
 
   if (!editable) {
@@ -168,179 +270,74 @@ function EmailButtonBlockRender(props: {
   }
 
   return (
-    <div ref={rootRef} className="my-2 select-none" contentEditable={false}>
+    <div className="my-2 select-none" contentEditable={false}>
       <div className={cn("flex", previewAlign)}>
-        <div className={cn("group/btn relative inline-flex", alignment === "full" && "w-full")}>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={open ? panelId : undefined}
-            aria-label="Edit email button"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleOpen();
-            }}
-            className={cn(
-              previewButtonClassName(
-                variant,
-                alignment,
-                cn(
-                  "cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  variant === "outline"
-                    ? "hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                    : "hover:bg-zinc-800 dark:hover:bg-zinc-200",
-                  open && "ring-2 ring-primary/40 ring-offset-2",
-                ),
-              ),
-            )}
-          >
-            {label}
-          </button>
-
-          <button
-            type="button"
-            aria-label="Button settings"
-            title="Button settings"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleOpen();
-            }}
-            className={cn(
-              "absolute -top-2.5 -right-2.5 flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-xs transition-opacity hover:text-foreground",
-              open ? "opacity-100 text-foreground ring-1 ring-primary/50" : "opacity-0 group-hover/btn:opacity-100",
-            )}
-          >
-            <Settings2 className="size-3.5" />
-          </button>
-
-          {open ? (
-            <div
-              id={panelId}
-              role="dialog"
-              aria-label="Button settings"
-              className={cn(
-                "absolute top-full z-50 mt-2 w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-popover p-3.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10",
-                panelAlignClass,
-              )}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
+        <Popover open={open} onOpenChange={setOpen}>
+          <div className={cn("group/btn relative inline-flex", alignment === "full" && "w-full")}>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Edit email button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className={cn(
+                    previewButtonClassName(
+                      variant,
+                      alignment,
+                      cn(
+                        "cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        variant === "outline"
+                          ? "hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                          : "hover:bg-zinc-800 dark:hover:bg-zinc-200",
+                        open && "ring-2 ring-primary/40 ring-offset-2",
+                      ),
+                    ),
+                  )}
+                />
+              }
             >
-              <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
-                <span className="flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
-                  <MousePointerClick className="size-3.5 text-muted-foreground" />
-                  Button settings
-                </span>
-                <div className="flex shrink-0 items-center gap-2">
-                  {hasValidUrl ? (
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                      title="Test link in new tab"
-                    >
-                      <ExternalLink className="size-3" />
-                      Test link
-                    </a>
-                  ) : null}
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="secondary"
-                    className="h-6 px-2 text-[11px]"
-                    onClick={() => setOpen(false)}
-                  >
-                    Done
-                  </Button>
-                </div>
-              </div>
+              {label}
+            </PopoverTrigger>
 
-              <div className="mt-3 space-y-2.5">
-                <div className="space-y-1">
-                  <Label htmlFor={`email-btn-text-${props.block?.id ?? "new"}`} className="text-xs font-medium">
-                    Button text
-                  </Label>
-                  <Input
-                    ref={textInputRef}
-                    id={`email-btn-text-${props.block?.id ?? "new"}`}
-                    value={text}
-                    onChange={(e) => updateProps({ text: e.target.value })}
-                    placeholder="Read more"
-                    className="h-8 text-xs"
-                  />
-                </div>
+            <button
+              type="button"
+              aria-label="Button settings"
+              title="Button settings"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen((prev) => !prev);
+              }}
+              className={cn(
+                "absolute -top-2.5 -right-2.5 flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-xs transition-opacity hover:text-foreground",
+                open ? "opacity-100 text-foreground ring-1 ring-primary/50" : "opacity-0 group-hover/btn:opacity-100",
+              )}
+            >
+              <Settings2 className="size-3.5" />
+            </button>
+          </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor={`email-btn-url-${props.block?.id ?? "new"}`} className="text-xs font-medium">
-                    Link URL
-                  </Label>
-                  <Input
-                    id={`email-btn-url-${props.block?.id ?? "new"}`}
-                    value={url}
-                    onChange={(e) => updateProps({ url: e.target.value })}
-                    placeholder="https://example.com"
-                    className="h-8 font-mono text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Style</Label>
-                    <Select
-                      value={variant}
-                      onValueChange={(value) =>
-                        updateProps({ variant: normalizeEmailButtonVariant(value) })
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-full text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="primary" className="text-xs">
-                          Solid
-                        </SelectItem>
-                        <SelectItem value="outline" className="text-xs">
-                          Outline
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Alignment</Label>
-                    <Select
-                      value={alignment}
-                      onValueChange={(value) =>
-                        updateProps({ alignment: normalizeEmailButtonAlign(value) })
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-full text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left" className="text-xs">
-                          Left
-                        </SelectItem>
-                        <SelectItem value="center" className="text-xs">
-                          Center
-                        </SelectItem>
-                        <SelectItem value="full" className="text-xs">
-                          Full width
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              <p className="mt-2 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
-                Press Esc or click outside to close
-              </p>
-            </div>
-          ) : null}
-        </div>
+          <PopoverContent
+            align={popoverAlign}
+            side="bottom"
+            sideOffset={8}
+            className="z-[80] w-80 max-w-[min(20rem,calc(100vw-2rem))] gap-0 p-3.5"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <EmailButtonSettingsPanel
+              blockId={blockId}
+              text={text}
+              url={url}
+              variant={variant}
+              alignment={alignment}
+              hasValidUrl={hasValidUrl}
+              textInputRef={textInputRef}
+              onClose={() => setOpen(false)}
+              onChange={updateProps}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   );

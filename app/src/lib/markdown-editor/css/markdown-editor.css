@@ -143,6 +143,11 @@
   border-top: 1px solid var(--border);
 }
 
+.gtm-md-editor [data-content-type="emailButton"] .bn-block-outer,
+.gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
+  overflow: visible !important;
+}
+
 .gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
   padding-top: 8px;
   padding-bottom: 8px;

@@ -51,11 +51,25 @@ export function hasHqSession(): boolean {
   return Boolean(getHqAccessToken() && cachedUser);
 }
 
+/** UI / mode switcher — true while Studio identity remains (incl. refresh pending). */
+export function isHqStudioSignedIn(): boolean {
+  return cachedUser !== null;
+}
+
 export function clearHqSession(): void {
   accessToken = null;
   accessExpiresAt = 0;
   cachedUser = null;
   emit();
+}
+
+class AuthFetchError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
 }
 
 async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -69,13 +83,18 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!res.ok) {
-    throw new Error(body?.error ?? `Request failed (${res.status})`);
+    throw new AuthFetchError(
+      res.status,
+      body?.error ?? `Request failed (${res.status})`,
+    );
   }
   if (body === null) {
     throw new Error("Empty response");
   }
   return body as T;
 }
+
+let hqRefreshInFlight: Promise<boolean> | null = null;
 
 export type HqSignupWorkerProof =
   | { kind: "owner"; passtoken: string }
@@ -108,17 +127,28 @@ export async function hqLogin(input: { email: string; password: string }): Promi
 
 /** Restore HQ session from 30-day refresh cookie (RTR). */
 export async function hqRefreshSession(): Promise<boolean> {
-  try {
-    const payload = await authFetch<AuthPayload>("/auth/refresh", {
-      method: "POST",
-      body: "{}",
-    });
-    applyAuthPayload(payload);
-    return true;
-  } catch {
-    clearHqSession();
-    return false;
-  }
+  if (hqRefreshInFlight) return hqRefreshInFlight;
+
+  hqRefreshInFlight = (async () => {
+    try {
+      const payload = await authFetch<AuthPayload>("/auth/refresh", {
+        method: "POST",
+        body: "{}",
+      });
+      applyAuthPayload(payload);
+      return true;
+    } catch (err) {
+      const status = err instanceof AuthFetchError ? err.status : 0;
+      if (status === 401 || status === 403) {
+        clearHqSession();
+      }
+      return false;
+    } finally {
+      hqRefreshInFlight = null;
+    }
+  })();
+
+  return hqRefreshInFlight;
 }
 
 export async function hqLogout(): Promise<void> {

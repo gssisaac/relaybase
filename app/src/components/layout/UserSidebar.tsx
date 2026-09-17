@@ -87,9 +87,12 @@ import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 import { useMailRuntime } from "@/mail-platform/runtime";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
+  hasWebWorkerSession,
+  signOutHqStudio,
   signOutRedirectPath,
   signOutRelaybase,
 } from "@/lib/desktop/auth";
+import { useHqStudioSignedIn } from "@/lib/hq-auth/use-hq-studio-signed-in";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
@@ -183,30 +186,51 @@ function StudioProBadge({ className }: { className?: string }) {
   );
 }
 
+function ModeSignedOutHint() {
+  return (
+    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+      Signed out
+    </span>
+  );
+}
+
 function ModeMenuItem({
   label,
   mode,
   active,
   proBadge,
+  signedOut,
   onClick,
 }: {
   label: string;
   mode: SidebarMode;
   active: boolean;
   proBadge?: boolean;
+  signedOut?: boolean;
   onClick: () => void;
 }) {
   return (
     <DropdownMenuItem onClick={onClick}>
-      <ModeIcon mode={mode} className="size-3.5" />
-      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+      <ModeIcon
+        mode={mode}
+        className={cn("size-3.5", signedOut && "opacity-50")}
+      />
+      <span
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1.5",
+          signedOut && "text-muted-foreground",
+        )}
+      >
         {label}
         {proBadge ? <StudioProBadge /> : null}
       </span>
-      <Check
-        className={cn("ml-auto size-3.5 shrink-0", active ? "opacity-100" : "opacity-0")}
-        aria-hidden
-      />
+      {active ? (
+        <Check className="ml-auto size-3.5 shrink-0" aria-hidden />
+      ) : signedOut ? (
+        <ModeSignedOutHint />
+      ) : (
+        <Check className="ml-auto size-3.5 shrink-0 opacity-0" aria-hidden />
+      )}
     </DropdownMenuItem>
   );
 }
@@ -214,6 +238,7 @@ function ModeMenuItem({
 function TitleMenuItems({
   mode,
   teamMode,
+  studioSignedIn,
   canAddAccount = true,
   onAddAccount,
   onOpenSettings,
@@ -222,6 +247,7 @@ function TitleMenuItems({
 }: {
   mode: SidebarMode;
   teamMode: boolean;
+  studioSignedIn: boolean;
   canAddAccount?: boolean;
   onAddAccount: () => void;
   onOpenSettings: () => void;
@@ -249,6 +275,7 @@ function TitleMenuItems({
         mode="studio"
         active={mode === "studio"}
         proBadge
+        signedOut={!studioSignedIn}
         onClick={() => onSwitchTo("studio")}
       />
       <div role="separator" className="my-1 h-px bg-border" />
@@ -831,6 +858,7 @@ export function UserSidebar({
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
+  const studioSignedIn = useHqStudioSignedIn();
   const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
   const { settings: settingsHref } = useEmailPaths();
@@ -857,6 +885,35 @@ export function UserSidebar({
       ? "studio"
       : "email"
     : detectedMode;
+  const signOutDialog = useMemo(() => {
+    if (mode === "studio") {
+      if (!mailSession.isDesktop && hasWebWorkerSession(isTeam)) {
+        return {
+          title: "Sign out of Relaybase Studio?",
+          description:
+            "Ends your Relaybase Studio session on this device. You’ll stay signed in to Mailbox.",
+        };
+      }
+      if (!mailSession.isDesktop) {
+        return {
+          title: "Sign out of Relaybase Studio?",
+          description:
+            "Ends your Relaybase Studio session and returns you to sign-in.",
+        };
+      }
+      return {
+        title: "Sign out of Relaybase Studio?",
+        description:
+          "Clears your credentials from this device and returns you to the welcome screen.",
+      };
+    }
+    return {
+      title: "Sign out of Relaybase?",
+      description: isTeam
+        ? "Clears your team login from this device and returns you to the sign-in page."
+        : "Clears your credentials from this device and returns you to the welcome screen.",
+    };
+  }, [isTeam, mailSession.isDesktop, mode]);
   const {
     isDesktop,
     isMacOS,
@@ -910,7 +967,14 @@ export function UserSidebar({
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      if (!mailSession.isDesktop) {
+      if (!mailSession.isDesktop && mode === "studio") {
+        await signOutHqStudio();
+        router.replace(
+          hasWebWorkerSession(isTeam)
+            ? readLastPath(userId, "email")
+            : signOutRedirectPath(isTeam, session),
+        );
+      } else if (!mailSession.isDesktop) {
         await mailSession.logout();
         await signOutRelaybase(isTeam, session);
         router.replace(signOutRedirectPath(isTeam, session));
@@ -1006,6 +1070,7 @@ export function UserSidebar({
                 <TitleMenuItems
                   mode={mode}
                   teamMode={isTeam}
+                  studioSignedIn={studioSignedIn}
                   canAddAccount={canAddAccount}
                   onAddAccount={() => setAddOpen(true)}
                   onOpenSettings={openSettings}
@@ -1054,6 +1119,7 @@ export function UserSidebar({
                     <TitleMenuItems
                       mode={mode}
                       teamMode={isTeam}
+                      studioSignedIn={studioSignedIn}
                       canAddAccount={canAddAccount}
                       onAddAccount={() => setAddOpen(true)}
                       onOpenSettings={openSettings}
@@ -1123,11 +1189,9 @@ export function UserSidebar({
       <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sign out of Relaybase?</AlertDialogTitle>
+            <AlertDialogTitle>{signOutDialog.title}</AlertDialogTitle>
             <AlertDialogDescription>
-              {isTeam
-                ? "Clears your team login from this device and returns you to the sign-in page."
-                : "Clears your credentials from this device and returns you to the welcome screen."}
+              {signOutDialog.description}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

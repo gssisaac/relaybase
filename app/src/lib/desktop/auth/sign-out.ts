@@ -1,8 +1,23 @@
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import type { AppSessionStore } from "@/lib/desktop/app-session";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 import { ownerLogout } from "./owner-session";
 import { clearWebOwnerSessionStorage } from "./web-owner-persist";
+
+/** Web Worker (mailbox / console) session — independent of HQ Studio login. */
+export function hasWebWorkerSession(isTeam: boolean): boolean {
+  if (isDesktopRuntime()) return false;
+  if (isTeam) return Boolean(getWebTeamAuth());
+  return hasWebOwnerSession();
+}
+
+/** Web: revoke HQ Studio refresh cookie + in-memory JWT only. */
+export async function signOutHqStudio(): Promise<void> {
+  const { hqLogout } = await import("@/lib/hq-auth/session");
+  await hqLogout();
+}
 
 /** Where to land after sign-out: unlock when a keyring session remains, else setup/login. */
 export function signOutRedirectPath(
@@ -24,9 +39,7 @@ export async function signOutRelaybase(
   store: AppSessionStore,
 ): Promise<void> {
   if (!isDesktopRuntime()) {
-    // Web: revoke Studio refresh and Worker owner/team sessions.
-    const { hqLogout } = await import("@/lib/hq-auth/session");
-    await hqLogout();
+    await signOutHqStudio();
     // Revoke owner refresh (needs the Worker URL global, so before the
     // team clear below deletes it), then drop owner + team tab storage.
     await ownerLogout();

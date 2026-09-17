@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  FormattingToolbarController,
   SuggestionMenuController,
   TableHandlesController,
   useCreateBlockNote,
@@ -22,6 +23,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 
+import { EmailButtonSettingsProvider } from "@/lib/markdown-editor/blocks/email-button-settings-context";
+import { EmailButtonFormattingToolbar } from "@/lib/markdown-editor/components/email-button-formatting-toolbar";
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
 import { getNewsletterEditorSlashMenuItems } from "@/lib/markdown-editor/components/newsletter-slash-menu-items";
 import { newsletterEditorSchema, type NewsletterEditor } from "@/lib/markdown-editor/schema/newsletter-editor-schema";
@@ -662,23 +665,28 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
         ) : null}
         {ready ? (
           <div className={cn("h-full min-h-0", isRaw && "hidden")}>
-            <MarkdownBlockNoteView
-              editor={editor}
-              editable={editable && !isRaw}
-              sideMenu={false}
-              slashMenu={false}
-              tableHandles={false}
-              theme={isDark ? "dark" : "light"}
-              className="gtm-md-editor-view h-full min-h-0"
-            >
-              <SuggestionMenuController
-                triggerCharacter="/"
-                floatingUIOptions={slashMenuFloatingOptions}
-                getItems={(query) => getNewsletterEditorSlashMenuItems(editor, query)}
-                shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
-              />
-              <TableHandlesController tableHandle={TableHandleWithIcons} />
-            </MarkdownBlockNoteView>
+            <EmailButtonSettingsProvider>
+              <MarkdownBlockNoteView
+                editor={editor}
+                editable={editable && !isRaw}
+                sideMenu={false}
+                slashMenu={false}
+                tableHandles={false}
+                theme={isDark ? "dark" : "light"}
+                className="gtm-md-editor-view h-full min-h-0"
+              >
+                <FormattingToolbarController
+                  formattingToolbar={EmailButtonFormattingToolbar}
+                />
+                <SuggestionMenuController
+                  triggerCharacter="/"
+                  floatingUIOptions={slashMenuFloatingOptions}
+                  getItems={(query) => getNewsletterEditorSlashMenuItems(editor, query)}
+                  shouldOpen={(state) => !state.selection.$from.parent.type.isInGroup("tableContent")}
+                />
+                <TableHandlesController tableHandle={TableHandleWithIcons} />
+              </MarkdownBlockNoteView>
+            </EmailButtonSettingsProvider>
           </div>
         ) : (
           <div className="min-h-[12rem]" aria-hidden />

@@ -42,12 +42,11 @@ export function useStudioPaths() {
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
-    { href: analytics, label: "Analytics", icon: BarChart3 },
-    { href: messages, label: "Messages", icon: Mail },
-    { href: triggers, label: "Triggers", icon: Zap },
     { href: newsletters, label: "Newsletters", icon: Mail },
-    { href: schedule, label: "Schedule", icon: CalendarDays },
     { href: subscribers, label: "Subscribers", icon: Users },
+    { href: triggers, label: "Triggers", icon: Zap },
+    { href: schedule, label: "Scheduled", icon: CalendarDays },
+    { href: analytics, label: "Analytics", icon: BarChart3 },
   ];
 
   return {

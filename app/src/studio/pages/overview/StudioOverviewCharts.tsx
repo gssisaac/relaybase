@@ -56,12 +56,14 @@ export function StudioOverviewSendsChart({ data }: { data: StudioAnalytics["char
     );
   }
 
+  const chartData = data.map((row) => ({ ...row }));
+
   return (
     <div>
       <ChartContainer config={sendsChartConfig} className={miniChartClassName}>
         <BarChart
           accessibilityLayer
-          data={data}
+          data={chartData}
           margin={{ left: 0, right: 4, top: 4, bottom: 0 }}
           barGap={2}
           barCategoryGap="28%"

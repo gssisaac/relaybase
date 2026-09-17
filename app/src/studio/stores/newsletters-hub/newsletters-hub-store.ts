@@ -20,6 +20,7 @@ export class NewslettersHubStore {
   sentOverview: AccountSentOverview | null = null;
 
   listFetching = false;
+  listLoadError: string | null = null;
   inProgressFetching = false;
   sentOverviewFetching = false;
 
@@ -100,11 +101,18 @@ export class NewslettersHubStore {
         runInAction(() => {
           this.newsletters = list.newsletters;
           this.layouts = layoutRes.layouts;
+          this.listLoadError = null;
         });
         this.syncListSendingPoll();
-      } catch {
-        // Caller may toast
-        throw new Error("Could not load newsletters");
+      } catch (err) {
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : "Could not load newsletters — is hq/studio running on port 32832?";
+        runInAction(() => {
+          if (!hasCache) this.listLoadError = message;
+        });
+        if (!hasCache) throw new Error(message);
       } finally {
         runInAction(() => {
           this.listFetching = false;
@@ -195,7 +203,7 @@ export class NewslettersHubStore {
     if (this.hasSendingNewsletters) {
       if (this.listSendingPollTimer !== null) return;
       this.listSendingPollTimer = setInterval(() => {
-        void this.refreshList();
+        void this.refreshList().catch(() => {});
       }, LIST_SENDING_POLL_MS);
       return;
     }

@@ -142,7 +142,7 @@ export function NewNewsletterTemplateDialog({
         });
         toast.success("Newsletter created");
         newslettersHubStore.upsertNewsletter(created);
-        void newslettersHubStore.refreshList();
+        void newslettersHubStore.refreshList().catch(() => {});
         onOpenChange(false);
         router.push(newsletterDetailHref(created.id, "content"));
         return;
@@ -154,7 +154,7 @@ export function NewNewsletterTemplateDialog({
       });
       toast.success("Newsletter created");
       newslettersHubStore.upsertNewsletter(created);
-      void newslettersHubStore.refreshList();
+      void newslettersHubStore.refreshList().catch(() => {});
       onOpenChange(false);
       router.push(newsletterDetailHref(created.id, "content"));
     } catch (err) {

@@ -81,6 +81,7 @@ export function NewsletterSubscribersView() {
             <Button
               size="sm"
               variant="outline"
+              nativeButton={false}
               render={
                 <Link href={groupId ? studioSubscriberDetailHref(groupId) : subscribersHref} />
               }

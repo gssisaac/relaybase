@@ -19,7 +19,14 @@ export class AnalyticsStore {
   private fetchPromise: Promise<void> | null = null;
 
   constructor() {
-    makeAutoObservable(this, {}, { autoBind: true });
+    makeAutoObservable<AnalyticsStore, "payload" | "fetchPromise">(
+      this,
+      {
+        payload: false,
+        fetchPromise: false,
+      },
+      { autoBind: true },
+    );
   }
 
   get data(): StudioAnalytics | null {
@@ -34,7 +41,7 @@ export class AnalyticsStore {
     return this.payload !== null && this.fetching;
   }
 
-  private commitPayload(next: StudioAnalytics | null) {
+  commitPayload(next: StudioAnalytics | null) {
     this.payload = next ? cloneAnalyticsPayload(next) : null;
     this.dataEpoch += 1;
   }

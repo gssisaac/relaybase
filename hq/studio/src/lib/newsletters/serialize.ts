@@ -36,6 +36,7 @@ export function serializeNewsletter(row: Newsletter) {
     listStatus: row.listStatus,
     messageId: rowMessageId(row),
     layoutId: message?.layoutId ?? null,
+    defaultLayoutId: message?.layoutId ?? null,
     subject: message?.subject ?? "",
     previewText: message?.previewText ?? null,
     bodyMarkdown: message?.bodyMarkdown ?? "",

@@ -20,7 +20,18 @@ export class DashboardStore {
   private sendingPollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    makeAutoObservable(this, {}, { autoBind: true });
+    makeAutoObservable<
+      DashboardStore,
+      "payload" | "fetchPromise" | "sendingPollTimer"
+    >(
+      this,
+      {
+        payload: false,
+        fetchPromise: false,
+        sendingPollTimer: false,
+      },
+      { autoBind: true },
+    );
   }
 
   get data(): StudioDashboardPayload | null {

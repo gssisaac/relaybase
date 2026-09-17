@@ -213,6 +213,7 @@ export function NewsletterSettingsView() {
             <Button
               size="sm"
               variant="outline"
+              nativeButton={false}
               render={<Link href={studioSubscriberDetailHref(newsletter.subscriberGroupId)} />}
             >
               Open subscribers

@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
 import { formatOverviewWhen, overviewInsetItemClassName } from "./overview-inset-styles";
 import { StudioAnalyticsSkeleton } from "./StudioAnalyticsSkeleton";
-import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 import { StudioOverviewTopSection } from "./StudioOverviewTopSection";
 
 export function StudioAnalyticsView() {
@@ -62,14 +61,11 @@ export function StudioAnalyticsView() {
           </Button>
         }
       >
-        <div className="min-w-0 space-y-2">
-          <StudioInsightSectionNav active="analytics" />
-          <div className="space-y-1">
-            <h1 className="truncate text-lg font-semibold tracking-tight">Analytics</h1>
-            <p className="text-sm text-muted-foreground">
-              Send volume, engagement, triggers, and recent activity.
-            </p>
-          </div>
+        <div className="min-w-0 space-y-1">
+          <h1 className="truncate text-lg font-semibold tracking-tight">Analytics</h1>
+          <p className="text-sm text-muted-foreground">
+            Send volume, engagement, triggers, and recent activity.
+          </p>
         </div>
       </DesktopTitleBar>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">

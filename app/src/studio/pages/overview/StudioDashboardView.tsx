@@ -24,7 +24,6 @@ import {
   overviewInsetItemClassName,
 } from "./overview-inset-styles";
 import { StudioDashboardSkeleton } from "./StudioDashboardSkeleton";
-import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 
 export function StudioDashboardView() {
   const { schedule, newsletters, subscribers } = useStudioPaths();
@@ -76,14 +75,11 @@ export function StudioDashboardView() {
           </div>
         }
       >
-        <div className="min-w-0 space-y-2">
-          <StudioInsightSectionNav active="dashboard" />
-          <div className="space-y-1">
-            <h1 className="truncate text-lg font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              Create campaigns from templates, track scheduled sends, and manage your subscribers.
-            </p>
-          </div>
+        <div className="min-w-0 space-y-1">
+          <h1 className="truncate text-lg font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Create campaigns from templates, track scheduled sends, and manage your subscribers.
+          </p>
         </div>
       </DesktopTitleBar>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">

@@ -20,8 +20,6 @@ export type SubscriberDetailTab = "contacts" | "history" | "settings";
 
 export type NewslettersSection = "list" | "sent" | "in-progress";
 
-export type StudioInsightSection = "dashboard" | "analytics";
-
 /** Studio UI route for subscriber groups (list + detail query routes). */
 export const STUDIO_SUBSCRIBERS_PATH = "/studio/subscribers";
 
@@ -71,11 +69,6 @@ export function useStudioPaths() {
     overview,
     tabs,
   };
-}
-
-export function studioInsightSectionHref(section: StudioInsightSection = "dashboard"): string {
-  if (section === "analytics") return "/studio/analytics";
-  return "/studio/dashboard";
 }
 
 export function newslettersSectionHref(section: NewslettersSection = "list"): string {

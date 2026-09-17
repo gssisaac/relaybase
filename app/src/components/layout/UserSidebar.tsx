@@ -913,15 +913,13 @@ export function UserSidebar({
       if (!mailSession.isDesktop) {
         await mailSession.logout();
         await signOutRelaybase(isTeam, session);
-        router.replace("/login");
+        router.replace(signOutRedirectPath(isTeam, session));
       } else {
         await signOutRelaybase(isTeam, session);
         router.replace(signOutRedirectPath(isTeam, session));
       }
     } catch {
-      router.replace(
-        mailSession.isDesktop ? signOutRedirectPath(isTeam, session) : "/login",
-      );
+      router.replace(signOutRedirectPath(isTeam, session));
     } finally {
       setSigningOut(false);
       setSignOutOpen(false);

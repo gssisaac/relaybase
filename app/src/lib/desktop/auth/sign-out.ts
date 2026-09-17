@@ -24,7 +24,10 @@ export async function signOutRelaybase(
   store: AppSessionStore,
 ): Promise<void> {
   if (!isDesktopRuntime()) {
-    // Web: revoke owner refresh (needs the Worker URL global, so before the
+    // Web: revoke HQ Cloud refresh (Studio) and Worker owner/team sessions.
+    const { hqLogout } = await import("@/lib/hq-auth/session");
+    await hqLogout();
+    // Revoke owner refresh (needs the Worker URL global, so before the
     // team clear below deletes it), then drop owner + team tab storage.
     await ownerLogout();
     clearWebOwnerSessionStorage();

@@ -11,6 +11,8 @@ import { NewsletterDetailProvider } from "@/studio/stores/newsletter-detail";
 import { NewsletterDetailSwitch } from "@/studio/pages/newsletters/NewsletterDetailSwitch";
 import { NewsletterInProgressView } from "@/studio/pages/newsletters/NewsletterInProgressView";
 import { NewsletterSentOverviewView } from "@/studio/pages/newsletters/NewsletterSentOverviewView";
+import { NewslettersRouteFallbackSkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
+import { NewsletterCloudflareLimitsAlertProvider } from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
 import { NewslettersListView } from "@/studio/pages/newsletters/NewslettersListView";
 
 function NewslettersRoute() {
@@ -36,12 +38,10 @@ function NewslettersRoute() {
 
 export function NewslettersView() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-4 text-sm text-muted-foreground">Loading…</div>
-      }
-    >
-      <NewslettersRoute />
-    </Suspense>
+    <NewsletterCloudflareLimitsAlertProvider>
+      <Suspense fallback={<NewslettersRouteFallbackSkeleton />}>
+        <NewslettersRoute />
+      </Suspense>
+    </NewsletterCloudflareLimitsAlertProvider>
   );
 }

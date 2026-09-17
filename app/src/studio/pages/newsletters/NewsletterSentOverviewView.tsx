@@ -8,11 +8,15 @@ import { toast } from "sonner";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NewsletterCloudflareSendingLimitsCard } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
+import {
+  NewsletterCloudflareLimitsAlertBanner,
+  NewsletterCloudflareLimitsAlertShowButton,
+} from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { NewsletterSentOverviewBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { studioApi, type AccountSentOverview } from "@/studio/api";
 
 function rateLabel(value: number): string {
@@ -58,14 +62,17 @@ export function NewsletterSentOverviewView() {
       <DesktopTitleBar
         className="px-4 py-3"
         end={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-          </Button>
+          <>
+            <NewsletterCloudflareLimitsAlertShowButton />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+            >
+              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+            </Button>
+          </>
         }
       >
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -76,9 +83,9 @@ export function NewsletterSentOverviewView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
-          <NewsletterCloudflareSendingLimitsCard />
+          <NewsletterCloudflareLimitsAlertBanner />
           {!data ? (
-            <p className="text-sm text-muted-foreground">Loading sent statistics…</p>
+            <NewsletterSentOverviewBodySkeleton />
           ) : data.totals.newsletters === 0 ? (
             <Card>
               <CardHeader>

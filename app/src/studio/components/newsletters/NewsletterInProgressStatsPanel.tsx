@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref } from "@/studio/lib/paths";
+import { NewsletterInProgressBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { studioApi, type InProgressOverview } from "@/studio/api";
 
 function formatWhen(value?: string | null): string {
@@ -67,17 +68,19 @@ export function NewsletterInProgressStatsPanel({ active }: { active: boolean }) 
       </div>
 
       {!data ? (
-        <p className="text-sm text-muted-foreground">Loading send progress…</p>
+        <NewsletterInProgressBodySkeleton />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge
-              variant="outline"
-              className="gap-1 border-sky-600/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
-            >
-              <Loader2 className="size-3 animate-spin" />
-              {sendingCount} sending
-            </Badge>
+            {sendingCount > 0 ? (
+              <Badge
+                variant="outline"
+                className="gap-1 border-sky-600/30 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+              >
+                <Loader2 className="size-3 animate-spin" />
+                {sendingCount} sending
+              </Badge>
+            ) : null}
             <Badge
               variant="outline"
               className="border-amber-600/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"

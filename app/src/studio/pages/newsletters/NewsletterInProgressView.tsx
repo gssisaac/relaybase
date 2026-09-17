@@ -9,12 +9,16 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NewsletterCloudflareSendingLimitsCard } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
+import {
+  NewsletterCloudflareLimitsAlertBanner,
+  NewsletterCloudflareLimitsAlertShowButton,
+} from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
 import { NewsletterSendingProgressPanel } from "@/studio/components/newsletters/NewsletterSendingProgressPanel";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
 import { newsletterDetailHref } from "@/studio/lib/paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { NewsletterInProgressBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { studioApi, type InProgressOverview } from "@/studio/api";
 
 function formatWhen(value?: string | null): string {
@@ -58,14 +62,17 @@ export function NewsletterInProgressView() {
       <DesktopTitleBar
         className="px-4 py-3"
         end={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-          </Button>
+          <>
+            <NewsletterCloudflareLimitsAlertShowButton />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load(true)}
+              disabled={refreshing}
+            >
+              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+            </Button>
+          </>
         }
       >
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -76,16 +83,18 @@ export function NewsletterInProgressView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
-          <NewsletterCloudflareSendingLimitsCard />
+          <NewsletterCloudflareLimitsAlertBanner />
           {!data ? (
-            <p className="text-sm text-muted-foreground">Loading in-progress newsletters…</p>
+            <NewsletterInProgressBodySkeleton />
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Badge variant="outline" className="gap-1 border-sky-600/30 bg-sky-500/10 text-sky-700 dark:text-sky-400">
-                  <Loader2 className="size-3 animate-spin" />
-                  {sendingCount} sending
-                </Badge>
+                {sendingCount > 0 ? (
+                  <Badge variant="outline" className="gap-1 border-sky-600/30 bg-sky-500/10 text-sky-700 dark:text-sky-400">
+                    <Loader2 className="size-3 animate-spin" />
+                    {sendingCount} sending
+                  </Badge>
+                ) : null}
                 <Badge variant="outline" className="border-amber-600/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
                   {scheduledCount} scheduled
                 </Badge>

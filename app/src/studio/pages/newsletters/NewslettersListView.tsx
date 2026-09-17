@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, FileEdit, Mail, Plus, RefreshCw, Send, TriangleAlert } from "lucide-react";
+import { Clock, FileEdit, Mail, Plus, RefreshCw, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -11,10 +11,14 @@ import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { NewNewsletterTemplateDialog } from "@/studio/components/newsletters/NewNewsletterTemplateDialog";
 import {
-  CF_LIMITS_ALERT_HIDDEN_STORAGE_KEY,
-  NewsletterCloudflareSendingLimitsCard,
-} from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
+  NewsletterCloudflareLimitsAlertBanner,
+  NewsletterCloudflareLimitsAlertShowButton,
+} from "@/studio/components/newsletters/NewsletterCloudflareLimitsAlert";
 import { NewslettersSectionNav } from "@/studio/components/newsletters/NewslettersSectionNav";
+import {
+  NewsletterGallerySkeleton,
+  NewsletterListKpiSkeleton,
+} from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { NewsletterThumbnailGrid } from "@/studio/components/newsletters/NewsletterThumbnailGrid";
 import { newslettersSectionHref } from "@/studio/lib/paths";
 import { OverviewKpiCard } from "@/studio/pages/overview/OverviewKpiCard";
@@ -112,33 +116,6 @@ export function NewslettersListView() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<NewsletterFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
-  const [limitsAlertHidden, setLimitsAlertHidden] = useState(false);
-
-  useEffect(() => {
-    try {
-      setLimitsAlertHidden(localStorage.getItem(CF_LIMITS_ALERT_HIDDEN_STORAGE_KEY) === "1");
-    } catch {
-      setLimitsAlertHidden(false);
-    }
-  }, []);
-
-  function dismissLimitsAlert() {
-    setLimitsAlertHidden(true);
-    try {
-      localStorage.setItem(CF_LIMITS_ALERT_HIDDEN_STORAGE_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function showLimitsAlert() {
-    setLimitsAlertHidden(false);
-    try {
-      localStorage.removeItem(CF_LIMITS_ALERT_HIDDEN_STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-  }
 
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
@@ -216,24 +193,15 @@ export function NewslettersListView() {
     setFilter((prev) => (prev === next ? "all" : next));
   }
 
+  const initialLoad = loading && newsletters.length === 0;
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar
         className="px-4 py-3"
         end={
           <>
-            {limitsAlertHidden ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label="Show Cloudflare send quota notice"
-                title="Cloudflare send quota"
-                onClick={showLimitsAlert}
-              >
-                <TriangleAlert className="size-4 text-amber-600 dark:text-amber-400" />
-              </Button>
-            ) : null}
+            <NewsletterCloudflareLimitsAlertShowButton />
             <NewNewsletterTemplateDialog
               open={createOpen}
               onOpenChange={setCreateOpen}
@@ -263,52 +231,54 @@ export function NewslettersListView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
-          {!limitsAlertHidden ? (
-            <NewsletterCloudflareSendingLimitsCard onDismiss={dismissLimitsAlert} />
-          ) : null}
+          <NewsletterCloudflareLimitsAlertBanner />
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <OverviewKpiCard
-              icon={FileEdit}
-              label="Drafts"
-              value={String(counts.draft)}
-              hint={`${counts.all} total newsletters`}
-              selected={filter === "draft"}
-              onClick={() => toggleFilter("draft")}
-            />
-            <OverviewKpiCard
-              icon={Clock}
-              label="In progress"
-              value={String(counts.in_progress)}
-              hint="Filter scheduled & sending"
-              selected={filter === "in_progress"}
-              onClick={() => toggleFilter("in_progress")}
-              footer={
-                <Link
-                  href={newslettersSectionHref("in-progress")}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  View send progress
-                </Link>
-              }
-            />
-            <OverviewKpiCard
-              icon={Send}
-              label="Sent"
-              value={String(counts.sent)}
-              hint="Filter finished campaigns"
-              selected={filter === "sent"}
-              onClick={() => toggleFilter("sent")}
-              footer={
-                <Link
-                  href={newslettersSectionHref("sent")}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  Account send statistics
-                </Link>
-              }
-            />
-          </div>
+          {initialLoad ? (
+            <NewsletterListKpiSkeleton />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <OverviewKpiCard
+                icon={FileEdit}
+                label="Drafts"
+                value={String(counts.draft)}
+                hint={`${counts.all} total newsletters`}
+                selected={filter === "draft"}
+                onClick={() => toggleFilter("draft")}
+              />
+              <OverviewKpiCard
+                icon={Clock}
+                label="In progress"
+                value={String(counts.in_progress)}
+                hint="Filter scheduled & sending"
+                selected={filter === "in_progress"}
+                onClick={() => toggleFilter("in_progress")}
+                footer={
+                  <Link
+                    href={newslettersSectionHref("in-progress")}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    View send progress
+                  </Link>
+                }
+              />
+              <OverviewKpiCard
+                icon={Send}
+                label="Sent"
+                value={String(counts.sent)}
+                hint="Filter finished campaigns"
+                selected={filter === "sent"}
+                onClick={() => toggleFilter("sent")}
+                footer={
+                  <Link
+                    href={newslettersSectionHref("sent")}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Account send statistics
+                  </Link>
+                }
+              />
+            </div>
+          )}
 
           <ListToolbar
             search={search}
@@ -392,9 +362,9 @@ export function NewslettersListView() {
                 }
               />
             )
-          ) : (
-            <div className="min-h-[200px]" />
-          )}
+          ) : initialLoad ? (
+            <NewsletterGallerySkeleton />
+          ) : null}
         </div>
       </div>
     </div>

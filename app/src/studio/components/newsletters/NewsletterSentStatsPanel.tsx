@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref } from "@/studio/lib/paths";
+import { NewsletterSentOverviewBodySkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { studioApi, type AccountSentOverview } from "@/studio/api";
 
 function rateLabel(value: number): string {
@@ -60,7 +61,7 @@ export function NewsletterSentStatsPanel({ active }: { active: boolean }) {
       </div>
 
       {!data ? (
-        <p className="text-sm text-muted-foreground">Loading sent statistics…</p>
+        <NewsletterSentOverviewBodySkeleton />
       ) : data.totals.newsletters === 0 ? (
         <Card>
           <CardHeader>

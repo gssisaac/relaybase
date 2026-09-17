@@ -19,6 +19,7 @@ import { NewsletterDetailShell } from "@/studio/pages/newsletters/NewsletterDeta
 import { NewsletterPublishView } from "@/studio/pages/newsletters/NewsletterPublishView";
 import { NewsletterSettingsView } from "@/studio/pages/newsletters/NewsletterSettingsView";
 import { NewsletterStatsView } from "@/studio/pages/newsletters/NewsletterStatsView";
+import { NewsletterDetailShellSkeleton } from "@/studio/components/newsletters/NewsletterLoadingSkeletons";
 import { useNewsletterDetail } from "@/studio/stores/newsletter-detail";
 
 function NewsletterNotFound() {
@@ -66,11 +67,7 @@ export function NewsletterDetailSwitch({ tab }: { tab: NewsletterDetailTab | nul
   }, [newsletter, newsletterId, resolvedTab, router, tab]);
 
   if (loading && !newsletter) {
-    return (
-      <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
+    return <NewsletterDetailShellSkeleton />;
   }
   if (notFound || !newsletter) return <NewsletterNotFound />;
 

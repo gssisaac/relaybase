@@ -74,7 +74,7 @@ function SetupShell({ children }: { children: ReactNode }) {
 /**
  * Setup / install flow. Both desktop and web render this: desktop drives
  * the keyring-backed AppSessionStore install wizard; web renders the OAuth
- * install flow (WebAuthorizeCard / WebInstallProgress, see WebInstallFlow)
+ * install flow (OAuth on /setup/install, probe + install on /setup/progress)
  * spliced into the same WorkerInstallPanel / SetupProgressPanel screens.
  */
 export default function SetupLayout({ children }: { children: ReactNode }) {

@@ -170,6 +170,7 @@ export function SetupProgressPanelCore({
     needsUpgrade: boolean;
   } | null>(null);
   const [probedWorkerUrl, setProbedWorkerUrl] = useState<string | null>(null);
+  const [probedAccountId, setProbedAccountId] = useState("");
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
   const [tokenSaved, setTokenSaved] = useState(false);
@@ -289,6 +290,7 @@ export function SetupProgressPanelCore({
 
     return () => {
       cancelled = true;
+      installStartedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [credentials, cfOAuthConnected, purpose]);
@@ -322,6 +324,7 @@ export function SetupProgressPanelCore({
     setWorkerOwnerConfigured(null);
     setWorkerVersions(null);
     setProbedWorkerUrl(null);
+    setProbedAccountId("");
     setInstallPepper(null);
     setTokenSaved(false);
     setMailApiDone(false);
@@ -336,7 +339,23 @@ export function SetupProgressPanelCore({
         return;
       }
       const probe = await desktopProbeInstall(cfOAuthAccountId || undefined);
-      const found = probe.resources.filter((r) => r.present);
+      setProbedAccountId(probe.accountId?.trim() || "");
+      let found = probe.resources.filter((r) => r.present);
+      const workersDevUrl = probe.workersDevUrl?.trim() || null;
+      if (
+        found.length === 0 &&
+        workersDevUrl &&
+        !found.some((r) => r.kind === "worker")
+      ) {
+        found = [
+          {
+            kind: "worker",
+            name: "relaybase-api",
+            present: true,
+            id: "",
+          },
+        ];
+      }
       if (found.length === 0) {
         setProbing(false);
         await runAutoInstall([]);
@@ -346,12 +365,11 @@ export function SetupProgressPanelCore({
       setDecisions(
         Object.fromEntries(found.map((r) => [decisionKey(r), "skip" as const])),
       );
-      const workerUrl = probe.workersDevUrl?.trim() || null;
-      setProbedWorkerUrl(workerUrl);
-      if (workerUrl) {
+      setProbedWorkerUrl(workersDevUrl);
+      if (workersDevUrl) {
         const [status, versions] = await Promise.all([
-          ownerAuthStatusForWorkerUrl(workerUrl),
-          loadPublicWorkerVersionCompare(workerUrl),
+          ownerAuthStatusForWorkerUrl(workersDevUrl),
+          loadPublicWorkerVersionCompare(workersDevUrl),
         ]);
         setWorkerOwnerConfigured(status.ownerConfigured);
         setWorkerVersions(versions);
@@ -539,8 +557,10 @@ export function SetupProgressPanelCore({
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
+      const installAccountId =
+        cfOAuthAccountId || probedAccountId.trim() || undefined;
       const result = await desktopAutoInstallWorker(
-        cfOAuthAccountId || undefined,
+        installAccountId,
         undefined,
         chosen,
         wipeConfirmation,

@@ -46,9 +46,16 @@ import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/common/
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/common/layout/setup-page-chrome";
 import { WhatWeInstall } from "@/console/components/setup/common/install/SetupWizardParts";
 import { WorkerUpdateTargetDialog } from "@/console/components/setup/common/update/WorkerUpdateTargetDialog";
-import { WebAuthorizeCard } from "@/console/components/setup/web/WebAuthorizeCard";
 import { useWebSetupInstall } from "@/console/components/setup/web/use-web-setup-install";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import {
+  openWebCfOAuthPopup,
+  webOAuthStartHrefForPath,
+} from "@/lib/desktop/bridge/web-oauth-authorize";
+import {
+  consumeWebCfOAuthCompleteParam,
+  fetchWebCfOAuthSessionPresent,
+} from "@/lib/desktop/bridge/web-oauth-complete";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
@@ -144,7 +151,7 @@ export function WorkerInstallPanel({
   const [installAuthorized, setInstallAuthorized] = useState(false);
   // Start true on desktop+install for the same reason as `autoChecking`.
   const [installAuthChecking, setInstallAuthChecking] = useState(
-    () => isDesktopRuntime() && purpose === "install",
+    () => purpose === "install",
   );
   const finishingRef = useRef(false);
   const modeRef = useRef(mode);
@@ -210,12 +217,21 @@ export function WorkerInstallPanel({
   // `installAuthChecking` is initialised true for desktop+install so the
   // effect body only needs to flip it to false inside the async callback.
   useEffect(() => {
-    if (!isDesktopRuntime()) return;
+    if (purpose !== "install" || isDesktopRuntime() || !webSetupInstall) return;
+    if (!consumeWebCfOAuthCompleteParam()) return;
+    router.replace("/setup/progress");
+  }, [purpose, router, webSetupInstall]);
+
+  useEffect(() => {
     if (purpose !== "install") return;
     let active = true;
     void (async () => {
       try {
-        const present = await desktopCfOauthPresent();
+        const present = isDesktopRuntime()
+          ? await desktopCfOauthPresent()
+          : webSetupInstall
+            ? await fetchWebCfOAuthSessionPresent()
+            : false;
         if (!active) return;
         setInstallAuthorized(present);
       } catch {
@@ -228,7 +244,7 @@ export function WorkerInstallPanel({
     return () => {
       active = false;
     };
-  }, [purpose]);
+  }, [purpose, webSetupInstall]);
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
@@ -350,7 +366,70 @@ export function WorkerInstallPanel({
     credentials?.accountId?.trim() ||
     "";
 
+  const runAfterWebOAuthComplete = useCallback(() => {
+    void (async () => {
+      await refresh();
+      if (purpose === "worker-update") {
+        setTargetChecking(true);
+        try {
+          const target = await desktopPreviewWorkerUpdateTarget();
+          setTargetPreview(target);
+          setAuthorizedReady(true);
+          if (skipMatchConfirm && target.matches) {
+            finishOauthWait({ error: null });
+            void startWorkerUpdate();
+            router.push(progressHref);
+            return;
+          }
+          setTargetConfirmOpen(true);
+          finishOauthWait({
+            error: target.matches
+              ? null
+              : {
+                  title: "Wrong Cloudflare account",
+                  detail: `Your Relaybase Worker is ${target.expectedWorkerUrl}. This login would update ${target.oauthWorkerUrl}.`,
+                  fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+                },
+          });
+        } catch (err) {
+          setAuthorizedReady(false);
+          finishOauthWait({
+            error: explainWorkerUpdateTargetError(err),
+          });
+        } finally {
+          setTargetChecking(false);
+        }
+        return;
+      }
+      setInstallAuthorized(true);
+      finishOauthWait({ error: null });
+      router.push("/setup/progress");
+    })();
+  }, [
+    finishOauthWait,
+    purpose,
+    progressHref,
+    refresh,
+    router,
+    skipMatchConfirm,
+    startWorkerUpdate,
+  ]);
+
   async function handleStartCfOAuth() {
+    if (!isDesktopRuntime() && webSetupInstall) {
+      setOauthBusy(true);
+      setOauthError(null);
+      startOauthWaitTimer();
+      const path =
+        purpose === "worker-update" ? progressHref : "/setup/progress";
+      openWebCfOAuthPopup(webOAuthStartHrefForPath(path), {
+        onComplete: runAfterWebOAuthComplete,
+        onError: (message) => {
+          finishOauthWait({ error: explainCfOAuthError(message) });
+        },
+      });
+      return;
+    }
     setOauthBusy(true);
     setOauthError(null);
     startOauthWaitTimer();
@@ -367,6 +446,14 @@ export function WorkerInstallPanel({
   }
 
   async function handleAuthorize() {
+    if (purpose === "install" && !isDesktopRuntime() && webSetupInstall) {
+      if (installAuthorized) {
+        router.push("/setup/progress");
+        return;
+      }
+      await handleStartCfOAuth();
+      return;
+    }
     if (purpose === "worker-update") {
       if (authorizedReady && targetPreview?.matches) {
         if (skipMatchConfirm) {
@@ -565,68 +652,6 @@ export function WorkerInstallPanel({
   const canContinueAfterReveal =
     Boolean(revealedPasstoken) && (tokenSaved || tokenDownloaded);
 
-  if (webSetupInstall && purpose === "worker-update") {
-    const progressPath = backHref
-      ? "/setup/worker-update/progress"
-      : "/settings/worker/progress";
-    return (
-      <SetupScrollPage>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Update Worker</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Authorize the Cloudflare account that owns your saved Worker, then we upload the
-              latest script without touching R2 or D1.
-            </p>
-            {credentials?.workerUrl ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Saved Worker:{" "}
-                <span className="break-all font-mono">{credentials.workerUrl}</span>
-              </p>
-            ) : null}
-          </div>
-          <div className="flex justify-end">
-            <SetupBackLink
-              href={backHref ?? "/settings/worker"}
-              label={backHref ? "Back" : "Back to Worker settings"}
-            />
-          </div>
-          <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
-            <WebAuthorizeCard
-              afterAuthPath={progressPath}
-              buttonLabel="Authorize and update Worker"
-            />
-          </div>
-        </div>
-      </SetupScrollPage>
-    );
-  }
-
-  if (webSetupInstall && purpose === "install") {
-    return (
-      <SetupScrollPage>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Get ready</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Relaybase runs entirely in your Cloudflare account. Your email, API keys, and
-              routing data never touch Relaybase servers. Install and receive mail on the free
-              plan; sending email requires a Cloudflare Workers Paid plan (~$5/mo, billed by
-              Cloudflare).
-            </p>
-          </div>
-          <div className="flex justify-end">
-            <SetupBackLink href="/setup" label="Back to start" />
-          </div>
-          <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
-            <WebAuthorizeCard afterAuthPath="/setup/progress" />
-          </div>
-          <WhatWeInstall />
-        </div>
-      </SetupScrollPage>
-    );
-  }
-
   return (
     <SetupScrollPage>
       <div className="space-y-6">
@@ -691,7 +716,7 @@ export function WorkerInstallPanel({
                 : installAuthChecking
                   ? "Checking your Cloudflare authorization…"
                   : installAuthorized
-                    ? "Your Cloudflare authorization is active. Click Continue to install to deploy and create Workers, R2, and D1."
+                    ? "Your Cloudflare authorization is active. Click Continue — we'll check for existing Worker, R2, and D1 on the next screen before installing."
                     : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
               : purpose === "worker-update"
                 ? "Copy the update command, deploy the Worker, then come back. Schema uses your owner session."

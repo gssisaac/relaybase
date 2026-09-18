@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  accountWorkersDevUrl,
   assertR2Subscription,
   countD1UserRows,
   countR2Objects,
@@ -139,49 +140,71 @@ export async function GET(request: NextRequest) {
           log("d1", "info", `D1 ${dbName} ready (id ${d1Ids[d1Ids.length - 1]})`);
         }
 
-        // 3. Deploy worker
-        log("prepare", "info", "Fetching Worker install manifest…");
-        const manifest = await fetchInstallManifest();
-        const staged = await stageInstallPackage(manifest, (line) => log("prepare", "info", line));
+        const workerDecision = decisions.find((d) => d.kind === "worker");
+        const skipWorkerUpload =
+          workerDecision?.action === "skip" && decisions.length > 0;
 
-        log("deploy", "info", `Uploading Worker \`${DEFAULT_SCRIPT}\`…`);
-        const d1ForUpload = D1_DATABASES.map(([binding], i) => ({ binding, id: d1Ids[i] }));
-        await uploadWorkerScript(
-          client,
-          DEFAULT_SCRIPT,
-          staged.workerJs,
-          R2_BUCKET,
-          d1ForUpload,
-          staged.version,
-          staged.desktopVersion ?? "unknown",
-        );
-        const bindings = await listWorkerBindings(client, DEFAULT_SCRIPT).catch(() => []);
-        log(
-          "deploy",
-          "info",
-          `Worker bindings: ${bindings.length ? bindings.map((b) => `${b.kind}:${b.name}`).join(", ") : "(none)"}`,
-        );
-        await putWorkerSchedules(client, DEFAULT_SCRIPT, "*/15 * * * *").catch((err) =>
-          log("deploy", "stderr", `Could not set Worker cron: ${err}`),
-        );
-        const workerUrl = await enableWorkersDev(client, DEFAULT_SCRIPT);
-        log("deploy", "info", `Deployed at ${workerUrl}`);
+        let workerUrl: string;
+        let stagedVersion = "unknown";
+        let authPepper: string | undefined;
+
+        if (skipWorkerUpload) {
+          log(
+            "deploy",
+            "info",
+            `Keeping Worker \`${DEFAULT_SCRIPT}\` as-is (Skip). Not uploading a new script.`,
+          );
+          workerUrl = await accountWorkersDevUrl(client, DEFAULT_SCRIPT);
+          log("deploy", "info", `Using existing Worker at ${workerUrl}`);
+        } else {
+          // 3. Deploy worker
+          log("prepare", "info", "Fetching Worker install manifest…");
+          const manifest = await fetchInstallManifest();
+          const staged = await stageInstallPackage(manifest, (line) => log("prepare", "info", line));
+          stagedVersion = staged.version;
+
+          log("deploy", "info", `Uploading Worker \`${DEFAULT_SCRIPT}\`…`);
+          const d1ForUpload = D1_DATABASES.map(([binding], i) => ({ binding, id: d1Ids[i] }));
+          await uploadWorkerScript(
+            client,
+            DEFAULT_SCRIPT,
+            staged.workerJs,
+            R2_BUCKET,
+            d1ForUpload,
+            staged.version,
+            staged.desktopVersion ?? "unknown",
+          );
+          const bindings = await listWorkerBindings(client, DEFAULT_SCRIPT).catch(() => []);
+          log(
+            "deploy",
+            "info",
+            `Worker bindings: ${bindings.length ? bindings.map((b) => `${b.kind}:${b.name}`).join(", ") : "(none)"}`,
+          );
+          await putWorkerSchedules(client, DEFAULT_SCRIPT, "*/15 * * * *").catch((err) =>
+            log("deploy", "stderr", `Could not set Worker cron: ${err}`),
+          );
+          workerUrl = await enableWorkersDev(client, DEFAULT_SCRIPT);
+          log("deploy", "info", `Deployed at ${workerUrl}`);
+        }
 
         // 4. Secrets
         const existingSecrets = await listWorkerSecrets(client, DEFAULT_SCRIPT).catch(
           (): string[] => [],
         );
         const alreadyHasPepper = existingSecrets.includes("AUTH_PEPPER");
-        let authPepper: string | undefined;
-        if (mode === "update" && alreadyHasPepper) {
+        if (skipWorkerUpload) {
+          log("secret", "info", "AUTH_PEPPER unchanged (Worker skipped)");
+        } else if (mode === "update" && alreadyHasPepper) {
           log("secret", "info", "AUTH_PEPPER unchanged (Worker update)");
         } else {
           authPepper = generateAuthPepper();
           await putWorkerSecret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", authPepper);
           log("secret", "info", alreadyHasPepper ? "AUTH_PEPPER rotated" : "AUTH_PEPPER secret set");
         }
-        await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
-        log("secret", "info", "CF_ACCOUNT_ID secret set");
+        if (!skipWorkerUpload) {
+          await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
+          log("secret", "info", "CF_ACCOUNT_ID secret set");
+        }
 
         // 5. Warm up + schema
         await waitForWorkerReady(workerUrl, (line) => log("warmup", "info", line));
@@ -191,7 +214,9 @@ export async function GET(request: NextRequest) {
         const useMigrate = mode === "update" || anyD1Reused || ownerAlreadyConfigured;
         const step = useMigrate ? "migrate-db" : "init-db";
         const cfAccessForSchema =
-          mode === "update" && !authPepper ? session.accessToken : undefined;
+          (mode === "update" || skipWorkerUpload) && !authPepper
+            ? session.accessToken
+            : undefined;
         let dbApplied: string[] = [];
         let dbAlreadyInitialized = false;
         try {
@@ -224,6 +249,12 @@ export async function GET(request: NextRequest) {
         // pipeline). Web mirrors that: send pepper in the done event only.
         if (mode === "update") {
           log("setup-admin", "info", "Worker update — your existing passtoken is unchanged.");
+        } else if (!authPepper && ownerAlreadyConfigured) {
+          log(
+            "setup-admin",
+            "info",
+            "Worker unchanged — use your existing passtoken or Already installed to sign in.",
+          );
         } else if (!authPepper) {
           log(
             "setup-admin",
@@ -240,7 +271,7 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        const workerVersion = (await fetchWorkerVersion(workerUrl)) ?? staged.version;
+        const workerVersion = (await fetchWorkerVersion(workerUrl)) ?? stagedVersion;
 
         send("done", {
           workerUrl,

@@ -8,7 +8,9 @@ import {
   countR2Objects,
   findD1Id,
   findR2Bucket,
+  listD1Databases,
   listWorkerD1Bindings,
+  workerHealthOk,
   workerScriptExists,
 } from "@/server/cloudflare/client";
 import { D1_DATABASES, DEFAULT_SCRIPT, R2_BUCKET } from "@/server/cloudflare/constants";
@@ -49,7 +51,18 @@ export async function GET(request: NextRequest) {
     await assertR2Subscription(client);
 
     const resources: InstallResourceProbe[] = [];
-    const workerPresent = await workerScriptExists(client, DEFAULT_SCRIPT);
+    let workerPresent = await workerScriptExists(client, DEFAULT_SCRIPT);
+    let workersDevUrl: string | null = null;
+    if (!workerPresent) {
+      try {
+        workersDevUrl = await accountWorkersDevUrl(client, DEFAULT_SCRIPT);
+        if (workersDevUrl && (await workerHealthOk(workersDevUrl))) {
+          workerPresent = true;
+        }
+      } catch {
+        /* metadata probe only */
+      }
+    }
     resources.push({ kind: "worker", name: DEFAULT_SCRIPT, present: workerPresent, id: "" });
 
     const r2Present = await findR2Bucket(client, R2_BUCKET);
@@ -63,8 +76,10 @@ export async function GET(request: NextRequest) {
     resources.push(r2);
 
     const workerD1 = workerPresent ? await listWorkerD1Bindings(client, DEFAULT_SCRIPT).catch(() => []) : [];
+    const listedD1 = await listD1Databases(client).catch(() => [] as Array<[string, string]>);
     for (const [binding, name] of D1_DATABASES) {
       let id = workerD1.find(([b]) => b === binding)?.[1] ?? "";
+      if (!id) id = listedD1.find(([n]) => n === name)?.[1] ?? "";
       if (!id) id = (await findD1Id(client, name).catch(() => null)) ?? "";
       const d1: InstallResourceProbe = { kind: "d1", name, present: Boolean(id), id };
       if (id) {
@@ -76,9 +91,9 @@ export async function GET(request: NextRequest) {
       resources.push(d1);
     }
 
-    const workersDevUrl = workerPresent
-      ? await accountWorkersDevUrl(client, DEFAULT_SCRIPT).catch(() => null)
-      : null;
+    if (workerPresent && !workersDevUrl) {
+      workersDevUrl = await accountWorkersDevUrl(client, DEFAULT_SCRIPT).catch(() => null);
+    }
 
     const response = NextResponse.json({ accountId: session.accountId, workersDevUrl, resources });
     // Persist a rotated refresh_token if Cloudflare issued one during the

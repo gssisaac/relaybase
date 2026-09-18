@@ -152,9 +152,23 @@ export async function workerScriptExists(client: CfClient, scriptName: string): 
       client,
       `/accounts/${client.accountId}/workers/scripts/${scriptName}/${suffix}`,
     );
-    if (present !== null) return present;
+    if (present === true) return true;
+    if (present === false && suffix === "settings") return false;
   }
-  return false;
+  try {
+    const value = await cfRequest(
+      client,
+      "GET",
+      `/accounts/${client.accountId}/workers/scripts`,
+    );
+    const scripts = value?.result ?? [];
+    return scripts.some(
+      (s: Json) => s?.id === scriptName || s?.script_name === scriptName || s?.name === scriptName,
+    );
+  } catch (err) {
+    if (isForbidden(err)) return false;
+    throw err;
+  }
 }
 
 export async function workerHealthOk(workerUrl: string): Promise<boolean> {

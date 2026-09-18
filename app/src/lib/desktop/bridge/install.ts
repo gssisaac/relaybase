@@ -37,6 +37,8 @@ export type AutoInstallResult = {
   dbAlreadyInitialized: boolean;
   dbApplied: string[];
   workerVersion: string;
+  /** Worker already had an owner (skip / reconnect — no new passtoken issued). */
+  ownerAlreadyConfigured?: boolean;
 };
 
 export type InitDbResult = {

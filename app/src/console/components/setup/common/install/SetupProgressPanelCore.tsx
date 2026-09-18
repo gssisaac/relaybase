@@ -181,8 +181,10 @@ export function SetupProgressPanelCore({
   const [leavingToMailbox, setLeavingToMailbox] = useState(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
+  const [useExistingOwnerLogin, setUseExistingOwnerLogin] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const installStartedRef = useRef(false);
+  const flowFinishedRef = useRef(false);
   const busyRef = useRef(false);
   const wipeProbeCancelledRef = useRef(false);
 
@@ -283,14 +285,13 @@ export function SetupProgressPanelCore({
           return;
         }
       }
-      if (installStartedRef.current) return;
+      if (flowFinishedRef.current || installStartedRef.current) return;
       installStartedRef.current = true;
       void startFlow();
     })();
 
     return () => {
       cancelled = true;
-      installStartedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [credentials, cfOAuthConnected, purpose]);
@@ -310,6 +311,8 @@ export function SetupProgressPanelCore({
   }
 
   async function startFlow() {
+    flowFinishedRef.current = false;
+    setUseExistingOwnerLogin(false);
     setProbing(true);
     setError(null);
     setR2DashboardOpened(false);
@@ -418,11 +421,14 @@ export function SetupProgressPanelCore({
     setMessage(`Connected to ${workerUrl}`);
     if (purpose === "worker-update") {
       setInstallPepper(null);
+      flowFinishedRef.current = true;
       setAutoDone({ workerUrl, revealedPasstoken: "" });
       router.replace(workerUpdateHomeHref);
       return;
     }
     const pepper = result.authPepper?.trim() ?? "";
+    const ownerAlreadyConfigured =
+      result.ownerAlreadyConfigured || workerOwnerConfigured === true;
     if (pepper) {
       try {
         const issued = await issuePasstokenWithRetry(desktopOwnerSetupAdmin, {
@@ -433,6 +439,7 @@ export function SetupProgressPanelCore({
         setTokenSaved(false);
         setTokenDownloaded(false);
         setCopiedToken(false);
+        flowFinishedRef.current = true;
         setAutoDone({
           workerUrl,
           revealedPasstoken: issued.passtoken,
@@ -441,12 +448,24 @@ export function SetupProgressPanelCore({
       } catch (err) {
         console.error("Auto setup-admin failed, falling back to manual issue", err);
         setInstallPepper(pepper);
+        flowFinishedRef.current = true;
         setAutoDone({ workerUrl, revealedPasstoken: "" });
         setError(explainDesktopError(err, "Could not issue a passtoken"));
         return;
       }
     }
     setInstallPepper(null);
+    if (ownerAlreadyConfigured) {
+      setUseExistingOwnerLogin(true);
+      setError(null);
+      flowFinishedRef.current = true;
+      setMessage(
+        "Worker unchanged — sign in with your existing passtoken on the next screen.",
+      );
+      setAutoDone({ workerUrl, revealedPasstoken: "" });
+      return;
+    }
+    flowFinishedRef.current = true;
     setAutoDone({ workerUrl, revealedPasstoken: "" });
     setError({
       title: "Could not issue a passtoken",
@@ -1326,6 +1345,30 @@ export function SetupProgressPanelCore({
                     </p>
                   )}
                 </>
+              ) : useExistingOwnerLogin ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium">Owner already configured</p>
+                  <p className="text-xs text-muted-foreground">
+                    This Worker already has an owner in D1. We did not rotate
+                    AUTH_PEPPER or issue a new passtoken. Sign in with the
+                    passtoken you saved when you first installed.
+                  </p>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() => router.push("/setup/connect")}
+                  >
+                    Already installed — sign in
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/recover-admin")}
+                  >
+                    I forgot my passtoken
+                  </Button>
+                </div>
               ) : (
                 <form
                   className="space-y-2"
@@ -1407,6 +1450,7 @@ export function SetupProgressPanelCore({
                 </ul>
               </div>
             ) : null}
+            {!useExistingOwnerLogin ? (
             <Button
               type="button"
               className="w-full"
@@ -1453,6 +1497,7 @@ export function SetupProgressPanelCore({
             >
               {leavingToMailbox ? "Opening…" : "Go to Mailbox"}
             </Button>
+            ) : null}
           </div>
         ) : stopped ? (
           <div className="space-y-3 rounded-lg border border-border p-4">

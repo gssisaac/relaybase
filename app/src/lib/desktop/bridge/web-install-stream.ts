@@ -46,6 +46,7 @@ type StreamDone = {
   dbAlreadyInitialized?: boolean;
   dbApplied?: string[];
   workerVersion?: string;
+  ownerAlreadyConfigured?: boolean;
 };
 
 function toAutoInstallResult(payload: StreamDone): AutoInstallResult {
@@ -61,6 +62,7 @@ function toAutoInstallResult(payload: StreamDone): AutoInstallResult {
     dbAlreadyInitialized: Boolean(payload.dbAlreadyInitialized),
     dbApplied: payload.dbApplied ?? [],
     workerVersion: payload.workerVersion ?? "",
+    ownerAlreadyConfigured: Boolean(payload.ownerAlreadyConfigured),
   };
 }
 

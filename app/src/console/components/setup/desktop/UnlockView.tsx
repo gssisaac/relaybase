@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
-import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
+import { WorkerUrlPicker } from "@/console/components/setup/common/dialogs/WorkerUrlPicker";
 import {
   isMissingWorkerUnlockMessage,
   missingWorkerHelp,

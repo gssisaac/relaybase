@@ -11,7 +11,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
+import { EnableEmailApiDialog } from "@/console/components/setup/common/update/EnableEmailApiDialog";
 import { isConsoleUnlockRequiredError } from "@/lib/desktop/app-session/errors";
 import {
   desktopGetCredentials,

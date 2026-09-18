@@ -22,9 +22,9 @@ import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passt
 import { useDesktop } from "@/lib/desktop/shell";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
-import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
-import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
-import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
+import { WorkerUrlPicker } from "@/console/components/setup/common/dialogs/WorkerUrlPicker";
+import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/common/install/SetupCloudflareAuthorizeCard";
+import { SetupCenteredPage } from "@/console/components/setup/common/layout/setup-page-chrome";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
 import {

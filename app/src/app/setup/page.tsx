@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { SETUP_PAGE_SHELL } from "@/console/components/setup/setup-page-chrome";
+import { SETUP_PAGE_SHELL } from "@/console/components/setup/common/layout/setup-page-chrome";
 import { cn } from "@/lib/utils";
 
 export default function SetupChoicePage() {

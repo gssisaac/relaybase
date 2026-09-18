@@ -8,42 +8,12 @@ import { Button } from "@/components/ui/button";
 import { stripAnsi } from "@/lib/desktop/bridge";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
-import { WebWorkerUpdateProgress } from "@/console/components/setup/WebInstallFlow";
+import { SetupProgressPanelCore } from "@/console/components/setup/common/install/SetupProgressPanelCore";
 import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
-import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
+import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/common/layout/setup-page-chrome";
 
 const SETTINGS_WORKER_HOME = "/settings/worker";
 const SETTINGS_WORKER_UPDATE = "/settings/worker/update";
-
-function WebWorkerUpdateProgressPage({
-  backHref = SETTINGS_WORKER_HOME,
-  backLabel = "Back to Worker settings",
-}: {
-  backHref?: string;
-  backLabel?: string;
-}) {
-  const router = useRouter();
-  return (
-    <SetupScrollPage maxWidth="max-w-[600px]">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Updating Worker</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            R2 and D1 stay as they are while the Worker script is replaced.
-          </p>
-        </div>
-        <div className="flex justify-end">
-          <SetupBackLink href={backHref} label={backLabel} />
-        </div>
-        <WebWorkerUpdateProgress
-          onDone={() => {
-            window.setTimeout(() => router.replace(SETTINGS_WORKER_HOME), 600);
-          }}
-        />
-      </div>
-    </SetupScrollPage>
-  );
-}
 
 function DesktopWorkerUpdateProgressView() {
   const router = useRouter();
@@ -192,7 +162,10 @@ export function WorkerUpdateProgressView({
 } = {}) {
   if (!isDesktopRuntime()) {
     return (
-      <WebWorkerUpdateProgressPage backHref={backHref} backLabel={backLabel} />
+      <SetupProgressPanelCore
+        purpose="worker-update"
+        fromRecover={backHref === "/recover-admin"}
+      />
     );
   }
   return <DesktopWorkerUpdateProgressView />;

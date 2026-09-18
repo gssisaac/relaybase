@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { HqStudioSignupView } from "@/console/components/setup/HqStudioSignupView";
+import { HqStudioSignupView } from "@/console/components/setup/common/auth/HqStudioSignupView";
 import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
 
 function StudioSignupInner() {

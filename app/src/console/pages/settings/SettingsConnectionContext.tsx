@@ -34,7 +34,7 @@ import {
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
-import { registerEnableEmailApiPasteBridge } from "@/console/components/setup/use-enable-email-api-dialog";
+import { registerEnableEmailApiPasteBridge } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import {

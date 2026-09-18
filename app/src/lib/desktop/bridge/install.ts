@@ -1,6 +1,11 @@
 import { fetchWorkerInstallManifest, type WorkerUpdateCheck } from "./cloudflare";
 import { loadLocalCredentialsFile } from "./credentials-local";
 import { formatDesktopError, invoke, isDesktopRuntime } from "./invoke";
+import {
+  cancelWebInstallStream,
+  runWebInstallStream,
+  subscribeWebInstallLog,
+} from "./web-install-stream";
 
 export type InstallResult = {
   workerUrl: string;
@@ -109,6 +114,17 @@ export async function desktopInstallWorker(
 export async function desktopProbeInstall(
   accountId?: string,
 ): Promise<InstallProbeResult> {
+  if (!isDesktopRuntime()) {
+    const qs = accountId?.trim() ? `?accountId=${encodeURIComponent(accountId.trim())}` : "";
+    const res = await fetch(`/api/install/probe${qs}`, { cache: "no-store" });
+    const data = (await res.json().catch(() => ({}))) as InstallProbeResult & {
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error ?? `Probe failed (${res.status})`);
+    }
+    return data;
+  }
   return invoke("probe_auto_install", {
     accountId: accountId ?? null,
   });
@@ -120,6 +136,14 @@ export async function desktopAutoInstallWorker(
   decisions?: InstallDecision[],
   wipeConfirmation?: string | null,
 ): Promise<AutoInstallResult> {
+  if (!isDesktopRuntime()) {
+    return runWebInstallStream({
+      accountId,
+      decisions: decisions ?? [],
+      wipeConfirmation,
+      mode: "install",
+    });
+  }
   return invoke("auto_install_routing_worker", {
     accountId: accountId ?? null,
     serverToken: serverToken?.trim() ? serverToken.trim() : null,
@@ -188,6 +212,10 @@ export async function desktopPreviewWorkerUpdateTarget(): Promise<WorkerUpdateTa
 export async function desktopUpdateInstalledWorker(
   serverToken?: string,
 ): Promise<AutoInstallResult> {
+  if (!isDesktopRuntime()) {
+    void serverToken;
+    return runWebInstallStream({ mode: "update" });
+  }
   return invoke("update_installed_worker_cmd", {
     serverToken: serverToken?.trim() ? serverToken.trim() : null,
   });
@@ -195,6 +223,10 @@ export async function desktopUpdateInstalledWorker(
 
 /** Stop an in-flight auto-install. The install promise then rejects. */
 export async function desktopCancelAutoInstall(): Promise<void> {
+  if (!isDesktopRuntime()) {
+    cancelWebInstallStream();
+    return;
+  }
   await invoke("cancel_auto_install");
 }
 
@@ -203,6 +235,21 @@ export async function desktopRollbackInstall(
   accountId?: string,
   wipeConfirmation?: string | null,
 ): Promise<void> {
+  if (!isDesktopRuntime()) {
+    const res = await fetch("/api/install/rollback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: accountId?.trim() || undefined,
+        wipeConfirmation: wipeConfirmation?.trim() || null,
+      }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error ?? `Rollback failed (${res.status})`);
+    }
+    return;
+  }
   await invoke("rollback_auto_install", {
     accountId: accountId ?? null,
     wipeConfirmation: wipeConfirmation?.trim() ? wipeConfirmation.trim() : null,
@@ -242,9 +289,7 @@ export async function listenInstallLog(
   handler: (event: InstallLogEvent) => void,
 ): Promise<() => void> {
   if (!isDesktopRuntime()) {
-    return () => {
-      /* no-op outside Tauri */
-    };
+    return subscribeWebInstallLog(handler);
   }
   try {
     const { listen } = await import("@tauri-apps/api/event");

@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { WorkerUrlInputDialog } from "@/console/components/setup/WorkerUrlInputDialog";
+import { WorkerUrlInputDialog } from "@/console/components/setup/common/dialogs/WorkerUrlInputDialog";
 import {
   loadRecentWorkerUrls,
   mergeRecentWorkerUrls,

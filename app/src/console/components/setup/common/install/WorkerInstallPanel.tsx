@@ -40,14 +40,14 @@ import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { useDesktop } from "@/lib/desktop/shell";
 import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
-import { ManualInstallScriptPanel } from "@/console/components/setup/AdminTokenPanel";
-import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
-import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
-import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
-import { WhatWeInstall } from "@/console/components/setup/SetupWizardParts";
-import { WorkerUpdateTargetDialog } from "@/console/components/setup/WorkerUpdateTargetDialog";
-import { WebAuthorizeCard } from "@/console/components/setup/WebInstallFlow";
-import { useWebSetupInstall } from "@/console/components/setup/use-web-setup-install";
+import { ManualInstallScriptPanel } from "@/console/components/setup/common/auth/AdminTokenPanel";
+import { useOpenEnableEmailApiDialog } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
+import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/common/install/SetupCloudflareAuthorizeCard";
+import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/common/layout/setup-page-chrome";
+import { WhatWeInstall } from "@/console/components/setup/common/install/SetupWizardParts";
+import { WorkerUpdateTargetDialog } from "@/console/components/setup/common/update/WorkerUpdateTargetDialog";
+import { WebAuthorizeCard } from "@/console/components/setup/web/WebAuthorizeCard";
+import { useWebSetupInstall } from "@/console/components/setup/web/use-web-setup-install";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
@@ -595,7 +595,6 @@ export function WorkerInstallPanel({
             <WebAuthorizeCard
               afterAuthPath={progressPath}
               buttonLabel="Authorize and update Worker"
-              runInstallOnSamePage={false}
             />
           </div>
         </div>
@@ -620,7 +619,7 @@ export function WorkerInstallPanel({
             <SetupBackLink href="/setup" label="Back to start" />
           </div>
           <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
-            <WebAuthorizeCard />
+            <WebAuthorizeCard afterAuthPath="/setup/progress" />
           </div>
           <WhatWeInstall />
         </div>

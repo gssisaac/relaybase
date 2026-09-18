@@ -4,7 +4,7 @@ import { Loader2, Shield } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
+import { useOpenEnableEmailApiDialog } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { CfApiTokenDetailsSheet } from "@/console/pages/settings/cloudflare/CfApiTokenDetailsSheet";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {

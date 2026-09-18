@@ -8,8 +8,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthPageBrandMark } from "@/console/components/setup/AuthPageBrandMark";
-import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
+import { AuthPageBrandMark } from "@/console/components/setup/common/layout/AuthPageBrandMark";
+import { WorkerUrlPicker } from "@/console/components/setup/common/dialogs/WorkerUrlPicker";
 import { cn } from "@/lib/utils";
 import { hqSignup } from "@/lib/hq-auth/session";
 import {

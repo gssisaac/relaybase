@@ -15,8 +15,8 @@ import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SendingHealthProvider } from "@/lib/dashboard/SendingHealthContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
-import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
-import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
+import { EnableEmailApiDialogHost } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
+import { ConsoleRouteGate } from "@/console/components/setup/common/layout/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
@@ -36,7 +36,7 @@ import {
 import { MailAccountsProvider } from "@/email/components/accounts/MailAccountsContext";
 import { EmailMailboxProvider } from "@/email/components/mailbox/EmailMailboxContext";
 import { SenderIconProvider } from "@/email/components/sender/SenderIconContext";
-import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
+import { SessionPhaseScreen } from "@/console/components/setup/common/layout/SessionPhaseScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
 const WEB_OWNER_USER_ID = "web-owner";

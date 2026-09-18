@@ -46,7 +46,7 @@ import { Button } from "@/components/ui/button";
 import {
   isEmailApiNotConfiguredError,
   openEnableEmailApiDialog,
-} from "@/console/components/setup/use-enable-email-api-dialog";
+} from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isConsoleUnlockRequiredError } from "@/lib/desktop/app-session/errors";
 import {

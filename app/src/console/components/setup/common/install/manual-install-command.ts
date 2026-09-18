@@ -2,7 +2,7 @@ import {
   buildDefaultWorkerUrl,
   isValidWorkerUrl,
   normalizeWorkerUrl,
-} from "../../../lib/desktop/worker-url/worker-url";
+} from "@/lib/desktop/worker-url/worker-url";
 
 export function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;

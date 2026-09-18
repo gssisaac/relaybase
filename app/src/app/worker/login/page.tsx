@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { AccountLoginView } from "@/console/components/setup/AccountLoginView";
+import { AccountLoginView } from "@/console/components/setup/common/auth/AccountLoginView";
 import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { EmailAppProviders } from "@/mail-platform/runtime";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";

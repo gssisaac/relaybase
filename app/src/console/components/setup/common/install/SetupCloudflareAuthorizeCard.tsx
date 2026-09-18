@@ -4,7 +4,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { CfOauthInstallDetailsSheet } from "@/console/components/setup/CfOauthInstallDetailsSheet";
+import { CfOauthInstallDetailsSheet } from "@/console/components/setup/common/dialogs/CfOauthInstallDetailsSheet";
 import {
   CF_OAUTH_INSTALL_SCOPES,
   type DesktopErrorHelp,

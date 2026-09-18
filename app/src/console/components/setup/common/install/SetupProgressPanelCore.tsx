@@ -43,15 +43,17 @@ import {
   occupancySummary,
   resourceIsOccupied,
   wipePhraseIsValid,
-} from "@/console/components/setup/InstallWipeConfirmDialog";
+} from "@/console/components/setup/common/install/InstallWipeConfirmDialog";
 import {
   canEnterMailboxAfterInstall,
   issuePasstokenWithRetry,
-} from "@/console/components/setup/install-success-gate";
-import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
-import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
+} from "@/console/components/setup/common/install/install-success-gate";
+import { useOpenEnableEmailApiDialog } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
+import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/common/layout/setup-page-chrome";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { fetchWebCfOAuthSessionPresent } from "@/lib/desktop/bridge/web-oauth-complete";
+import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
+import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 import { loadPublicWorkerVersionCompare } from "@/lib/dashboard/list-cf-zones";
 import { ownerAuthStatusForWorkerUrl } from "@/lib/desktop/auth/owner-session";
@@ -104,8 +106,8 @@ function isR2InactiveError(error: DesktopErrorHelp | null): boolean {
   return Boolean(error?.title.toLowerCase().includes("r2 is not active"));
 }
 
-/** Tauri auto-install progress (OAuth tokens live in the OS keyring). */
-export function DesktopSetupProgressPanel({
+/** Cloudflare install / update progress (desktop Tauri + browser OAuth cookie). */
+export function SetupProgressPanelCore({
   purpose = "install",
   fromRecover = false,
 }: {
@@ -213,19 +215,21 @@ export function DesktopSetupProgressPanel({
   );
 
   async function ensureOauthSession() {
-    if (!cfOAuthConnected) {
-      setError({
-        title: "Connect Cloudflare first",
-        detail:
-          "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
-        fix:
-          purpose === "worker-update"
-            ? "Go back and Authorize with Cloudflare on this Worker update page."
-            : "Go back and click Authorize and install on Cloudflare.",
-      });
-      return false;
+    if (cfOAuthConnected) return true;
+    if (!isDesktopRuntime()) {
+      const cookie = await fetchWebCfOAuthSessionPresent();
+      if (cookie) return true;
     }
-    return true;
+    setError({
+      title: "Connect Cloudflare first",
+      detail:
+        "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
+      fix:
+        purpose === "worker-update"
+          ? "Go back and Authorize with Cloudflare on this Worker update page."
+          : "Go back and click Authorize and install on Cloudflare.",
+    });
+    return false;
   }
 
   useEffect(() => {
@@ -251,24 +255,32 @@ export function DesktopSetupProgressPanel({
   }, [autoDone, purpose]);
 
   useEffect(() => {
-    if (!isDesktopRuntime()) return;
-    if (!credentials) return;
-
     let cancelled = false;
+
     void (async () => {
-      const keyring = await desktopCfOauthPresent();
-      const cookie =
-        !cfOAuthConnected && !keyring
-          ? await fetchWebCfOAuthSessionPresent()
-          : false;
-      if (cancelled) return;
-      if (!cfOAuthConnected && !keyring && !cookie) {
-        router.replace(
-          purpose === "worker-update"
-            ? workerUpdateHref
-            : "/setup/install",
-        );
-        return;
+      if (isDesktopRuntime()) {
+        if (!credentials) return;
+        const keyring = await desktopCfOauthPresent();
+        const cookie =
+          !cfOAuthConnected && !keyring
+            ? await fetchWebCfOAuthSessionPresent()
+            : false;
+        if (cancelled) return;
+        if (!cfOAuthConnected && !keyring && !cookie) {
+          router.replace(
+            purpose === "worker-update" ? workerUpdateHref : "/setup/install",
+          );
+          return;
+        }
+      } else {
+        const cookie = await fetchWebCfOAuthSessionPresent();
+        if (cancelled) return;
+        if (!cookie) {
+          router.replace(
+            purpose === "worker-update" ? workerUpdateHref : "/setup/install",
+          );
+          return;
+        }
       }
       if (installStartedRef.current) return;
       installStartedRef.current = true;
@@ -279,7 +291,7 @@ export function DesktopSetupProgressPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [credentials, cfOAuthConnected]);
+  }, [credentials, cfOAuthConnected, purpose]);
 
   async function stopInstall() {
     if (!busyRef.current || stopping) return;
@@ -1398,15 +1410,23 @@ export function DesktopSetupProgressPanel({
                   }
                   setLeavingToMailbox(true);
                   try {
-                    await store.loginWithPasstoken({
-                      workerUrl: autoDone.workerUrl,
-                      passtoken,
-                    });
+                    if (isDesktopRuntime()) {
+                      await store.loginWithPasstoken({
+                        workerUrl: autoDone.workerUrl,
+                        passtoken,
+                      });
+                    } else {
+                      const workerUrl = autoDone.workerUrl.replace(/\/$/, "");
+                      await webOwnerLogin({ workerUrl, passtoken });
+                      rememberWorkerUrl(workerUrl);
+                    }
                     router.replace("/email/inbox");
                   } catch {
                     setLeavingToMailbox(false);
-                    store.openAlreadyInstalled();
-                    router.replace("/setup/connect");
+                    if (isDesktopRuntime()) {
+                      store.openAlreadyInstalled();
+                      router.replace("/setup/connect");
+                    }
                   }
                 })();
               }}
@@ -1639,3 +1659,6 @@ export function DesktopSetupProgressPanel({
     </SetupScrollPage>
   );
 }
+
+/** @deprecated Import SetupProgressPanelCore or SetupProgressPanel */
+export const DesktopSetupProgressPanel = SetupProgressPanelCore;

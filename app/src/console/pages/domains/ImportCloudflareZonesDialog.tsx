@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   isEmailApiNotConfiguredError,
   useOpenEnableEmailApiDialog,
-} from "@/console/components/setup/use-enable-email-api-dialog";
+} from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import {
   isZoneListNeedsWorkerUpdate,

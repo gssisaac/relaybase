@@ -29,7 +29,7 @@ import {
   buildWranglerInstallCommand,
   resolveManualWorkerUrl,
   workerUpdateCommand,
-} from "./manual-install-command";
+} from "../install/manual-install-command";
 
 /** Install-only AUTH_PEPPER. Not the owner passtoken. Never persist. */
 function generateAuthPepper(): string {

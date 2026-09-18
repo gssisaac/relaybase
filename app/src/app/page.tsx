@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { RestoreLastRoute } from "@/components/RestoreLastRoute";
-import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
+import { SessionPhaseScreen } from "@/console/components/setup/common/layout/SessionPhaseScreen";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";

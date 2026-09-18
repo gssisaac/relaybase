@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
+import { EnableEmailApiDialogHost } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 

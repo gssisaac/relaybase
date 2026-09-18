@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { BootScreen } from "@/console/components/setup/BootScreen";
-import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
-import { UnlockView } from "@/console/components/setup/UnlockView";
+import { BootScreen } from "@/console/components/setup/common/layout/BootScreen";
+import { TeamLoginView } from "@/console/components/setup/common/auth/TeamLoginView";
+import { UnlockView } from "@/console/components/setup/desktop/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";

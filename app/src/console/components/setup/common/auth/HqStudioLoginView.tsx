@@ -8,7 +8,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthPageBrandMark } from "@/console/components/setup/AuthPageBrandMark";
+import { AuthPageBrandMark } from "@/console/components/setup/common/layout/AuthPageBrandMark";
 import { hqLogin } from "@/lib/hq-auth/session";
 
 function redirectAfterAuth(router: ReturnType<typeof useRouter>, next: string | null) {

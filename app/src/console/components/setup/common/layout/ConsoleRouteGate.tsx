@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
-import { ConsoleGateView } from "@/console/components/setup/ConsoleGateView";
+import { ConsoleGateView } from "@/console/components/setup/desktop/ConsoleGateView";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
 

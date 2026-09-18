@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
+import { WorkerUrlPicker } from "@/console/components/setup/common/dialogs/WorkerUrlPicker";
 import {
   isMissingWorkerError,
   missingWorkerHelp,

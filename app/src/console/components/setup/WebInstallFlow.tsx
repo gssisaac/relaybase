@@ -21,8 +21,18 @@ import {
   openWebCfOAuthPopup,
   webOAuthStartHrefForPath,
 } from "@/lib/desktop/bridge/web-oauth-authorize";
-import { fetchWebCfOAuthSessionPresent } from "@/lib/desktop/bridge/web-oauth-complete";
-import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
+import {
+  consumeWebCfOAuthCompleteParam,
+  fetchWebCfOAuthSessionPresent,
+} from "@/lib/desktop/bridge/web-oauth-complete";
+import {
+  webOwnerLogin,
+  webOwnerSetupAdmin,
+} from "@/lib/desktop/bridge/web-owner-bridge";
+import {
+  canEnterMailboxAfterInstall,
+  issuePasstokenWithRetry,
+} from "@/console/components/setup/install-success-gate";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { saveUserConnection } from "@/lib/desktop/user-data";
@@ -30,26 +40,31 @@ import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 type InstallLogEvent = { step: string; level: "info" | "stderr"; line: string };
 
-type InstallDone = {
+type InstallStreamDone = {
   workerUrl: string;
   workerScriptName: string;
   workerVersion: string;
-  passtoken: string | null;
-  ownerAlreadyConfigured: boolean;
+  authPepper?: string;
+  ownerAlreadyConfigured?: boolean;
+  accountId?: string;
 };
 
 /** Web install / update — same Relaybase → Cloudflare authorize card as desktop. */
 export function WebAuthorizeCard({
-  afterAuthPath = "/setup/progress",
+  afterAuthPath = "/setup/install",
   buttonLabel = "Authorize and install on Cloudflare",
+  runInstallOnSamePage = true,
 }: {
-  /** In-app path to open after Cloudflare OAuth succeeds (install / update progress). */
+  /** OAuth return target (web-complete `next`). Install stays on this page when `runInstallOnSamePage`. */
   afterAuthPath?: string;
   buttonLabel?: string;
+  /** Run SSE install here instead of navigating to `/setup/progress` (avoids web redirect loops). */
+  runInstallOnSamePage?: boolean;
 }) {
   const router = useRouter();
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
+  const [installing, setInstalling] = useState(false);
   // Whether a valid CF OAuth session cookie is already present.
   // "checking" → still probing /api/oauth/session on mount.
   // "present"  → cookie exists; show "Continue" instead of forcing re-auth.
@@ -79,6 +94,31 @@ export function WebAuthorizeCard({
     };
   }, [sessionCheck]);
 
+  useEffect(() => {
+    if (!runInstallOnSamePage || isDesktopRuntime()) return;
+    if (!consumeWebCfOAuthCompleteParam()) return;
+    setSessionCheck("present");
+    setInstalling(true);
+  }, [runInstallOnSamePage]);
+
+  function beginInstall() {
+    if (runInstallOnSamePage) {
+      setInstalling(true);
+      return;
+    }
+    router.push(afterAuthPath);
+  }
+
+  function finishOAuthSuccess() {
+    setOauthBusy(false);
+    setSessionCheck("present");
+    if (runInstallOnSamePage) {
+      setInstalling(true);
+      return;
+    }
+    router.push(afterAuthPath);
+  }
+
   function startAuthorize() {
     if (isDesktopRuntime()) return;
     setOauthError(null);
@@ -86,8 +126,7 @@ export function WebAuthorizeCard({
     const authorizeHref = webOAuthStartHrefForPath(afterAuthPath);
     openWebCfOAuthPopup(authorizeHref, {
       onComplete: () => {
-        setOauthBusy(false);
-        router.push(afterAuthPath);
+        finishOAuthSuccess();
       },
       onError: (message) => {
         setOauthBusy(false);
@@ -104,6 +143,10 @@ export function WebAuthorizeCard({
   // While probing for an existing session, show a neutral loading state
   // so the user doesn't see a flash of the authorize button that would
   // immediately disappear.
+  if (installing && runInstallOnSamePage) {
+    return <WebInstallProgress />;
+  }
+
   if (sessionCheck === "checking") {
     return (
       <SetupCloudflareAuthorizeCard
@@ -133,11 +176,7 @@ export function WebAuthorizeCard({
             You already authorized Relaybase. Continue to the install, or authorize again to
             switch Cloudflare accounts.
           </p>
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => router.push(afterAuthPath)}
-          >
+          <Button type="button" className="w-full" onClick={beginInstall}>
             Continue to install
           </Button>
           <button
@@ -173,92 +212,153 @@ export function WebInstallProgress() {
   const desktop = useOptionalDesktop();
   const [logs, setLogs] = useState<InstallLogEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<InstallDone | null>(null);
+  const [autoDone, setAutoDone] = useState<{
+    workerUrl: string;
+    revealedPasstoken: string;
+  } | null>(null);
+  const [installPepper, setInstallPepper] = useState<string | null>(null);
+  const [issuingPasstoken, setIssuingPasstoken] = useState(false);
   const [tokenSaved, setTokenSaved] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [downloaded, setDownloaded] = useState(false);
-  const [continuing, setContinuing] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [tokenDownloaded, setTokenDownloaded] = useState(false);
+  const [leavingToMailbox, setLeavingToMailbox] = useState(false);
+  const [passtokenError, setPasstokenError] = useState<string | null>(null);
   const startedRef = useRef(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    const source = new EventSource("/api/install/stream");
-    source.addEventListener("log", (e) => {
-      setLogs((prev) => [...prev, JSON.parse((e as MessageEvent).data)]);
-    });
-    source.addEventListener("done", (e) => {
-      const payload = JSON.parse((e as MessageEvent).data) as InstallDone & {
-        accountId?: string;
-        workerScriptName?: string;
-        workerVersion?: string;
-      };
-      setDone(payload);
-      source.close();
-      void (async () => {
-        try {
-          await saveUserConnection({
-            workerUrl: payload.workerUrl,
-            accountId: payload.accountId,
-            workerScriptName: payload.workerScriptName,
-            workerVersion: payload.workerVersion,
-          });
-          await desktop?.refresh?.();
-        } catch {
-          /* best-effort — user can still sign in manually */
-        }
-      })();
-    });
-    source.addEventListener("error", (e) => {
-      const msg = (e as MessageEvent).data;
-      setError(msg ? (JSON.parse(msg)?.error ?? "Install failed") : "Connection to the install stream was lost.");
-      source.close();
-    });
-    return () => source.close();
-  }, []);
+
+    let source: EventSource | null = null;
+    let cancelled = false;
+
+    void (async () => {
+      const oauthOk = await fetchWebCfOAuthSessionPresent();
+      if (cancelled) return;
+      if (!oauthOk) {
+        setError(
+          "Cloudflare authorization is missing or expired. Go back and authorize again.",
+        );
+        return;
+      }
+
+      source = new EventSource("/api/install/stream");
+      source.addEventListener("log", (e) => {
+        setLogs((prev) => [...prev, JSON.parse((e as MessageEvent).data)]);
+      });
+      source.addEventListener("done", (e) => {
+        const payload = JSON.parse((e as MessageEvent).data) as InstallStreamDone;
+        source?.close();
+        void (async () => {
+          try {
+            await saveUserConnection({
+              workerUrl: payload.workerUrl,
+              accountId: payload.accountId,
+              workerScriptName: payload.workerScriptName,
+              workerVersion: payload.workerVersion,
+            });
+            await desktop?.refresh?.();
+          } catch {
+            /* best-effort */
+          }
+          const workerUrl = payload.workerUrl.replace(/\/$/, "");
+          const pepper = payload.authPepper?.trim() ?? "";
+          setInstallPepper(pepper || null);
+          setAutoDone({ workerUrl, revealedPasstoken: "" });
+          await finishWebInstall(workerUrl, pepper);
+        })();
+      });
+      source.addEventListener("error", (e) => {
+        const msg = (e as MessageEvent).data;
+        setError(
+          msg
+            ? (JSON.parse(msg)?.error ?? "Install failed")
+            : "Connection to the install stream was lost. If you just authorized, try Continue to install again.",
+        );
+        source?.close();
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      source?.close();
+    };
+  }, [desktop]);
 
   useEffect(() => {
     logEndRef.current?.scrollTo({ top: logEndRef.current.scrollHeight });
   }, [logs]);
 
-  async function copyToken() {
-    if (!done?.passtoken) return;
-    await navigator.clipboard.writeText(done.passtoken);
-    setCopied(true);
+  async function finishWebInstall(workerUrl: string, pepper: string) {
+    if (!pepper) {
+      setPasstokenError(
+        "Install finished but AUTH_PEPPER was not available to create the owner login. Try install again, or use I forgot my passtoken.",
+      );
+      return;
+    }
+    setIssuingPasstoken(true);
+    setPasstokenError(null);
+    try {
+      const issued = await issuePasstokenWithRetry(webOwnerSetupAdmin, {
+        workerUrl,
+        pepper,
+      });
+      setInstallPepper(null);
+      setTokenSaved(false);
+      setTokenDownloaded(false);
+      setCopiedToken(false);
+      setAutoDone({ workerUrl, revealedPasstoken: issued.passtoken });
+    } catch (err) {
+      setInstallPepper(pepper);
+      setAutoDone({ workerUrl, revealedPasstoken: "" });
+      setPasstokenError(err instanceof Error ? err.message : "Could not issue a passtoken");
+    } finally {
+      setIssuingPasstoken(false);
+    }
+  }
+
+  async function issuePasstokenManually() {
+    if (!autoDone || issuingPasstoken) return;
+    const pepper = installPepper?.trim() ?? "";
+    if (!pepper) return;
+    await finishWebInstall(autoDone.workerUrl, pepper);
+  }
+
+  async function copyAutoToken() {
+    if (!autoDone?.revealedPasstoken) return;
+    await navigator.clipboard.writeText(autoDone.revealedPasstoken);
+    setCopiedToken(true);
     setTokenSaved(true);
   }
 
-  async function downloadToken() {
-    if (!done?.passtoken) return;
-    await downloadPasstokenBackup(done.passtoken);
-    setDownloaded(true);
+  async function downloadAutoToken() {
+    if (!autoDone?.revealedPasstoken) return;
+    await downloadPasstokenBackup(autoDone.revealedPasstoken);
+    setTokenDownloaded(true);
     setTokenSaved(true);
   }
 
   async function goToMailbox() {
-    if (!done) return;
-    setContinuing(true);
+    if (!autoDone) return;
+    const passtoken = autoDone.revealedPasstoken.trim();
+    if (
+      !canEnterMailboxAfterInstall({
+        revealedPasstoken: passtoken,
+        tokenSaved,
+      })
+    ) {
+      return;
+    }
+    setLeavingToMailbox(true);
     try {
-      const workerUrl = done.workerUrl.replace(/\/$/, "");
-      if (done.passtoken) {
-        // Bootstrap an owner session directly against the deployed Worker —
-        // same webOwnerLogin() the Account Login screen's owner tab uses, so
-        // the rest of the app (workerFetch's Bearer path, WebOwnerSession)
-        // picks it up. Access stays in memory; refresh is mirrored to tab
-        // sessionStorage so a reload on /dashboard restores the session.
-        await webOwnerLogin({ workerUrl, passtoken: done.passtoken });
-        rememberWorkerUrl(workerUrl);
-        router.push("/dashboard");
-      } else {
-        // An owner was already configured on this Worker — nothing to log
-        // in with here. Send them to sign in with their existing passtoken.
-        router.push(`/worker/login?workerUrl=${encodeURIComponent(workerUrl)}`);
-      }
+      const workerUrl = autoDone.workerUrl.replace(/\/$/, "");
+      await webOwnerLogin({ workerUrl, passtoken });
+      rememberWorkerUrl(workerUrl);
+      router.replace("/email/inbox");
     } catch (err) {
+      setLeavingToMailbox(false);
       setError(err instanceof Error ? err.message : "Sign-in failed");
-    } finally {
-      setContinuing(false);
     }
   }
 
@@ -274,60 +374,105 @@ export function WebInstallProgress() {
     );
   }
 
-  if (done) {
-    const canContinue = !done.passtoken || tokenSaved;
+  if (autoDone) {
     return (
       <div className="space-y-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4">
         <p className="text-base font-semibold text-emerald-700 dark:text-emerald-400">
           🎉 Installed and connected!
         </p>
         <p className="text-xs text-muted-foreground">
-          Worker URL: <span className="font-mono">{done.workerUrl}</span>
+          Worker URL: <span className="font-mono">{autoDone.workerUrl}</span>
         </p>
-        {done.passtoken ? (
-          <div className="space-y-2">
-            <p className="text-xs font-medium">Save your passtoken</p>
-            <p className="text-xs text-muted-foreground">
-              Shown once — copy or download a backup before continuing. There is no other way to
-              recover it.
+        {passtokenError ? (
+          <p className="text-xs text-destructive whitespace-pre-wrap">{passtokenError}</p>
+        ) : null}
+        <div className="space-y-2">
+          {issuingPasstoken ? (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              Issuing your owner passtoken…
             </p>
-            <div className="rounded-md border border-border bg-muted/30 p-2">
-              <code className="block break-all font-mono text-[11px]">{done.passtoken}</code>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
+          ) : autoDone.revealedPasstoken ? (
+            <>
+              <p className="text-xs font-medium">Save your passtoken</p>
+              <p className="text-xs text-muted-foreground">
+                Shown once. Copy or download a backup before opening the mailbox.
+              </p>
+              <div className="rounded-md border border-border bg-muted/30 p-2">
+                <code className="block break-all font-mono text-[11px]">
+                  {autoDone.revealedPasstoken}
+                </code>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant={copiedToken || tokenSaved ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => void copyAutoToken()}
+                >
+                  {copiedToken ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  Copy passtoken
+                </Button>
+                <Button
+                  type="button"
+                  variant={tokenDownloaded ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => void downloadAutoToken()}
+                >
+                  {tokenDownloaded ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                  Download .txt
+                </Button>
+              </div>
+              {tokenSaved ? (
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                  Passtoken saved. You can continue.
+                </p>
+              ) : (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Copy or download before Go to Mailbox.
+                </p>
+              )}
+            </>
+          ) : (
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void issuePasstokenManually();
+              }}
+            >
+              <p className="text-xs font-medium">Create the owner login</p>
+              <p className="text-xs text-muted-foreground">
+                We issue a passtoken once — copy or download it before opening the mailbox.
+              </p>
               <Button
-                type="button"
-                variant={copied || tokenSaved ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => void copyToken()}
+                type="submit"
+                className="w-full"
+                disabled={issuingPasstoken || !installPepper}
               >
-                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                Copy passtoken
+                {issuingPasstoken ? <Loader2 className="size-4 animate-spin" /> : null}
+                Issue passtoken
               </Button>
-              <Button
-                type="button"
-                variant={downloaded ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => void downloadToken()}
-              >
-                {downloaded ? <Check className="size-3.5" /> : <Download className="size-3.5" />}
-                Download .txt
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            An owner is already configured on this Worker — sign in with your existing passtoken.
-          </p>
-        )}
+            </form>
+          )}
+        </div>
         <Button
           type="button"
           className="w-full"
-          disabled={!canContinue || continuing}
+          disabled={
+            !canEnterMailboxAfterInstall({
+              revealedPasstoken: autoDone.revealedPasstoken,
+              tokenSaved,
+              leavingToMailbox,
+            })
+          }
           onClick={() => void goToMailbox()}
         >
-          {continuing ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          Go to dashboard
+          {leavingToMailbox ? "Opening…" : "Go to Mailbox"}
         </Button>
       </div>
     );

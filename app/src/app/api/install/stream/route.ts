@@ -40,7 +40,6 @@ import {
   fetchWorkerVersion,
   initWorkerDb,
   migrateWorkerDb,
-  ownerSetupAdmin,
   waitForWorkerReady,
 } from "@/server/cloudflare/schema";
 import { applyRefreshedCookie } from "@/server/cloudflare/session";
@@ -220,21 +219,24 @@ export async function GET(request: NextRequest) {
           throw err;
         }
 
-        // 6. Owner passtoken (fresh install only — an existing owner keeps
-        // their passtoken; re-issuing needs the separate reset-admin flow).
-        let passtoken: string | null = null;
-        if (!ownerAlreadyConfigured) {
-          if (!authPepper) {
-            throw new Error("AUTH_PEPPER is required to issue the owner passtoken");
-          }
-          const issued = await ownerSetupAdmin(workerUrl, authPepper);
-          passtoken = issued.passtoken;
-          log("setup-admin", "info", "Owner passtoken issued");
+        // 6. Owner passtoken — desktop returns authPepper to JS and calls
+        // setup-admin from SetupProgressPanel.finishInstall (not in the install
+        // pipeline). Web mirrors that: send pepper in the done event only.
+        if (mode === "update") {
+          log("setup-admin", "info", "Worker update — your existing passtoken is unchanged.");
+        } else if (!authPepper) {
+          log(
+            "setup-admin",
+            "stderr",
+            "AUTH_PEPPER was not available — the app cannot issue a passtoken.",
+          );
         } else {
           log(
             "setup-admin",
             "info",
-            "Owner already configured on this Worker — sign in with your existing passtoken.",
+            ownerAlreadyConfigured
+              ? "Deploy complete — issuing a new owner passtoken in the app (reinstall always rotates AUTH_PEPPER)"
+              : "Deploy complete — issuing owner passtoken in the app…",
           );
         }
 
@@ -251,7 +253,7 @@ export async function GET(request: NextRequest) {
           dbAlreadyInitialized,
           dbApplied,
           workerVersion,
-          passtoken,
+          authPepper: mode === "install" && authPepper ? authPepper : "",
           ownerAlreadyConfigured,
         });
       } catch (err) {

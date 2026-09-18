@@ -15,7 +15,13 @@ import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup
 const SETTINGS_WORKER_HOME = "/settings/worker";
 const SETTINGS_WORKER_UPDATE = "/settings/worker/update";
 
-function WebWorkerUpdateProgressPage() {
+function WebWorkerUpdateProgressPage({
+  backHref = SETTINGS_WORKER_HOME,
+  backLabel = "Back to Worker settings",
+}: {
+  backHref?: string;
+  backLabel?: string;
+}) {
   const router = useRouter();
   return (
     <SetupScrollPage maxWidth="max-w-[600px]">
@@ -27,7 +33,7 @@ function WebWorkerUpdateProgressPage() {
           </p>
         </div>
         <div className="flex justify-end">
-          <SetupBackLink href={SETTINGS_WORKER_HOME} label="Back to Worker settings" />
+          <SetupBackLink href={backHref} label={backLabel} />
         </div>
         <WebWorkerUpdateProgress
           onDone={() => {
@@ -177,9 +183,17 @@ function DesktopWorkerUpdateProgressView() {
  * Lightweight viewer for `useWorkerUpdateRunner()` on desktop. On web, runs the
  * SSE update pipeline instead.
  */
-export function WorkerUpdateProgressView() {
+export function WorkerUpdateProgressView({
+  backHref,
+  backLabel,
+}: {
+  backHref?: string;
+  backLabel?: string;
+} = {}) {
   if (!isDesktopRuntime()) {
-    return <WebWorkerUpdateProgressPage />;
+    return (
+      <WebWorkerUpdateProgressPage backHref={backHref} backLabel={backLabel} />
+    );
   }
   return <DesktopWorkerUpdateProgressView />;
 }

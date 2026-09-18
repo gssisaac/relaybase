@@ -47,6 +47,7 @@ import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup
 import { WhatWeInstall } from "@/console/components/setup/SetupWizardParts";
 import { WorkerUpdateTargetDialog } from "@/console/components/setup/WorkerUpdateTargetDialog";
 import { WebAuthorizeCard } from "@/console/components/setup/WebInstallFlow";
+import { useWebSetupInstall } from "@/console/components/setup/use-web-setup-install";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
@@ -94,6 +95,7 @@ export function WorkerInstallPanel({
   backHref?: string;
 }) {
   const router = useRouter();
+  const webSetupInstall = useWebSetupInstall();
   const { refresh, credentials } = useDesktop();
   const { start: startWorkerUpdate } = useWorkerUpdateRunner();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
@@ -563,7 +565,7 @@ export function WorkerInstallPanel({
   const canContinueAfterReveal =
     Boolean(revealedPasstoken) && (tokenSaved || tokenDownloaded);
 
-  if (!isDesktopRuntime() && purpose === "worker-update") {
+  if (webSetupInstall && purpose === "worker-update") {
     const progressPath = backHref
       ? "/setup/worker-update/progress"
       : "/settings/worker/progress";
@@ -593,6 +595,7 @@ export function WorkerInstallPanel({
             <WebAuthorizeCard
               afterAuthPath={progressPath}
               buttonLabel="Authorize and update Worker"
+              runInstallOnSamePage={false}
             />
           </div>
         </div>
@@ -600,7 +603,7 @@ export function WorkerInstallPanel({
     );
   }
 
-  if (!isDesktopRuntime() && purpose === "install") {
+  if (webSetupInstall && purpose === "install") {
     return (
       <SetupScrollPage>
         <div className="space-y-6">

@@ -4,7 +4,6 @@ import {
   hasOwnerSession,
   ownerLogin,
   ownerLogout,
-  ownerSetupAdmin,
   restoreWebOwnerSession,
 } from "@/lib/desktop/auth";
 import { loadLocalCredentialsFile, persistLocalCredentialsFile } from "./credentials-local";
@@ -117,5 +116,20 @@ export async function webOwnerSetupAdmin(input: {
   pepper: string;
 }): Promise<{ passtoken: string }> {
   await mergeWebWorkerUrl(input.workerUrl);
-  return ownerSetupAdmin({ pepper: input.pepper });
+  const res = await fetch("/api/cloudflare/setup-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
+      pepper: input.pepper.trim(),
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    passtoken?: string;
+    error?: string;
+  };
+  if (!res.ok || !data.passtoken) {
+    throw new Error(data.error || `Setup failed (${res.status})`);
+  }
+  return { passtoken: data.passtoken };
 }

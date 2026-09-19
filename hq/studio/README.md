@@ -6,41 +6,38 @@ this runs as a plain Node server operated by Relaybase — see
 
 ## Run
 
+Requires PostgreSQL (`DATABASE_URL`). See [docs/postgresql-typeorm.md](./docs/postgresql-typeorm.md).
+
 ```bash
 cd hq/studio
+cp .env.example .env   # set DATABASE_URL, TYPEORM_SYNC=1 for first-time schema
 pnpm install
+pnpm run orm:setup     # once: create DB + sync schema
 pnpm dev
 ```
 
 Listens on `http://localhost:32832` (override with `PORT`). Port **32831** is used by the desktop app’s CF OAuth loopback — do not run hq/studio on 32831 while Relaybase.app is open.
 
-## Dev data
+## Committed assets (not runtime DB)
 
 | Path | Contents |
 |------|----------|
-| `data/store/*.json` | Sharded dev store (account, layouts, newsletters, triggers, subscriber groups, …) |
-| `catalog/templates/*.yaml` | Read-only template gallery blueprints (committed) |
-| `public/templates/*/meta.yaml` | HTML layout shells (committed) |
-| `data/templates/*.yaml` | Legacy — migrated to `catalog/`; no longer used for the gallery |
-| `data/messages/*.yaml` | Editable message bodies (newsletters, triggers, library copies) |
+| `catalog/templates/*.yaml` | Read-only template gallery blueprints |
+| `public/templates/*/meta.yaml` | Built-in HTML layout shells |
 
-Override the data root with `STUDIO_DATA_DIR`.
-
-Legacy monolithic `data/store.json` is migrated once on startup into `data/store/`. Legacy `templates[]` in that file is imported to YAML, then removed.
+Runtime Studio state and auth live in **PostgreSQL** (`hq_auth_users`, store entities). There is no `data/` JSON dev store.
 
 ## Studio web auth (`/auth/*`)
 
-User records live in `data/auth.json` (same directory as the store shards). The web app
-proxies `/auth/*` to this service in local dev.
+The web app proxies `/auth/*` to this service in local dev.
 
 | Route | Purpose |
 |-------|---------|
-| `POST /auth/signup` | 2-step signup payload: Worker proof + name + email + password (+ confirm) → links account worker URL in store |
-| `POST /auth/login` | Same |
+| `POST /auth/signup/cloud` | Internal cloud signup (username, CF account, worker URL, passtoken) |
+| `POST /auth/login` | Username + password |
 | `POST /auth/refresh` | RTR refresh cookie rotation |
 | `POST /auth/logout` | Revoke refresh + clear cookie |
 | `GET /auth/me` | Bearer access JWT → user profile |
-| `POST /auth/forgot-password` | Email reset token (dev: link logged to console) |
-| `POST /auth/reset-password` | Token + new password → new session |
+| `POST /auth/reset-password/oauth` | CF OAuth account match → new password |
 
 Set `HQ_JWT_SECRET` in production. See `.env.example` and `docs/auth/authentication.md`.

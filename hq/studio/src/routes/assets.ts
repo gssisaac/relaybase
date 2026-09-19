@@ -1,6 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import { Hono } from "hono";
 
 import { store } from "../db/store";

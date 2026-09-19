@@ -21,11 +21,6 @@ server/pnpm-lock.yaml
 # Claude Code local git worktrees — full checkout copies, never commit
 .claude/worktrees/
 
-# Local Studio JSON store (dev) — never commit data files
-hq/studio/data/*
-!hq/studio/data/.gitkeep
-# Sharded store lives in hq/studio/data/store/*.json (ignored by rule above)
-
-# Local dated archives of hq/studio/data (may include auth.json)
+# Local Studio backups
 hq/studio/.backup/*.tar.gz
 backup/

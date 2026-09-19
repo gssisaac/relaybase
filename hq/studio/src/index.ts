@@ -2,10 +2,9 @@ import "reflect-metadata";
 import { serve } from "@hono/node-server";
 import app from "./app";
 import { ensurePostgresBootstrap } from "./bootstrap-postgres";
-import { isPostgresStoreEnabled } from "./db/orm/data-source";
+import { assertPostgresStoreConfigured } from "./db/orm/data-source";
 import { flushPostgresAuthPersist } from "./db/postgres-auth-runtime";
 import { flushPostgresStorePersist } from "./db/postgres-store-runtime";
-import { store } from "./db/store";
 import { readEnv } from "./env";
 import { startScheduler } from "./scheduler";
 
@@ -14,18 +13,9 @@ const env = readEnv();
 const port = Number(env.PORT ?? 32832);
 
 async function main() {
-  const production = (process.env.NODE_ENV ?? "").trim() === "production";
-
-  if (isPostgresStoreEnabled()) {
-    await ensurePostgresBootstrap();
-    console.log("relaybase-studio PostgreSQL: connected (store + auth)");
-  } else if (production) {
-    throw new Error("DATABASE_URL is required when NODE_ENV=production");
-  } else {
-    console.warn(
-      "[studio] DATABASE_URL not set — using local JSON/YAML dev store only (see pnpm run orm:setup)",
-    );
-  }
+  assertPostgresStoreConfigured();
+  await ensurePostgresBootstrap();
+  console.log("relaybase-studio PostgreSQL: connected (store + auth)");
 
   const shutdown = async (signal: string) => {
     console.log(`[studio] ${signal} — flushing PostgreSQL writes…`);
@@ -41,11 +31,7 @@ async function main() {
 
   serve({ fetch: app.fetch, port }, (info) => {
     console.log(`relaybase-studio listening on http://localhost:${info.port}`);
-    console.log(
-      isPostgresStoreEnabled()
-        ? "relaybase-studio persistence: PostgreSQL"
-        : `relaybase-studio dev data dir: ${store.dataDir}`,
-    );
+    console.log("relaybase-studio persistence: PostgreSQL");
     startScheduler();
   });
 }

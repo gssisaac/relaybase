@@ -1,13 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import type { Message, StudioDataStore } from "../../db/types";
 import { requireMessage } from "./resolve";
-import { messageFileStore } from "./message-file-store";
-
-function messageYamlPath(messageId: string): string {
-  return path.join(messageFileStore.dataDir, `${messageId}.yaml`);
-}
 
 function materializeOwnerMessage(
   messageId: string,
@@ -32,23 +24,14 @@ function materializeOwnerMessage(
 }
 
 /** Recreate message bodies when store references `msgtpl_*` ids but rows are missing. */
-export function ensureOwnerMessageFiles(
-  store: StudioDataStore,
-  options?: { postgres?: boolean },
-): boolean {
+export function ensureOwnerMessageFiles(store: StudioDataStore): boolean {
   const now = new Date().toISOString();
   let repaired = false;
 
   const ensure = (messageId: string | undefined, name: string, accountLinkId: string, createdAt: string) => {
     if (!messageId?.startsWith("msgtpl_")) return;
-    if (options?.postgres) {
-      if (store.messages.some((m) => m.id === messageId)) return;
-      store.messages.push(materializeOwnerMessage(messageId, name, accountLinkId, createdAt, now));
-      repaired = true;
-      return;
-    }
-    if (fs.existsSync(messageYamlPath(messageId))) return;
-    messageFileStore.save(materializeOwnerMessage(messageId, name, accountLinkId, createdAt, now));
+    if (store.messages.some((m) => m.id === messageId)) return;
+    store.messages.push(materializeOwnerMessage(messageId, name, accountLinkId, createdAt, now));
     repaired = true;
   };
 

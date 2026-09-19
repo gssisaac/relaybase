@@ -3,7 +3,7 @@ import type { Newsletter, StudioDataStore } from "../../db/types";
 const DEV_ACCOUNT_LINK_ID = "dev";
 import { newId } from "../shared/ids";
 
-/** Demo newsletters kept in `data/store.json` — runAt is refreshed on each hq/studio load in dev. */
+/** Demo newsletters in the PostgreSQL store — runAt is refreshed on each hq/studio load in dev. */
 const DEMO_SCHEDULE_SPECS = [
   { newsletterId: "broadcast_scheduled_ama", offsetDays: 1, hourUtc: 3, minuteUtc: 0 },
   { newsletterId: "broadcast_sent_sep_digest", offsetDays: 7, hourUtc: 3, minuteUtc: 0 },
@@ -63,7 +63,7 @@ function applyScheduleToNewsletter(row: Newsletter, runAt: string, nowIso: strin
 
 /**
  * Dev-only: keep three fixture newsletters scheduled at tomorrow / +7d / +14d and
- * mirror `scheduledJobs` so the in-process scheduler matches hand-edited store.json.
+ * mirror `scheduledJobs` so the in-process scheduler stays in sync.
  */
 export function ensureDevScheduleFixtures(store: StudioDataStore, now = new Date()): boolean {
   if (process.env.NODE_ENV === "production") return false;

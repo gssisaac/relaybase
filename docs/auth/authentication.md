@@ -19,7 +19,7 @@ flowchart TB
 
   subgraph CloudHQ [Cloud HQ Studio (hq-relaybase-studio)]
     AuthRoutes["/auth/* (login, signup/cloud, worker-session)"]
-    AuthStore[("auth.json / D1 (Users, Passwords, RefreshTokens)")]
+    AuthStore[("PostgreSQL hq_auth_users (Users, Passwords, RefreshTokens)")]
     Vault["passtoken-vault.ts (AES-256-GCM KMS)"]
   end
 
@@ -154,7 +154,7 @@ sequenceDiagram
 
 ## 4. Backend Data Schema & Vault Cryptography
 
-### 4.1. Central Identity Schema (`authStore` / `auth.json`)
+### 4.1. Central Identity Schema (`authStore` / `hq_auth_users`)
 
 ```typescript
 export interface HqAuthUser {

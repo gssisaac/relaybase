@@ -13,6 +13,15 @@ export function isPostgresStoreEnabled(): boolean {
   return readDatabaseUrl() !== undefined;
 }
 
+/** Studio requires PostgreSQL — there is no JSON/YAML dev store fallback. */
+export function assertPostgresStoreConfigured(): void {
+  if (!readDatabaseUrl()) {
+    throw new Error(
+      "DATABASE_URL is required. Copy hq/studio/.env.example and run pnpm run orm:setup.",
+    );
+  }
+}
+
 export function createStudioDataSource(): DataSource {
   const url = readDatabaseUrl();
   if (!url) {

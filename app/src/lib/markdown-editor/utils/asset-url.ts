@@ -5,7 +5,7 @@ const STUDIO_ASSET_PATH_RE = /^\/studio\/assets(\/|$)/;
 /**
  * Editor/preview should load assets via the same origin as `studioFetch` (local Next
  * proxy in dev). Upload responses use `STUDIO_PUBLIC_BASE_URL` (relaybase.email),
- * which 404s for assets that only exist in local hq/studio store.json.
+ * which 404s for assets that only exist in the Studio PostgreSQL store.
  */
 export function normalizeNewsletterAssetUrl(url: string): string {
   if (!/^https?:/i.test(url)) return url;

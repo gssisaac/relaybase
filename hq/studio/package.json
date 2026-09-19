@@ -10,11 +10,9 @@
     "start": "tsx --env-file=.env dist/index.js",
     "start:prod": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "migrate:templates-yaml": "node scripts/migrate-templates-to-yaml.mjs",
     "orm:ensure-db": "tsx --env-file=.env src/db/orm/ensure-relaybase-database.ts",
     "orm:sync": "tsx --env-file=.env src/db/orm/run-sync-schema.ts",
-    "orm:migrate:json": "tsx --env-file=.env src/db/orm/migrate-from-json-store.ts",
-    "orm:setup": "pnpm run orm:ensure-db && pnpm run orm:sync && pnpm run orm:migrate:json",
+    "orm:setup": "pnpm run orm:ensure-db && pnpm run orm:sync",
     "deploy:cf": "wrangler deploy",
     "deploy:railway": "pnpm dlx @railway/cli up --service hq-relaybase-studio -y -d",
     "generate:message-template-thumbnails": "pnpm -C ../../app run generate:message-template-thumbnails"

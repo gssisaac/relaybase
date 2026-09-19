@@ -14,7 +14,7 @@ bodyMarkdown: |
 
   * Registered `@relaybase.email` mailboxes on the shared dev Worker for realistic inbox tests.
 
-  * Reset demo `store.json` fixtures to draft so you can re-run sends without seed noise.
+  * Reset demo newsletter fixtures to draft so you can re-run sends without seed noise.
 
   **Next week**
 

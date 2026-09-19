@@ -3,7 +3,7 @@ export function isOwnedMessageId(id: string): boolean {
   return /^msgtpl_(automation_|broadcast_)/.test(id);
 }
 
-/** Read-only catalog blueprints — live under `data/templates/`, not Messages. */
+/** Read-only catalog blueprints — git `catalog/templates/`, not Messages. */
 export function isCatalogBlueprintMessageId(id: string): boolean {
   return id.startsWith("msgtpl_preset_");
 }
@@ -12,7 +12,7 @@ export function isLibraryMessageId(id: string): boolean {
   return id.startsWith("msg_library_");
 }
 
-/** YAML ids stored under `data/templates/` (gallery blueprints). */
+/** Catalog template ids (gallery blueprints in `catalog/templates/`). */
 export function isCatalogTemplateId(id: string): boolean {
   return isCatalogBlueprintMessageId(id) || isLibraryMessageId(id);
 }

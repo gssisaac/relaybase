@@ -1,5 +1,5 @@
 /**
- * Studio dev store types (`data/store/*.json` + `data/templates/*.yaml` + `data/messages/*.yaml`).
+ * Studio store document (PostgreSQL entities ↔ in-memory cache).
  *
  * Layout — HTML frame · Template — read-only catalog blueprint · Message — editable copy ·
  * Trigger — event send · Newsletter — subscriber send.
@@ -66,7 +66,7 @@ export type Layout = {
 };
 
 // ============================================================================
-// Templates (read-only catalog — `data/templates/<id>.yaml`)
+// Templates (read-only catalog — git `catalog/templates/<id>.yaml`)
 // ============================================================================
 
 export type TemplateCategory =
@@ -96,7 +96,7 @@ export type Template = {
 };
 
 // ============================================================================
-// Messages (editable copies — `data/messages/<id>.yaml`)
+// Messages (editable copies — PostgreSQL `messages` table)
 // ============================================================================
 
 export type Message = {
@@ -511,9 +511,9 @@ export type StudioDataStore = {
   account: AccountLink;
   complianceIdentities: ComplianceIdentity[];
   layouts: Layout[];
-  /** Hydrated catalog blueprints (not persisted under `data/store/`). */
+  /** Hydrated catalog blueprints (git `catalog/templates/`; not a separate DB table at runtime). */
   templates: Template[];
-  /** Hydrated user messages (not persisted under `data/store/`). */
+  /** User-editable messages (PostgreSQL `messages` table). */
   messages: Message[];
   newsletters: Newsletter[];
   recipients: Recipient[];

@@ -2,7 +2,7 @@
 
 **Status:** Approved (canonical, reduced scope)  
 **Supersedes:** newsletter/subscriber layers in [`studio-newsletter-broadcast-subscriber-model.md`](./studio-newsletter-broadcast-subscriber-model.md) (historical)  
-**Engine:** `hq/studio` (dev: `data/store.json` → prod: tenant-local Studio service on customer Cloudflare / BYO deploy)  
+**Engine:** `hq/studio` (PostgreSQL on Railway / local Postgres → prod: tenant-local Studio service on customer Cloudflare / BYO deploy)  
 **App:** `app/src/studio/*`  
 **Date:** 2026-09-15  
 

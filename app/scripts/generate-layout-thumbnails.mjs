@@ -1,16 +1,17 @@
 /**
  * Renders built-in layout previews to PNG under public/studio/layout-thumbnails/.
  *
- * Re-run when hq/studio layout HTML changes (e.g. after editing hq/studio/data/store.json).
+ * Re-run when hq/studio/public/templates/*/meta.yaml layout HTML changes.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
+import { parse as parseYaml } from "yaml";
 
 const appRoot = fileURLToPath(new URL("../", import.meta.url));
-const storePath = path.join(appRoot, "../hq/studio/data/store.json");
+const layoutsRoot = path.join(appRoot, "../hq/studio/public/templates");
 const brandLogoPath = path.join(appRoot, "../hq/studio/public/brand/relaybase-icon.png");
 const outDir = path.join(appRoot, "public/studio/layout-thumbnails");
 
@@ -57,17 +58,27 @@ async function loadDefaultBrandLogoDataUrl() {
 }
 
 async function loadLayouts() {
-  const layoutsPath = path.join(appRoot, "../hq/studio/data/store/layouts.json");
-  const storePath = path.join(appRoot, "../hq/studio/data/store.json");
-  try {
-    const raw = await fs.readFile(layoutsPath, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : (parsed.layouts ?? []);
-  } catch {
-    const raw = await fs.readFile(storePath, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : (parsed.layouts ?? []);
+  const entries = await fs.readdir(layoutsRoot, { withFileTypes: true });
+  const layouts = [];
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const metaPath = path.join(layoutsRoot, ent.name, "meta.yaml");
+    try {
+      const raw = await fs.readFile(metaPath, "utf8");
+      const parsed = parseYaml(raw);
+      if (!parsed?.id) continue;
+      layouts.push({
+        id: parsed.id,
+        name: parsed.name ?? parsed.id,
+        htmlSource: parsed.html ?? parsed.htmlSource ?? "",
+        variablesSchema: parsed.variables ?? parsed.variablesSchema ?? null,
+        isBuiltin: true,
+      });
+    } catch {
+      /* skip invalid layout dir */
+    }
   }
+  return layouts;
 }
 
 async function main() {
@@ -82,7 +93,7 @@ async function main() {
   const layouts = allLayouts.filter((row) => row.isBuiltin);
 
   if (!layouts.length) {
-    console.error("No built-in layouts found in store.json");
+    console.error("No built-in layouts found under hq/studio/public/templates");
     process.exit(1);
   }
 

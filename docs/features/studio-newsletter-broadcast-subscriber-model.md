@@ -66,7 +66,7 @@ erDiagram
 
 ## 2. TypeScript Data Model for JSON File Store (Development Phase)
 
-> **Development Policy:** No database schemas or SQL tables (D1/SQLite) are created during this active development phase. All Studio state is persisted in a local JSON document store (`data/store.json`). Database schemas and migrations will be introduced only after the TypeScript object model and end-to-end workflows are fully validated.
+> **Development Policy:** HQ Studio state (newsletters, subscribers, auth) persists in **PostgreSQL** via TypeORM entities. Customer Worker data remains in D1 on each deployed Worker.
 
 ```typescript
 // ============================================================================
@@ -267,7 +267,7 @@ export type NewsletterAsset = {
 };
 
 // ============================================================================
-// Root Dev Document Store (`data/store.json`)
+// Root Studio store (PostgreSQL entities ↔ in-memory cache)
 // ============================================================================
 
 export type CrmDataStore = {
@@ -606,7 +606,7 @@ To ensure long-term stability and compliance, the following edge cases and safeg
 ## 7. Migration Plan (File Store Transition)
 
 1. **JSON Document Store Migration:**
-   * Transition `data/store.json` arrays to `newsletters`, `subscribers`, `broadcasts`, `recipients`, and `accountSuppressions`.
+   * Map store arrays to `newsletters`, `subscribers`, `broadcasts`, `recipients`, and `accountSuppressions` tables.
    * Existing `audienceGroups` in dev stores can be transformed into `newsletters` + `subscribers` rows.
 2. **API Routing Cutover:**
    * `/studio/newsletters` endpoints updated to serve the Newsletter -> Broadcast hierarchy.

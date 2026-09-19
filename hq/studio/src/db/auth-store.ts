@@ -1,31 +1,15 @@
-import fs from "node:fs";
-import path from "node:path";
-
-import { isPostgresStoreEnabled } from "./orm/data-source";
 import { loadAuthStoreFromPostgres } from "./orm/postgres-auth-persist";
 import {
   commitPostgresAuthCache,
   readPostgresAuthClone,
   setPostgresAuthCache,
 } from "./postgres-auth-runtime";
-import { store } from "./store";
 import type {
   HqAuthStore,
   HqAuthUser,
   HqPasswordResetTokenRecord,
   HqRefreshTokenRecord,
 } from "./auth-types";
-
-const AUTH_FILE = path.join(store.dataDir, "auth.json");
-
-function defaultAuthStore(): HqAuthStore {
-  return {
-    version: 1,
-    users: [],
-    refreshTokens: [],
-    passwordResetTokens: [],
-  };
-}
 
 function normalizeAuthStore(raw: HqAuthStore): HqAuthStore {
   return {
@@ -36,45 +20,14 @@ function normalizeAuthStore(raw: HqAuthStore): HqAuthStore {
   };
 }
 
-function readAuthStore(): HqAuthStore {
-  fs.mkdirSync(store.dataDir, { recursive: true });
-  if (!fs.existsSync(AUTH_FILE)) {
-    const initial = defaultAuthStore();
-    fs.writeFileSync(AUTH_FILE, `${JSON.stringify(initial, null, 2)}\n`, "utf8");
-    return initial;
-  }
-  try {
-    const parsed = JSON.parse(fs.readFileSync(AUTH_FILE, "utf8")) as HqAuthStore;
-    return normalizeAuthStore(parsed);
-  } catch {
-    const initial = defaultAuthStore();
-    fs.writeFileSync(AUTH_FILE, `${JSON.stringify(initial, null, 2)}\n`, "utf8");
-    return initial;
-  }
-}
-
-function writeAuthStore(next: HqAuthStore): void {
-  fs.mkdirSync(store.dataDir, { recursive: true });
-  fs.writeFileSync(AUTH_FILE, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-}
-
 function readAuthImpl(): HqAuthStore {
-  if (isPostgresStoreEnabled()) {
-    return readPostgresAuthClone();
-  }
-  return readAuthStore();
+  return readPostgresAuthClone();
 }
 
 function updateAuthImpl(mutator: (draft: HqAuthStore) => void): HqAuthStore {
-  if (isPostgresStoreEnabled()) {
-    const draft = readPostgresAuthClone();
-    mutator(draft);
-    return commitPostgresAuthCache(normalizeAuthStore(draft));
-  }
-  const draft = readAuthStore();
+  const draft = readPostgresAuthClone();
   mutator(draft);
-  writeAuthStore(draft);
-  return draft;
+  return commitPostgresAuthCache(normalizeAuthStore(draft));
 }
 
 export async function initPostgresAuthStore(): Promise<void> {
@@ -155,6 +108,4 @@ export const authStore = {
       if (row) row.used = true;
     });
   },
-
-  authFilePath: AUTH_FILE,
 };

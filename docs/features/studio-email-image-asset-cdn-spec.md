@@ -33,7 +33,7 @@ To guarantee **100% universal rendering, inbox deliverability, and optimal visua
 ### 1.3 Storage & CDN Strategy
 All newsletter assets are hosted externally on a high-speed, globally distributed **Cloudflare R2 Bucket (`studio-assets`)** mapped to a public CDN custom domain (e.g., `https://assets.relaybase.xyz` or development host). 
 
-- **Local Dev Phase:** Assets are received via `POST /studio/newsletters/:id/assets` and stored in `hq/studio/data/store.json` under the key `{newsletterId}/{filename}`.
+- **Local Dev Phase:** Assets are received via `POST /studio/newsletters/:id/assets` and stored in PostgreSQL (`newsletter_assets` / in-memory store cache) under the key `{newsletterId}/{filename}`.
 - **Cloudflare Production Phase:** The exact same key layout `{newsletterId}/{filename}` is written directly to the R2 bucket `studio-assets` with public read access and cached at Cloudflare edge nodes with `public, max-age=31536000, immutable`.
 
 ---
@@ -93,7 +93,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 
 | Dimension | Local Development Store (`hq/studio`) | Production Cloudflare R2 (`strum-relaybase-studio`) |
 |---|---|---|
-| **Storage Engine** | Synchronous file store (`hq/studio/data/store.json`) | Cloudflare R2 (`env.STUDIO_ASSETS` bucket binding) |
+| **Storage Engine** | PostgreSQL (`newsletter_assets` base64 blobs in dev) | Cloudflare R2 (`env.STUDIO_ASSETS` bucket binding) |
 | **Ingestion Handler** | `POST /studio/newsletters/:id/assets` | `POST /studio/newsletters/:id/assets` (Worker route) |
 | **Retrieval Handler** | `GET /studio/assets/:newsletterId/:filename` | Public R2 Custom Domain / Worker Cache API |
 | **URL Base** | `process.env.STUDIO_PUBLIC_BASE_URL` (`http://localhost:32831`) | `https://assets.relaybase.xyz` (Cloudflare CDN) |
@@ -209,7 +209,7 @@ sequenceDiagram
     participant Ingest as File Ingest Pipeline<br/>(file-ingest.ts)
     participant Compress as Image Optimizer<br/>(image-optimize.ts)
     participant Server as HQ Studio API<br/>(hq/studio)
-    participant Storage as Cloudflare R2 /<br/>Local store.json
+    participant Storage as Cloudflare R2 /<br/>PostgreSQL assets
 
     User->>Editor: Drag & Drop / Paste Image File
     Editor->>Ingest: collectTransferFiles(event)
@@ -220,7 +220,7 @@ sequenceDiagram
     Ingest->>Server: POST /studio/newsletters/:id/assets<br/>{ filename, mimeType, contentBase64 }
     
     alt Local Development Mode
-        Server->>Storage: Update store.json (draft.newsletterAssets)
+        Server->>Storage: Persist newsletterAssets (PostgreSQL)
     else Production Cloudflare Mode
         Server->>Storage: env.STUDIO_ASSETS.put(`${newsletterId}/${filename}`, buffer)
     end
@@ -361,7 +361,7 @@ export const DEFAULT_EMAIL_IMAGE_SETTINGS: EmailImageOptimizeOptions = {
 |---|---|---|---|
 | **Phase 1: Format Standardization** | Switch client optimizer from WebP default to **JPEG default** (`.jpg`) and **PNG for transparency** (`.png`). | `app/src/lib/markdown-editor/utils/file-ingest.ts`<br/>`app/src/lib/markdown-editor/utils/image-optimize.ts` | Done |
 | **Phase 2: Sanitization Pipeline** | Add strict HTML image validation in `hq/studio/src/lib/render.ts` to ensure no relative paths, Base64 strings, or unhosted media reach outbound mail. | `hq/studio/src/lib/render.ts` | Done |
-| **Phase 3: Storage Bridge Parity** | Maintain local JSON store structure in `hq/studio/data/store.json` with exact key parity to Cloudflare R2 bucket (`studio-assets`). | `hq/studio/src/routes/assets.ts` | Active (Dev) |
+| **Phase 3: Storage Bridge Parity** | Maintain PostgreSQL asset keys with exact parity to Cloudflare R2 bucket (`studio-assets`). | `hq/studio/src/routes/assets.ts` | Active (Dev) |
 | **Phase 4: Cloudflare R2 Production Binding** | Attach Cloudflare R2 bucket `studio-assets` and custom edge domain (`assets.relaybase.xyz`) to production Worker deployment. | `hq/studio/wrangler.jsonc` | Target (Prod) |
 
 ---

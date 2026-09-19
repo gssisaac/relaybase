@@ -207,16 +207,25 @@ export async function GET(request: NextRequest) {
           (): string[] => [],
         );
         const alreadyHasPepper = existingSecrets.includes("AUTH_PEPPER");
-        if (skipWorkerUpload) {
+        const pepperRequiredForCloudSignup = cloudSignup && mode === "install";
+        if (skipWorkerUpload && !pepperRequiredForCloudSignup) {
           log("secret", "info", "AUTH_PEPPER unchanged (Worker skipped)");
         } else if (mode === "update" && alreadyHasPepper) {
           log("secret", "info", "AUTH_PEPPER unchanged (Worker update)");
         } else {
           authPepper = generateAuthPepper();
           await putWorkerSecret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", authPepper);
-          log("secret", "info", alreadyHasPepper ? "AUTH_PEPPER rotated" : "AUTH_PEPPER secret set");
+          log(
+            "secret",
+            "info",
+            skipWorkerUpload && pepperRequiredForCloudSignup
+              ? "AUTH_PEPPER rotated (Worker skipped — cloud signup needs a fresh pepper)"
+              : alreadyHasPepper
+                ? "AUTH_PEPPER rotated"
+                : "AUTH_PEPPER secret set",
+          );
         }
-        if (!skipWorkerUpload) {
+        if (!skipWorkerUpload || pepperRequiredForCloudSignup) {
           await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
           log("secret", "info", "CF_ACCOUNT_ID secret set");
         }

@@ -78,7 +78,9 @@ export function SignupModuleInstallPanel() {
         cloudSignup: true,
       });
       if (!("installToken" in result) || !result.installToken) {
-        throw new Error("Install finished but cloud signup token was missing.");
+        throw new Error(
+          "Install finished but the signup session could not be created. Try again, or choose Reinstall for the Worker on the previous step.",
+        );
       }
       setPendingInstallToken(result.installToken);
       setInstallComplete(true);

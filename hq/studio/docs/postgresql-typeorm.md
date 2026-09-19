@@ -1,5 +1,7 @@
 # hq/studio — PostgreSQL + TypeORM
 
+Studio **requires** `DATABASE_URL`. There is no JSON/YAML file store fallback.
+
 ## Setup (Railway)
 
 Studio uses database name **`relaybase`** on your Postgres instance (default Railway DB is usually `railway`).
@@ -14,7 +16,7 @@ Studio uses database name **`relaybase`** on your Postgres instance (default Rai
 
 3. **On Railway** (studio service in the same project): use private URLs with `postgres.railway.internal` and `DATABASE_ADMIN_URL` … `/railway`, `DATABASE_URL` … `/relaybase`.
 
-4. Install and run full setup (create DB → sync schema → import JSON dev store):
+4. Install and sync schema:
 
    ```bash
    pnpm install
@@ -22,9 +24,7 @@ Studio uses database name **`relaybase`** on your Postgres instance (default Rai
    pnpm run orm:setup
    ```
 
-   Or step by step: `pnpm run orm:ensure-db`, `pnpm run orm:sync`, `pnpm run orm:migrate:json`.
-
-Production requires `DATABASE_URL` (`NODE_ENV=production`). One-shot JSON import (`orm:migrate:json`) is for migrating legacy dev data; production data should already live in Postgres after migration.
+   Or step by step: `pnpm run orm:ensure-db`, `pnpm run orm:sync`.
 
 ## Setup (local Postgres)
 
@@ -40,10 +40,9 @@ TYPEORM_SYNC=1 pnpm run orm:setup
 |------|------|
 | `src/db/orm/entities/` | TypeORM entity definitions |
 | `src/db/orm/data-source.ts` | DataSource factory + singleton init |
-| `src/db/orm/migrate-from-json-store.ts` | One-shot JSON → Postgres import |
 | `src/db/orm/run-sync-schema.ts` | `synchronize: true` helper (requires `TYPEORM_SYNC=1`) |
 
-When `DATABASE_URL` is set, `store.read()` / `store.update()` and `authStore` use PostgreSQL (in-memory cache + snapshot persist). Local dev without `DATABASE_URL` still uses JSON/YAML under `data/`.
+`store.read()` / `store.update()` and `authStore` use PostgreSQL (in-memory cache + snapshot persist).
 
 ### Auth schema (`hq_auth_users`)
 
@@ -55,8 +54,6 @@ Cloud-unified auth fields (see `docs/auth/authentication.md`):
 | `cf_account_id` | Cloudflare account for OAuth password reset |
 | `worker_url` | Customer Worker base URL |
 | `passtoken_enc` | AES-256-GCM vault blob (never exposed to browsers) |
-
-Imported from `data/auth.json` via `orm:migrate:json` when present.
 
 ## Production
 

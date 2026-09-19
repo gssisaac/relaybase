@@ -40,5 +40,10 @@
     "website:dev": "pnpm --dir hq/website dev",
     "website:build": "pnpm --dir hq/website build",
     "website:start": "pnpm --dir hq/website start"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "next-themes@0.4.6": "patches/next-themes@0.4.6.patch"
+    }
   }
 }

@@ -1,7 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
-
-import { isPostgresStoreEnabled } from "./orm/data-source";
 import { loadStudioDataStore, persistStudioDataStore } from "./orm/postgres-persist";
 import {
   commitPostgresStoreCache,
@@ -15,21 +11,13 @@ import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
 import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtures";
 import { ensureOwnerMessageFiles } from "../lib/messages/ensure-owner-message-files";
-import { messageFileStore } from "../lib/messages/message-file-store";
 import { templateCatalogStore } from "../lib/templates/template-catalog-store";
 import { messageIdForOwner } from "../lib/messages/resolve";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
-import {
-  hasPersistedStore,
-  readPersistedStoreShards,
-  writePersistedStoreShards,
-} from "./store-persistence";
-import type { AccountComplianceSettings, Message, Newsletter, StudioDataStore, Template, Trigger } from "./types";
+import type { AccountComplianceSettings, Newsletter, StudioDataStore, Trigger } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
-
-const DATA_DIR = process.env.STUDIO_DATA_DIR ?? path.join(process.cwd(), "data");
 
 function defaultCompliance(now: string): AccountComplianceSettings {
   return {
@@ -75,7 +63,7 @@ function defaultStore(): StudioDataStore {
       createdAt: now,
     })),
     templates: templateCatalogStore.listAll(),
-    messages: messageFileStore.listAll(),
+    messages: [],
     newsletters: [],
     recipients: [],
     triggers: [],
@@ -188,8 +176,7 @@ function normalizeStore(store: StudioDataStore): { store: StudioDataStore; newsl
 
   if (!store.layouts) store.layouts = [];
   if (!store.templates) store.templates = templateCatalogStore.listAll();
-  if (!store.messages) store.messages = messageFileStore.listAll();
-  if (!store.newsletters) store.newsletters = [];
+  if (!store.messages) store.messages = [];
 
   if (!store.messageAssets) store.messageAssets = [];
   if (!store.triggers) store.triggers = [];
@@ -343,107 +330,18 @@ function normalizeStore(store: StudioDataStore): { store: StudioDataStore; newsl
   return { store, newsletterNamesStripped };
 }
 
-function ensureDataDir() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function readStore(): StudioDataStore {
-  ensureDataDir();
-  if (!hasPersistedStore(DATA_DIR)) {
-    const initial = hydrateTemplates(defaultStore());
-    writeStore(initial);
-    return initial;
-  }
-  try {
-    const partial = readPersistedStoreShards(DATA_DIR);
-    const legacyTemplates = (partial as { templates?: Template[] }).templates;
-    const parsed = { ...defaultStore(), ...partial } as StudioDataStore;
-    let migratedLegacyTemplates = false;
-    if (Array.isArray(legacyTemplates) && legacyTemplates.length > 0) {
-      const legacy = legacyTemplates as (Template & {
-        isPreset?: boolean;
-        accountLinkId?: string;
-      })[];
-      const messageRows = legacy
-        .filter((row) => !row.isPreset)
-        .map(
-          (row): Message => ({
-            id: row.id,
-            accountLinkId: row.accountLinkId ?? DEV_ACCOUNT_LINK_ID,
-            name: row.name,
-            subject: row.subject,
-            previewText: row.previewText ?? null,
-            bodyMarkdown: row.bodyMarkdown,
-            layoutId: row.layoutId ?? null,
-            templateVariables: row.templateVariables ?? {},
-            forkedFromTemplateId: null,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-          }),
-        );
-      if (messageRows.length > 0) {
-        messageFileStore.importFromLegacyRows(messageRows);
-      }
-      templateCatalogStore.listAll();
-      delete (parsed as { templates?: Template[] }).templates;
-      migratedLegacyTemplates = true;
-    }
-    const legacyAudienceMigrated = migrateLegacyAudienceNaming(parsed);
-    const { store: normalized, newsletterNamesStripped } = normalizeStore(parsed);
-    const repairedOwnerMessages = ensureOwnerMessageFiles(normalized);
-    const store = hydrateTemplates(normalized);
-    if (
-      migratedLegacyTemplates ||
-      legacyAudienceMigrated ||
-      newsletterNamesStripped ||
-      ensureDevScheduleFixtures(store) ||
-      repairedOwnerMessages
-    ) {
-      writeStore(store);
-    }
-    return store;
-  } catch (err) {
-    if (process.env.NODE_ENV !== "production") {
-      console.error("[store] readStore failed, resetting dev store:", err);
-    }
-    const initial = hydrateTemplates(defaultStore());
-    writeStore(initial);
-    return initial;
-  }
-}
-
-function writeStore(store: StudioDataStore) {
-  const {
-    templates: _templates,
-    messages: _messages,
-    ...persisted
-  } = store;
-  writePersistedStoreShards(DATA_DIR, persisted);
-}
-
-function hydrateTemplates(
-  store: StudioDataStore,
-  options?: { postgresMessages?: boolean },
-): StudioDataStore {
+function hydrateTemplates(store: StudioDataStore): StudioDataStore {
   store.templates = templateCatalogStore.listAll();
-  if (!options?.postgresMessages) {
-    store.messages = messageFileStore.listAll();
-  }
   return store;
 }
 
-export function reconcileAndHydrateStore(
-  parsed: StudioDataStore,
-  options?: { postgresMessages?: boolean },
-): { store: StudioDataStore; dirty: boolean } {
+export function reconcileAndHydrateStore(parsed: StudioDataStore): { store: StudioDataStore; dirty: boolean } {
   const legacyAudienceMigrated = migrateLegacyAudienceNaming(parsed);
   const { store: normalized, newsletterNamesStripped } = normalizeStore(parsed);
   let dirty = legacyAudienceMigrated || newsletterNamesStripped;
-  const repairedOwnerMessages = ensureOwnerMessageFiles(normalized, {
-    postgres: options?.postgresMessages,
-  });
+  const repairedOwnerMessages = ensureOwnerMessageFiles(normalized);
   dirty = dirty || repairedOwnerMessages;
-  const store = hydrateTemplates(normalized, options);
+  const store = hydrateTemplates(normalized);
   if (ensureDevScheduleFixtures(store)) dirty = true;
   return { store, dirty };
 }
@@ -451,47 +349,28 @@ export function reconcileAndHydrateStore(
 export async function initPostgresStudioStore(): Promise<void> {
   let loaded = await loadStudioDataStore();
   if (!loaded) {
-    const seeded = reconcileAndHydrateStore(defaultStore(), { postgresMessages: true });
+    const seeded = reconcileAndHydrateStore(defaultStore());
     setPostgresStoreCache(seeded.store);
     await persistStudioDataStore(seeded.store);
     return;
   }
 
-  const { store: reconciled, dirty } = reconcileAndHydrateStore(loaded, { postgresMessages: true });
+  const { store: reconciled, dirty } = reconcileAndHydrateStore(loaded);
   setPostgresStoreCache(reconciled);
   if (dirty) {
     await persistStudioDataStore(reconciled);
   }
 }
 
-function readStoreImpl(): StudioDataStore {
-  if (isPostgresStoreEnabled()) {
-    return readPostgresStoreClone();
-  }
-  return readStore();
-}
-
-function updateStoreImpl(mutator: (draft: StudioDataStore) => void): StudioDataStore {
-  if (isPostgresStoreEnabled()) {
-    const draft = readPostgresStoreClone();
-    mutator(draft);
-    const { store: reconciled } = reconcileAndHydrateStore(draft, { postgresMessages: true });
-    return commitPostgresStoreCache(reconciled);
-  }
-
-  const draft = readStore();
-  mutator(draft);
-  writeStore(draft);
-  return hydrateTemplates(draft);
-}
-
-/** Dev JSON/YAML store or in-memory PostgreSQL cache (production). */
+/** In-memory PostgreSQL cache (authoritative at runtime). */
 export const store = {
   read(): StudioDataStore {
-    return readStoreImpl();
+    return readPostgresStoreClone();
   },
   update(mutator: (draft: StudioDataStore) => void): StudioDataStore {
-    return updateStoreImpl(mutator);
+    const draft = readPostgresStoreClone();
+    mutator(draft);
+    const { store: reconciled } = reconcileAndHydrateStore(draft);
+    return commitPostgresStoreCache(reconciled);
   },
-  dataDir: DATA_DIR,
 };

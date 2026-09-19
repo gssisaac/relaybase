@@ -1,20 +1,23 @@
 import type { Template } from "../../db/types";
+import { applyCatalogTemplateMeta } from "../templates/catalog-template-meta";
 
 /** Catalog blueprint (read-only gallery). */
 export function serializeTemplate(row: Template) {
+  const meta = applyCatalogTemplateMeta(row);
   return {
-    id: row.id,
-    name: row.name,
-    description: row.description ?? null,
-    subject: row.subject,
-    previewText: row.previewText ?? null,
-    bodyMarkdown: row.bodyMarkdown,
-    layoutId: row.layoutId,
-    templateVariables: row.templateVariables ?? {},
-    category: row.category ?? null,
+    id: meta.id,
+    name: meta.name,
+    description: meta.description ?? null,
+    subject: meta.subject,
+    previewText: meta.previewText ?? null,
+    bodyMarkdown: meta.bodyMarkdown,
+    layoutId: meta.layoutId,
+    templateVariables: meta.templateVariables ?? {},
+    target: meta.target!,
+    category: meta.category ?? null,
     isBuiltin: true as const,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: meta.createdAt,
+    updatedAt: meta.updatedAt,
   };
 }
 

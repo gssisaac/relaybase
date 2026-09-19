@@ -75,6 +75,9 @@ export type TemplateCategory =
   | "marketing"
   | "newsletter";
 
+/** Primary Studio surface this blueprint is meant for. */
+export type TemplateTarget = "newsletter" | "trigger" | "both";
+
 /** Blueprint in the template gallery — not user-editable. */
 export type Template = {
   id: string;
@@ -85,6 +88,7 @@ export type Template = {
   bodyMarkdown: string;
   layoutId: string;
   templateVariables?: Record<string, string>;
+  target?: TemplateTarget;
   category?: TemplateCategory;
   isBuiltin: true;
   createdAt: string;

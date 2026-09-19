@@ -81,8 +81,9 @@ export function DashboardTemplatesSection({
           if (!next) setCatalogInitialTemplateId(null);
         }}
         initialTemplateId={catalogInitialTemplateId}
-        title="Templates"
-        description="Browse ready-to-use templates and preview before you use them."
+        audience="newsletter"
+        title="Newsletter templates"
+        description="Broadcast and digest blueprints for subscriber sends."
       />
     </Card>
   );

@@ -30,6 +30,7 @@ import {
 } from "@/studio/lib/triggers/trigger-label";
 import { triggerDetailHref } from "@/studio/lib/paths";
 import { NewTriggerDialog } from "@/studio/pages/triggers/NewTriggerDialog";
+import { NewTriggerTemplateDialog } from "@/studio/pages/triggers/NewTriggerTemplateDialog";
 import { TriggersListSkeleton } from "@/studio/pages/triggers/TriggersListSkeleton";
 import { TriggersOverviewTopSection } from "@/studio/pages/triggers/TriggersOverviewTopSection";
 import { studioApi, StudioApiError, type Trigger, type TriggerStatus } from "@/studio/api";
@@ -66,6 +67,7 @@ export function TriggersListView() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TriggerFilter>("all");
   const [addOpen, setAddOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Trigger | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -128,6 +130,16 @@ export function TriggersListView() {
         className="px-4 py-3"
         end={
           <div className="flex items-center gap-2">
+            <NewTriggerTemplateDialog
+              open={templateOpen}
+              onOpenChange={setTemplateOpen}
+              onCreated={(id) => router.push(triggerDetailHref(id, "config"))}
+              trigger={
+                <Button size="sm" variant="outline">
+                  From template
+                </Button>
+              }
+            />
             <NewTriggerDialog
               open={addOpen}
               onOpenChange={setAddOpen}

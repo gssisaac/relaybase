@@ -34,6 +34,7 @@ templateVariables:
   digest.title: Engineering Digest
   digest.read_time: 4 min read
   digest.edition: "Weekly edition #36"
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-09-07T09:00:00.000Z

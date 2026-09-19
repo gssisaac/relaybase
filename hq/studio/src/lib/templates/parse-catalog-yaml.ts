@@ -1,6 +1,7 @@
 import { parse as parseYaml } from "yaml";
 
 import type { Template } from "../../db/types";
+import { applyCatalogTemplateMeta } from "./catalog-template-meta";
 
 export function normalizeCatalogTemplate(row: Template): Template {
   if (row.layoutId === "tpl-header-image") {
@@ -10,7 +11,7 @@ export function normalizeCatalogTemplate(row: Template): Template {
   if (row.previewText === undefined) row.previewText = null;
   if (row.description === undefined) row.description = null;
   row.isBuiltin = true;
-  return row;
+  return applyCatalogTemplateMeta(row);
 }
 
 function isTemplateRecord(value: unknown): value is Template {

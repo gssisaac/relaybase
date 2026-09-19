@@ -23,6 +23,7 @@ layoutId: tpl-editorial-serif
 templateVariables:
   publication.title: Relaybase Chronicle
   publication.issue_meta: July recap · Infrastructure edition
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-07-20T10:00:00.000Z

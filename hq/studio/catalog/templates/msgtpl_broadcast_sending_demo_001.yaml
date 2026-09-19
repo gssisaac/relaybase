@@ -34,6 +34,7 @@ templateVariables:
   post.date: September 16, 2026
   author.name: Isaac Lee
   author.avatar: https://avatars.githubusercontent.com/u/4336264?v=4
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-09-15T10:00:00.000Z

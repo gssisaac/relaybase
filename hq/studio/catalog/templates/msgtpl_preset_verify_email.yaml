@@ -21,6 +21,7 @@ bodyMarkdown: |-
 layoutId: |-
   tpl-minimal
 templateVariables: {}
+target: both
 category: |-
   transactional
 isPreset: true

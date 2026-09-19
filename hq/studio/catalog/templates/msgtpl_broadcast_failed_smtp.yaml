@@ -15,6 +15,7 @@ bodyMarkdown: |
   — Relaybase QA
 layoutId: tpl-minimal
 templateVariables: {}
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-09-10T08:30:00.000Z

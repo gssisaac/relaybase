@@ -8,6 +8,11 @@ import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
+import type { CatalogTemplateAudience } from "@/studio/lib/templates/catalog-template-audience";
+import {
+  filterCatalogTemplatesByAudience,
+} from "@/studio/lib/templates/catalog-template-audience";
 import { CatalogTemplatePreviewDialog } from "@/studio/components/templates/CatalogTemplatePreviewDialog";
 import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
@@ -27,6 +32,7 @@ export function TemplatesGridView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [audience, setAudience] = useState<CatalogTemplateAudience>("all");
   const [previewTemplate, setPreviewTemplate] = useState<StudioTemplate | null>(null);
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
@@ -60,7 +66,8 @@ export function TemplatesGridView() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...templates].sort(
+    const byAudience = filterCatalogTemplatesByAudience(templates, audience);
+    const sorted = [...byAudience].sort(
       (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
     );
     if (!q) return sorted;
@@ -71,7 +78,7 @@ export function TemplatesGridView() {
         (row.category?.toLowerCase().includes(q) ?? false) ||
         row.id.toLowerCase().includes(q),
     );
-  }, [templates, search]);
+  }, [templates, search, audience]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -112,6 +119,21 @@ export function TemplatesGridView() {
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search templates…"
+            leading={
+              <CmdDropdown
+                triggerClassName="min-w-[11rem]"
+                value={audience}
+                enableSearch={false}
+                options={[
+                  { value: "all", label: "All templates" },
+                  { value: "newsletter", label: "Newsletters" },
+                  { value: "trigger", label: "Triggers" },
+                ]}
+                onValueChange={(v) => {
+                  if (v === "all" || v === "newsletter" || v === "trigger") setAudience(v);
+                }}
+              />
+            }
           />
 
           {loading && templates.length === 0 ? (

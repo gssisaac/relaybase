@@ -74,6 +74,8 @@ export function HubTemplateUseMenu({
   resolveSnapshot,
   runTestSend,
   triggerLabel = "Use template",
+  preferredPrimary = "menu",
+  defaultTriggerPurpose = "transactional",
 }: {
   defaultTitle: string;
   hubTemplateId: string;
@@ -85,6 +87,8 @@ export function HubTemplateUseMenu({
     mergeTags: Record<string, string>;
   }) => Promise<void>;
   triggerLabel?: string;
+  preferredPrimary?: "newsletter" | "trigger" | "menu";
+  defaultTriggerPurpose?: TriggerPurpose;
 }) {
   const router = useRouter();
   const { apiBase } = useEmailPaths();
@@ -129,7 +133,7 @@ export function HubTemplateUseMenu({
     setTriggerName(defaultTitle);
     setTriggerSenderEmail(null);
     setTriggerDomain(null);
-    setTriggerPurpose("transactional");
+    setTriggerPurpose(defaultTriggerPurpose);
     setFormError(null);
   }
 
@@ -280,56 +284,127 @@ export function HubTemplateUseMenu({
     }
   }
 
+  const moreMenu = (
+    <DropdownMenuContent align="end">
+      {preferredPrimary !== "newsletter" ? (
+        <DropdownMenuItem
+          onClick={() => {
+            resetNewsletterForm("draft");
+            setNewsletterOpen(true);
+          }}
+        >
+          <Mail className="size-4" />
+          Create newsletter
+        </DropdownMenuItem>
+      ) : null}
+      {preferredPrimary !== "newsletter" ? (
+        <DropdownMenuItem
+          onClick={() => {
+            resetNewsletterForm("schedule");
+            setNewsletterOpen(true);
+          }}
+        >
+          <Calendar className="size-4" />
+          Schedule send
+        </DropdownMenuItem>
+      ) : null}
+      {preferredPrimary === "newsletter" ? (
+        <DropdownMenuItem
+          onClick={() => {
+            resetNewsletterForm("schedule");
+            setNewsletterOpen(true);
+          }}
+        >
+          <Calendar className="size-4" />
+          Schedule send
+        </DropdownMenuItem>
+      ) : null}
+      {preferredPrimary !== "trigger" ? (
+        <DropdownMenuItem
+          onClick={() => {
+            resetTriggerForm();
+            setTriggerOpen(true);
+          }}
+        >
+          <Zap className="size-4" />
+          Create trigger
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem
+        onClick={() => {
+          resetTestForm();
+          setTestOpen(true);
+        }}
+      >
+        <Send className="size-4" />
+        Test send
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button size="sm" disabled={busy}>
-              {triggerLabel}
-              <ChevronDown className="size-4 opacity-70" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
+      {preferredPrimary === "newsletter" ? (
+        <div className="flex items-center">
+          <Button
+            size="sm"
+            disabled={busy}
+            className="rounded-r-none"
             onClick={() => {
               resetNewsletterForm("draft");
               setNewsletterOpen(true);
             }}
           >
-            <Mail className="size-4" />
             Create newsletter
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              resetNewsletterForm("schedule");
-              setNewsletterOpen(true);
-            }}
-          >
-            <Calendar className="size-4" />
-            Schedule send
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button size="sm" disabled={busy} className="rounded-l-none border-l-0 px-2">
+                  <ChevronDown className="size-4 opacity-70" />
+                </Button>
+              }
+            />
+            {moreMenu}
+          </DropdownMenu>
+        </div>
+      ) : preferredPrimary === "trigger" ? (
+        <div className="flex items-center">
+          <Button
+            size="sm"
+            disabled={busy}
+            className="rounded-r-none"
             onClick={() => {
               resetTriggerForm();
               setTriggerOpen(true);
             }}
           >
-            <Zap className="size-4" />
             Create trigger
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              resetTestForm();
-              setTestOpen(true);
-            }}
-          >
-            <Send className="size-4" />
-            Test send
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button size="sm" disabled={busy} className="rounded-l-none border-l-0 px-2">
+                  <ChevronDown className="size-4 opacity-70" />
+                </Button>
+              }
+            />
+            {moreMenu}
+          </DropdownMenu>
+        </div>
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button size="sm" disabled={busy}>
+                {triggerLabel}
+                <ChevronDown className="size-4 opacity-70" />
+              </Button>
+            }
+          />
+          {moreMenu}
+        </DropdownMenu>
+      )}
 
       <Dialog open={testOpen} onOpenChange={setTestOpen}>
         <DialogContent className="sm:max-w-md">

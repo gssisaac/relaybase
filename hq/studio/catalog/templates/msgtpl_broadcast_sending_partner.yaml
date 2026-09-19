@@ -31,6 +31,7 @@ layoutId: tpl-founder-letter
 templateVariables:
   author.name: Isaac
   author.title: Founder & CEO
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-09-15T12:20:00.000Z

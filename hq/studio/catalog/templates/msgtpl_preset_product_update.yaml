@@ -23,6 +23,7 @@ bodyMarkdown: |-
 layoutId: |-
   tpl-minimal
 templateVariables: {}
+target: both
 category: |-
   newsletter
 isPreset: true

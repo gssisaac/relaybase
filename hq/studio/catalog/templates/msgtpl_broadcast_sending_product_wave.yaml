@@ -22,6 +22,7 @@ bodyMarkdown: |
   Customer success
 layoutId: tpl-product-launch
 templateVariables: {}
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-09-15T11:00:00.000Z

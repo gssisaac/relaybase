@@ -26,6 +26,7 @@ bodyMarkdown: |-
 layoutId: tpl-warm-sand
 templateVariables:
   header.greeting_tag: You are on the list
+target: trigger
 category: null
 isBuiltin: true
 createdAt: 2026-09-05T12:10:00.000Z

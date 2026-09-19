@@ -22,6 +22,7 @@ import { TemplateThumbnailPreview } from "@/studio/components/templates/Template
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { newsletterDetailHref } from "@/studio/lib/paths";
+import { filterCatalogTemplatesByAudience } from "@/studio/lib/templates/catalog-template-audience";
 import { catalogTemplateSnapshot } from "@/studio/lib/templates/catalog-template-snapshot";
 import { createNewsletterFromHubTemplate } from "@/studio/lib/templates/hub-template-launch";
 import { newslettersHubStore } from "@/studio/stores/newsletters-hub";
@@ -106,7 +107,8 @@ export function NewNewsletterTemplateDialog({
 
   const filteredTemplates = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...templates].sort(
+    const audienceFiltered = filterCatalogTemplatesByAudience(templates, "newsletter");
+    const sorted = [...audienceFiltered].sort(
       (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
     );
     if (!q) return sorted;
@@ -315,7 +317,7 @@ export function NewNewsletterTemplateDialog({
                                   {displaySubject(template.subject, template.name)}
                                 </p>
                                 <p className="truncate text-xs text-muted-foreground">
-                                  {template.category?.replaceAll("_", " ") ?? "Catalog"}
+                                  {template.category?.replaceAll("_", " ") ?? "Newsletter"}
                                 </p>
                               </div>
                             </button>

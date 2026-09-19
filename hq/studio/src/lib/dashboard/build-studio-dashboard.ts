@@ -5,6 +5,7 @@ import { serializeTemplate } from "../messages/serialize-template";
 import { serializeLayout } from "../templates/layout-serialize";
 import { subscriberGroupToSummary } from "../subscriber-groups/api-serialize";
 import { templateCatalogStore } from "../templates/template-catalog-store";
+import { catalogTemplateMatchesTarget } from "../templates/catalog-template-meta";
 import { buildDashboardSendingAggregate } from "./sending-aggregate";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
@@ -40,6 +41,7 @@ export function buildStudioDashboard() {
   const catalogTemplates = templateCatalogStore
     .listAll()
     .map(serializeTemplate)
+    .filter((row) => catalogTemplateMatchesTarget(row, "newsletter"))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, DASHBOARD_TEMPLATE_LIMIT);
 

@@ -26,6 +26,7 @@ layoutId: tpl-keynote-banner
 templateVariables:
   hero.image: /studio/sample-banners/keynote-hero.png
   event.headline: "Relaybase 2.0 is Live: Built for Global Scale"
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-08-01T09:00:00.000Z

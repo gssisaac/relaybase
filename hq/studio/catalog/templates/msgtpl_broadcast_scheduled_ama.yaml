@@ -34,6 +34,7 @@ templateVariables:
   invite.time_details: 9:00 AM - Aug 27, 9:30 PM PDT
   invite.location_name: Hwy17 Studios ↗
   invite.location_address: Santa Cruz, CA
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-09-14T18:00:00.000Z

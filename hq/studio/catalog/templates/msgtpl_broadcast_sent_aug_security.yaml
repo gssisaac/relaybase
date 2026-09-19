@@ -29,6 +29,7 @@ bodyMarkdown: |
 layoutId: tpl-dark-obsidian
 templateVariables:
   header.badge_text: SECURITY
+target: newsletter
 category: null
 isBuiltin: true
 createdAt: 2026-08-18T11:00:00.000Z

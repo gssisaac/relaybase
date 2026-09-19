@@ -25,6 +25,7 @@ layoutId: tpl-receipt-invoice
 templateVariables:
   receipt.title: Payment Receipt
   receipt.number: INV-2026-0901
+target: trigger
 category: null
 isBuiltin: true
 createdAt: 2026-09-08T10:00:00.000Z

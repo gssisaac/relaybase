@@ -25,6 +25,7 @@ bodyMarkdown: |-
 layoutId: tpl-warm-sand
 templateVariables:
   header.greeting_tag: Welcome aboard
+target: trigger
 category: null
 isBuiltin: true
 createdAt: 2026-09-01T10:05:00.000Z

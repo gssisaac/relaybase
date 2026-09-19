@@ -3,6 +3,7 @@
 import { TemplateThumbnailPreview } from "@/studio/components/templates/TemplateThumbnailPreview";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
 import { isPresetCatalogTemplate } from "@/studio/lib/messages/message-library";
+import { catalogTemplateCardSubtitle } from "@/studio/lib/templates/catalog-template-audience";
 import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
@@ -14,10 +15,7 @@ export function resolveTemplateLayout(
 }
 
 function templateCardSubtitle(template: StudioTemplate): string {
-  if (template.category) {
-    return template.category.replaceAll("_", " ");
-  }
-  return "Catalog";
+  return catalogTemplateCardSubtitle(template);
 }
 
 export function TemplateThumbnailGrid({

@@ -23,6 +23,7 @@ bodyMarkdown: |-
   — Relaybase
 layoutId: tpl-minimal
 templateVariables: {}
+target: trigger
 category: null
 isBuiltin: true
 createdAt: 2026-09-02T09:10:00.000Z

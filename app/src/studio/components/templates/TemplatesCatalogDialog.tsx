@@ -21,6 +21,11 @@ import { CatalogTemplateUseActions } from "@/studio/components/templates/Catalog
 import { resolveTemplateLayout } from "@/studio/components/templates/TemplateThumbnailGrid";
 import { TemplateThumbnailPreview } from "@/studio/components/templates/TemplateThumbnailPreview";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
+import type { CatalogTemplateAudience } from "@/studio/lib/templates/catalog-template-audience";
+import {
+  catalogTemplateCardSubtitle,
+  filterCatalogTemplatesByAudience,
+} from "@/studio/lib/templates/catalog-template-audience";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";
 import { useTemplatesCatalog } from "@/studio/stores/templates-catalog";
 import type { StudioTemplate } from "@/studio/api";
@@ -36,6 +41,8 @@ export type TemplatesCatalogDialogProps = {
   description?: string;
   /** Opens on preview when the template is in the catalog cache. */
   initialTemplateId?: string | null;
+  /** Limit gallery to newsletter or trigger blueprints. */
+  audience?: CatalogTemplateAudience;
 };
 
 export function TemplatesCatalogDialog({
@@ -45,6 +52,7 @@ export function TemplatesCatalogDialog({
   title = "Templates",
   description = "Browse ready-to-use templates and preview before you use them.",
   initialTemplateId = null,
+  audience = "all",
 }: TemplatesCatalogDialogProps) {
   const templatesCatalog = useTemplatesCatalog();
   const [search, setSearch] = useState("");
@@ -100,7 +108,8 @@ export function TemplatesCatalogDialog({
 
   const filteredTemplates = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...templates].sort(
+    const byAudience = filterCatalogTemplatesByAudience(templates, audience);
+    const sorted = [...byAudience].sort(
       (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
     );
     if (!q) return sorted;
@@ -111,7 +120,7 @@ export function TemplatesCatalogDialog({
         (row.category?.toLowerCase().includes(q) ?? false) ||
         row.id.toLowerCase().includes(q),
     );
-  }, [templates, search]);
+  }, [templates, search, audience]);
 
   const { plainTextTemplate, previewSubject, renderedPreview, PREVIEW_RECIPIENT } =
     useCatalogTemplateRenderedPreview({
@@ -236,7 +245,7 @@ export function TemplatesCatalogDialog({
                             <div className="space-y-0.5 border-t px-3 py-2.5">
                               <p className="truncate text-sm font-medium">{template.name}</p>
                               <p className="truncate text-xs text-muted-foreground">
-                                {template.category?.replaceAll("_", " ") ?? "Catalog"}
+                                {catalogTemplateCardSubtitle(template)}
                               </p>
                             </div>
                           </button>

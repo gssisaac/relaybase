@@ -45,6 +45,8 @@ export type TemplateCategory =
   | "newsletter"
   | "conversational";
 
+export type TemplateTarget = "newsletter" | "trigger" | "both";
+
 /** Read-only catalog blueprint (`/studio/templates`). */
 export type StudioTemplate = {
   id: string;
@@ -55,6 +57,7 @@ export type StudioTemplate = {
   bodyMarkdown: string;
   layoutId: string;
   templateVariables: Record<string, string>;
+  target: TemplateTarget;
   category: TemplateCategory | null;
   isBuiltin: true;
   createdAt: string;

@@ -1,10 +1,12 @@
-import { Hono } from "hono";
+import {
+  DEV_ACCOUNT_LINK_ID,
+  studioDocumentService,
+} from "@services/index";
+
 import type { AccountSuppressionReason } from "@db/types";
+import { Hono } from "hono";
 import { newId } from "@lib/shared/ids";
 import { verifyCrmWebhookSecret } from "@lib/webhooks/verify-secret";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
-
 export const studioWebhooks = new Hono();
 
 studioWebhooks.post("/bounce", async (c) => {
@@ -31,7 +33,7 @@ studioWebhooks.post("/bounce", async (c) => {
   const reason: AccountSuppressionReason = body.reason ?? "hard_bounce";
 
   const now = new Date().toISOString();
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     if (body.newsletterId) {
       const broadcast = draft.newsletters.find((b) => b.id === body.newsletterId);
       if (broadcast?.subscriberGroupId) {
@@ -99,7 +101,7 @@ studioWebhooks.post("/bounce", async (c) => {
 
 // GET /studio/webhooks/suppressions — account-wide suppression list
 studioWebhooks.get("/suppressions", (c) => {
-  const rows = readStudioDocument()
+  const rows = studioDocumentService.read()
     .accountSuppressions.filter((s) => s.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return c.json({ suppressions: rows });

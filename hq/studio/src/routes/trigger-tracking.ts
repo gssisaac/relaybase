@@ -1,21 +1,17 @@
 import { Hono } from "hono";
-
-import { resolveSafeRedirectTarget } from "@lib/tracking/redirect";
 import {
-  recordAutomationTrackingClick,
-  recordAutomationTrackingOpen,
-} from "@lib/tracking/trigger-record";
-import { TRACKING_PIXEL_GIF } from "@lib/tracking/record";
+  trackingService,
+} from "@services/index";
 
 export const studioTriggerTracking = new Hono();
 
 studioTriggerTracking.get("/o/:triggerId/:triggerSendId", async (c) => {
   const { triggerId, triggerSendId } = c.req.param();
-  recordAutomationTrackingOpen(triggerId, triggerSendId);
+  trackingService.recordTriggerOpen(triggerId, triggerSendId);
 
   c.header("Content-Type", "image/gif");
   c.header("Cache-Control", "no-store");
-  return c.body(TRACKING_PIXEL_GIF);
+  return c.body(trackingService.trackingPixelGif);
 });
 
 studioTriggerTracking.get("/c/:triggerId/:triggerSendId", async (c) => {
@@ -23,10 +19,10 @@ studioTriggerTracking.get("/c/:triggerId/:triggerSendId", async (c) => {
   const target = c.req.query("u");
   if (!target) return c.json({ error: "missing u" }, 400);
 
-  const safe = resolveSafeRedirectTarget(target);
+  const safe = trackingService.safeRedirectTarget(target);
   if (!safe) return c.json({ error: "invalid redirect target" }, 400);
 
-  recordAutomationTrackingClick(triggerId, triggerSendId, safe);
+  trackingService.recordTriggerClick(triggerId, triggerSendId, safe);
 
   return c.redirect(safe, 302);
 });

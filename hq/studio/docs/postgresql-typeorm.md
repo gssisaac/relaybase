@@ -44,15 +44,13 @@ TYPEORM_SYNC=1 pnpm run orm:setup
 |------|------|
 | `src/db/types.ts`, `src/db/auth-types.ts` | Store document + auth record types |
 | `src/db/entities/` | TypeORM entity definitions |
-| `src/lib/db/` | Runtime read caches, parse-date, client config |
+| `src/lib/` | Infra only: `auth/`, `db/`, `orm/`, `mail/`, `render/`, `shared/`, `vault/`, `webhooks/` |
 | `src/lib/orm/data-source.ts` | DataSource factory + singleton init |
-| `src/lib/orm/run-sync-schema.ts` | `synchronize: true` helper (requires `TYPEORM_SYNC=1`) |
 | `src/services/repositories.ts` | Typed TypeORM repository accessors |
-| `src/services/auth/auth.repository.ts` | Auth row-level writes (no full-table TRUNCATE) |
-| `src/services/studio/studio-document.service.ts` | In-memory studio document + `mutateStudioDocument` → TypeORM upsert |
-| `src/services/studio/studio-document.persist.ts` | Bulk load/upsert via `store-entity-map` (no TRUNCATE) |
-| `src/services/domain/*.service.ts` | TypeORM-first domain services (`newsletterService`, `accountLinkService`, …) |
-| `src/services/auth-service.ts` | Auth cache + row-level `auth.repository` writes |
+| `src/services/index.ts` | Domain singleton exports (`templateService`, `newsletterService`, …) |
+| `src/services/{template,message,newsletter,trigger,subscriber,account,tracking,analytics,asset,job}/` | Domain modules + `service.ts` singleton |
+| `src/services/studio/` | Document bootstrap, reconcile, persist |
+| `src/services/auth/` | Auth repository; `auth-service.ts` at services root |
 
 **Auth:** per-row TypeORM saves; no full-table TRUNCATE on token refresh.
 

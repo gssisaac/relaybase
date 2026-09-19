@@ -1,37 +1,45 @@
 import { Hono } from "hono";
-import { listSubscriberContactsForBroadcast } from "@lib/subscriber-groups/resolver";
-import { refreshNewsletterSubscriberLink } from "@lib/newsletters/subscriber-sync";
-import { serializeNewsletterSubscriberContact } from "@lib/newsletters/subscriber-api-serialize";
-import { findNewsletter } from "@lib/newsletters/serialize";
-
+import {
+  accountService,
+  analyticsService,
+  assetService,
+  DEV_ACCOUNT_LINK_ID,
+  messageService,
+  newsletterService,
+  subscriberGroupService,
+  studioDocumentService,
+  templateService,
+  trackingService,
+  triggerService,
+} from "@services/index";
 export const studioNewsletterSubscribers = new Hono();
 
 // GET /studio/newsletters/:newsletterId/subscribers?status=&q=
 studioNewsletterSubscribers.get("/", (c) => {
   const newsletterId = c.req.param("newsletterId")!;
-  if (!findNewsletter(newsletterId)) return c.json({ error: "not found" }, 404);
+  if (!newsletterService.findInDocument(newsletterId)) return c.json({ error: "not found" }, 404);
 
   const statusFilter = c.req.query("status");
   const q = c.req.query("q")?.trim();
 
-  const rows = listSubscriberContactsForBroadcast(newsletterId, {
+  const rows = subscriberGroupService.listContactsForBroadcast(newsletterId, {
     status: statusFilter,
     q,
   });
 
-  return c.json({ members: rows.map((row) => serializeNewsletterSubscriberContact(newsletterId, row)) });
+  return c.json({ members: rows.map((row) => newsletterService.serializeSubscriberContact(newsletterId, row)) });
 });
 
 // POST /studio/newsletters/:newsletterId/subscribers/sync — live group; returns current counts
 studioNewsletterSubscribers.post("/sync", async (c) => {
   const newsletterId = c.req.param("newsletterId")!;
-  const broadcast = findNewsletter(newsletterId);
+  const broadcast = newsletterService.findInDocument(newsletterId);
   if (!broadcast) return c.json({ error: "not found" }, 404);
   if (!broadcast.subscriberGroupId) {
     return c.json({ error: "broadcast has no linked subscriber group" }, 400);
   }
 
-  const result = refreshNewsletterSubscriberLink(newsletterId, broadcast.subscriberGroupId);
+  const result = newsletterService.refreshSubscriberLink(newsletterId, broadcast.subscriberGroupId);
   return c.json({
     added: 0,
     updated: 0,

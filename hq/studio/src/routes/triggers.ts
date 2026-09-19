@@ -1,48 +1,28 @@
-import { Hono } from "hono";
-
-import type { TriggerPurpose, Trigger, TriggerSource } from "@db/types";
-import { createMessageForOwner, patchMessage } from "@lib/messages/message";
-import { triggerSource } from "@lib/messages/resolve";
-import { findSubscriberGroup } from "@lib/subscriber-groups/group";
-import { dispatchTriggerSend } from "@lib/triggers/dispatch";
-import { fireTrigger } from "@lib/triggers/fire";
 import {
-  findTrigger,
-  serializeTrigger,
-  serializeTriggerSend,
-  serializeTriggerEvent,
-} from "@lib/triggers/serialize";
-import { slugifyTrigger } from "@lib/triggers/slug";
-import { emptyTriggerStats, normalizeTriggerStats } from "@lib/triggers/stats";
-import {
-  defaultHttpWebhookTrigger,
-  defaultMailboxInboundTrigger,
-  defaultTriggerForPurpose,
-} from "@lib/triggers/trigger-defaults";
-import { buildTriggerStatsOverview } from "@lib/triggers/trigger-stats-overview";
-import { validateTriggerForActivation } from "@lib/triggers/validate";
-import {
-  defaultFromForDomain,
-  mergeTriggerPatch,
-  purposeFromInput,
-} from "@lib/triggers/patch";
-import { sanitizeTemplateVariables } from "@lib/templates/variable-schema";
-import { isValidEmail } from "@lib/shared/email";
+  DEV_ACCOUNT_LINK_ID,
+  messageService,
+  studioDocumentService,
+  subscriberGroupService,
+  templateService,
+  triggerService,
+} from "@services/index";
+import type { Trigger, TriggerPurpose, TriggerSource } from "@db/types";
 import { newId, newToken } from "@lib/shared/ids";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
+
+import { Hono } from "hono";
+import { isValidEmail } from "@lib/shared/email";
 
 export const studioTriggers = new Hono();
 
 studioTriggers.get("/", (c) => {
-  const rows = readStudioDocument()
+  const rows = studioDocumentService.read()
     .triggers.filter((a) => a.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return c.json({ triggers: rows.map((row) => serializeTrigger(row)) });
+  return c.json({ triggers: rows.map((row) => triggerService.serialize(row)) });
 });
 
 studioTriggers.get("/stats", (c) => {
-  return c.json(buildTriggerStatsOverview());
+  return c.json(triggerService.statsOverview());
 });
 
 studioTriggers.post("/", async (c) => {
@@ -61,20 +41,20 @@ studioTriggers.post("/", async (c) => {
 
   const name = body.name?.trim();
   if (!name) return c.json({ error: "Trigger name is required" }, 400);
-  const domain = body.domain?.trim().toLowerCase() || readStudioDocument().account.domain?.trim().toLowerCase();
+  const domain = body.domain?.trim().toLowerCase() || studioDocumentService.read().account.domain?.trim().toLowerCase();
   if (!domain) return c.json({ error: "Select a sending domain for this automation" }, 400);
 
-  const purpose = purposeFromInput(body.purpose);
+  const purpose = triggerService.purposeFromInput(body.purpose);
   const requestedType = body.triggerType || body.sourceType;
   let source: TriggerSource;
   if (requestedType === "mailbox_inbound" || (!requestedType && purpose === "conversational")) {
-    source = defaultMailboxInboundTrigger(domain, "support");
+    source = triggerService.defaultMailboxInboundTrigger(domain, "support");
   } else {
-    source = defaultHttpWebhookTrigger();
+    source = triggerService.defaultHttpWebhookTrigger();
   }
 
-  const data = readStudioDocument();
-  const baseSlug = slugifyTrigger(name) || newId("automation").slice(0, 12);
+  const data = studioDocumentService.read();
+  const baseSlug = triggerService.slugify(name) || newId("automation").slice(0, 12);
   let slug = baseSlug;
   let suffix = 2;
   while (data.triggers.some((row) => row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.slug === slug)) {
@@ -85,8 +65,8 @@ studioTriggers.post("/", async (c) => {
   const id = newId("automation");
   const now = new Date().toISOString();
   let created: Trigger | null = null;
-  mutateStudioDocument((draft) => {
-    const message = createMessageForOwner(
+  studioDocumentService.mutate((draft) => {
+    const message = messageService.createForOwner(
       draft,
       {
         ownerId: id,
@@ -104,7 +84,7 @@ studioTriggers.post("/", async (c) => {
       description: null,
       domain,
       fromName: draft.account.compliance.organizationName,
-      fromEmail: defaultFromForDomain(domain),
+      fromEmail: triggerService.defaultFromForDomain(domain),
       replyTo: null,
       complianceIdentityId: draft.account.defaultComplianceIdentityId,
       purpose,
@@ -115,7 +95,7 @@ studioTriggers.post("/", async (c) => {
       cooldownSeconds: source.type === "mailbox_inbound" ? 3600 : 86_400,
       applyMarketingSuppression: purpose !== "transactional",
       messageId: message.id,
-      stats: emptyTriggerStats(),
+      stats: triggerService.emptyStats(),
       lastTriggeredAt: null,
       lastSentAt: null,
       createdAt: now,
@@ -124,18 +104,18 @@ studioTriggers.post("/", async (c) => {
     draft.triggers.push(created);
   });
 
-  return c.json(serializeTrigger(created!, { revealTriggerSecret: true }), 201);
+  return c.json(triggerService.serialize(created!, { revealTriggerSecret: true }), 201);
 });
 
 studioTriggers.get("/:id", (c) => {
-  const row = findTrigger(c.req.param("id")!);
+  const row = triggerService.findInDocument(c.req.param("id")!);
   if (!row) return c.json({ error: "not found" }, 404);
-  return c.json(serializeTrigger(row));
+  return c.json(triggerService.serialize(row));
 });
 
 studioTriggers.patch("/:id", async (c) => {
   const id = c.req.param("id")!;
-  const existing = findTrigger(id);
+  const existing = triggerService.findInDocument(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
   let body: {
@@ -171,12 +151,12 @@ studioTriggers.patch("/:id", async (c) => {
 
   if (body.complianceIdentityId !== undefined && body.complianceIdentityId !== null) {
     const identityId = body.complianceIdentityId.trim();
-    const exists = readStudioDocument().complianceIdentities.some((row) => row.id === identityId);
+    const exists = studioDocumentService.read().complianceIdentities.some((row) => row.id === identityId);
     if (!exists) return c.json({ error: "Compliance sender not found" }, 400);
   }
 
   if (body.subscriberGroupId !== undefined && body.subscriberGroupId !== null) {
-    const group = findSubscriberGroup(body.subscriberGroupId.trim());
+    const group = subscriberGroupService.findGroup(body.subscriberGroupId.trim());
     if (!group) return c.json({ error: "Subscriber group not found" }, 404);
     const domain = (body.domain ?? existing.domain).toLowerCase();
     if (group.domain.toLowerCase() !== domain) {
@@ -186,13 +166,13 @@ studioTriggers.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   let updated: Trigger | null = null;
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     const row = draft.triggers[idx]!;
     const purpose = body.purpose ?? row.purpose;
-    const existingSource = triggerSource(row);
-    patchMessage(
+    const existingSource = messageService.triggerSource(row);
+    messageService.patch(
       draft,
       row.messageId,
       {
@@ -203,7 +183,7 @@ studioTriggers.patch("/:id", async (c) => {
         layoutId: body.layoutId !== undefined ? body.layoutId : undefined,
         templateVariables:
           body.templateVariables !== undefined
-            ? sanitizeTemplateVariables(body.templateVariables)
+            ? templateService.sanitizeVariables(body.templateVariables)
             : undefined,
       },
       now,
@@ -211,7 +191,7 @@ studioTriggers.patch("/:id", async (c) => {
     updated = {
       ...row,
       name: body.name?.trim() ?? row.name,
-      slug: body.slug !== undefined ? slugifyTrigger(body.slug) || row.slug : row.slug,
+      slug: body.slug !== undefined ? triggerService.slugify(body.slug) || row.slug : row.slug,
       description: body.description !== undefined ? body.description : row.description,
       domain: body.domain?.trim().toLowerCase() ?? row.domain,
       fromName: body.fromName !== undefined ? body.fromName : row.fromName,
@@ -223,7 +203,7 @@ studioTriggers.patch("/:id", async (c) => {
           : row.complianceIdentityId,
       listStatus: body.listStatus ?? row.listStatus,
       purpose,
-      source: body.source ? mergeTriggerPatch(existingSource, body.source) : existingSource,
+      source: body.source ? triggerService.mergeTriggerPatch(existingSource, body.source) : existingSource,
       subscriberGroupId:
         body.subscriberGroupId !== undefined ? body.subscriberGroupId : row.subscriberGroupId,
       cooldownSeconds:
@@ -237,21 +217,21 @@ studioTriggers.patch("/:id", async (c) => {
     draft.triggers[idx] = updated;
   });
 
-  return c.json(serializeTrigger(updated!));
+  return c.json(triggerService.serialize(updated!));
 });
 
 studioTriggers.post("/:id/activate", (c) => {
   const id = c.req.param("id")!;
-  const existing = findTrigger(id);
+  const existing = triggerService.findInDocument(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
-  const issues = validateTriggerForActivation(existing);
+  const issues = triggerService.validateForActivation(existing);
   if (issues.length) {
     return c.json({ error: "cannot activate", issues }, 422);
   }
 
   const now = new Date().toISOString();
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     draft.triggers[idx] = {
@@ -261,16 +241,16 @@ studioTriggers.post("/:id/activate", (c) => {
     };
   });
 
-  return c.json(serializeTrigger(findTrigger(id)!));
+  return c.json(triggerService.serialize(triggerService.findInDocument(id)!));
 });
 
 studioTriggers.post("/:id/pause", (c) => {
   const id = c.req.param("id")!;
-  const existing = findTrigger(id);
+  const existing = triggerService.findInDocument(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
   const now = new Date().toISOString();
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     draft.triggers[idx] = {
@@ -280,24 +260,24 @@ studioTriggers.post("/:id/pause", (c) => {
     };
   });
 
-  return c.json(serializeTrigger(findTrigger(id)!));
+  return c.json(triggerService.serialize(triggerService.findInDocument(id)!));
 });
 
 studioTriggers.post("/:id/rotate-webhook-secret", (c) => {
   const id = c.req.param("id")!;
-  const existing = findTrigger(id);
+  const existing = triggerService.findInDocument(id);
   if (!existing) return c.json({ error: "not found" }, 404);
-  const existingSource = triggerSource(existing);
+  const existingSource = messageService.triggerSource(existing);
   if (existingSource.type !== "http_webhook") {
     return c.json({ error: "automation is not http_webhook" }, 409);
   }
 
   const secret = newToken();
   const now = new Date().toISOString();
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
-    const source = triggerSource(draft.triggers[idx]!);
+    const source = messageService.triggerSource(draft.triggers[idx]!);
     if (source.type !== "http_webhook") return;
     draft.triggers[idx] = {
       ...draft.triggers[idx]!,
@@ -307,14 +287,14 @@ studioTriggers.post("/:id/rotate-webhook-secret", (c) => {
   });
 
   return c.json({
-    trigger: serializeTrigger(findTrigger(id)!, { revealTriggerSecret: true }),
+    trigger: triggerService.serialize(triggerService.findInDocument(id)!, { revealTriggerSecret: true }),
     secret,
   });
 });
 
 studioTriggers.post("/:id/test-send", async (c) => {
   const id = c.req.param("id")!;
-  const existing = findTrigger(id);
+  const existing = triggerService.findInDocument(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
   let body: { email?: string; name?: string; payload?: Record<string, unknown> } = {};
@@ -340,12 +320,12 @@ studioTriggers.post("/:id/test-send", async (c) => {
   const triggerEventId = newId("triggerevent");
   const now = new Date().toISOString();
 
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     draft.triggerEvents.push({
       id: triggerEventId,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
       triggerId: id,
-      triggerType: triggerSource(existing).type,
+      triggerType: messageService.triggerSource(existing).type,
       idempotencyKey: `test_${now}_${email}`,
       recipientEmail: email,
       recipientName: payload.name as string,
@@ -375,9 +355,9 @@ studioTriggers.post("/:id/test-send", async (c) => {
     });
   });
 
-  const automation = findTrigger(id)!;
-  const send = readStudioDocument().triggerSends.find((s) => s.id === sendId)!;
-  const result = await dispatchTriggerSend(automation, send, payload);
+  const automation = triggerService.findInDocument(id)!;
+  const send = studioDocumentService.read().triggerSends.find((s) => s.id === sendId)!;
+  const result = await triggerService.dispatchSend(automation, send, payload);
   if (!result.ok) {
     return c.json({ error: result.error, triggerSendId: sendId }, 502);
   }
@@ -387,27 +367,27 @@ studioTriggers.post("/:id/test-send", async (c) => {
 
 studioTriggers.get("/:id/activity", (c) => {
   const id = c.req.param("id")!;
-  if (!findTrigger(id)) return c.json({ error: "not found" }, 404);
+  if (!triggerService.findInDocument(id)) return c.json({ error: "not found" }, 404);
 
-  const data = readStudioDocument();
+  const data = studioDocumentService.read();
   const events = data.triggerEvents
     .filter((e) => e.triggerId === id)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-    .map(serializeTriggerEvent);
+    .map((event) => triggerService.serializeEvent(event));
   const sends = data.triggerSends
     .filter((s) => s.triggerId === id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(serializeTriggerSend);
+    .map((send) => triggerService.serializeSend(send));
 
   return c.json({ triggerEvents: events, sends });
 });
 
 studioTriggers.get("/:id/stats", (c) => {
-  const row = findTrigger(c.req.param("id")!);
+  const row = triggerService.findInDocument(c.req.param("id")!);
   if (!row) return c.json({ error: "not found" }, 404);
   return c.json({
     triggerId: row.id,
-    stats: normalizeTriggerStats(row.stats),
+    stats: triggerService.normalizeStats(row.stats),
     lastTriggeredAt: row.lastTriggeredAt ?? null,
     lastSentAt: row.lastSentAt ?? null,
   });

@@ -1,22 +1,26 @@
 import { Hono } from "hono";
+import {
+  accountService,
+  analyticsService,
+  assetService,
+  DEV_ACCOUNT_LINK_ID,
+  messageService,
+  newsletterService,
+  subscriberGroupService,
+  studioDocumentService,
+  templateService,
+  trackingService,
+  triggerService,
+} from "@services/index";
 
 import type { ComplianceIdentity } from "@db/types";
-import {
-  findComplianceIdentity,
-  listComplianceIdentities,
-  serializeComplianceIdentity,
-  syncAccountComplianceMirror,
-} from "@lib/compliance/identity";
 import { newId } from "@lib/shared/ids";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
-
 export const studioComplianceIdentities = new Hono();
 
 // GET /studio/compliance-identities
 studioComplianceIdentities.get("/", (c) => {
-  const identities = listComplianceIdentities().map(serializeComplianceIdentity);
-  const data = readStudioDocument();
+  const identities = accountService.listComplianceIdentities().map((row) => accountService.serializeComplianceIdentity(row));
+  const data = studioDocumentService.read();
   return c.json({
     identities,
     defaultComplianceIdentityId: data.account.defaultComplianceIdentityId,
@@ -44,7 +48,7 @@ studioComplianceIdentities.post("/", async (c) => {
   const id = newId("compliance");
   let created: ComplianceIdentity | null = null;
 
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     created = {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -59,16 +63,16 @@ studioComplianceIdentities.post("/", async (c) => {
     if (body.setAsDefault || !draft.account.defaultComplianceIdentityId) {
       draft.account.defaultComplianceIdentityId = id;
     }
-    syncAccountComplianceMirror(draft);
+    accountService.syncComplianceMirror(draft);
   });
 
-  return c.json({ identity: serializeComplianceIdentity(created!) }, 201);
+  return c.json({ identity: accountService.serializeComplianceIdentity(created!) }, 201);
 });
 
 // PATCH /studio/compliance-identities/:id
 studioComplianceIdentities.patch("/:id", async (c) => {
   const id = c.req.param("id")!;
-  const existing = findComplianceIdentity(id);
+  const existing = accountService.findComplianceIdentity(id);
   if (!existing || existing.accountLinkId !== DEV_ACCOUNT_LINK_ID) {
     return c.json({ error: "not found" }, 404);
   }
@@ -87,7 +91,7 @@ studioComplianceIdentities.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   let updated: ComplianceIdentity | null = null;
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const idx = draft.complianceIdentities.findIndex((row) => row.id === id);
     if (idx < 0) return;
     const prev = draft.complianceIdentities[idx]!;
@@ -106,9 +110,9 @@ studioComplianceIdentities.patch("/:id", async (c) => {
     };
     draft.complianceIdentities[idx] = updated;
     if (draft.account.defaultComplianceIdentityId === id) {
-      syncAccountComplianceMirror(draft);
+      accountService.syncComplianceMirror(draft);
     }
   });
 
-  return c.json({ identity: serializeComplianceIdentity(updated!) });
+  return c.json({ identity: accountService.serializeComplianceIdentity(updated!) });
 });

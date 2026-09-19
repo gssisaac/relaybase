@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import { authService } from "@services/auth-service";
 import type { HqAuthUser } from "@db/auth-types";
-import { accountLinkService } from "@services/domain/account-link.service";
+import { accountService } from "@services/account/service";
 import {
   verifyWorkerSignupProof,
   type WorkerSignupProof,
@@ -121,7 +121,7 @@ export function issueAuthResponse(c: Context, user: HqAuthUser) {
 }
 
 function linkWorkerUrlForNewAccount(workerUrl: string): void {
-  void accountLinkService.setWorkerUrl(DEV_ACCOUNT_LINK_ID, workerUrl);
+  void accountService.setWorkerUrl(DEV_ACCOUNT_LINK_ID, workerUrl);
 }
 
 export async function signupUser(input: {

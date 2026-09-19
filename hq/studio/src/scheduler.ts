@@ -1,10 +1,9 @@
-import { syncSubscriberGroupAsync } from "@lib/subscriber-groups/sync";
-import { resolveActiveSubscriberContacts } from "@lib/subscriber-groups/resolver";
-import { dispatchNewsletterToSubscribers, processNewsletterDispatchBatch } from "@lib/newsletters/dispatch";
-import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "@lib/newsletters/dispatch-progress";
-import { rollupNewsletterStatsFromRecipients } from "@lib/newsletters/stats";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
+import {
+  DEV_ACCOUNT_LINK_ID,
+  newsletterService,
+  studioDocumentService,
+  subscriberGroupService,
+} from "@services/index";
 
 /**
  * Stand-ins for Cloudflare Cron Trigger + Queue — in-process intervals for
@@ -12,20 +11,21 @@ import { readStudioDocument, mutateStudioDocument } from "@services/studio/studi
  */
 
 const SCHEDULE_POLL_MS = 10_000;
-const STATS_ROLLUP_MS = DISPATCH_QUEUE_POLL_MS;
+const STATS_ROLLUP_MS = newsletterService.dispatchQueuePollMs;
 const SUBSCRIBER_CRON_MS = 60_000;
 
 /** §5.1 — synchronous atomic claim on the document store guards against duplicate sends. */
 async function claimDueNewsletters(): Promise<void> {
   const now = new Date().toISOString();
-  const due = readStudioDocument()
+  const due = studioDocumentService
+    .read()
     .scheduledJobs.filter(
       (j) => (j.kind === "newsletter" || j.kind === "broadcast") && j.status === "pending" && j.runAt <= now,
     );
 
   for (const job of due) {
     let claimedBroadcastId: string | null = null;
-    mutateStudioDocument((draft) => {
+    studioDocumentService.mutate((draft) => {
       const jobIdx = draft.scheduledJobs.findIndex((j) => j.id === job.id && j.status === "pending");
       if (jobIdx < 0) return;
       const bIdx = draft.newsletters.findIndex(
@@ -52,12 +52,12 @@ async function claimDueNewsletters(): Promise<void> {
     try {
       // Late-binding resolution (§1.3): subscribers are resolved *now*, at
       // the exact dispatch moment — not frozen when the broadcast was scheduled.
-      const broadcast = readStudioDocument().newsletters.find((b) => b.id === claimedBroadcastId)!;
-      const members = resolveActiveSubscriberContacts(broadcast);
-      await dispatchNewsletterToSubscribers(broadcast, members);
+      const broadcast = studioDocumentService.read().newsletters.find((b) => b.id === claimedBroadcastId)!;
+      const members = subscriberGroupService.resolveActiveContacts(broadcast);
+      await newsletterService.dispatchToSubscribers(broadcast, members);
     } catch (err) {
       console.error(`[studio-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
-      mutateStudioDocument((draft) => {
+      studioDocumentService.mutate((draft) => {
         const idx = draft.newsletters.findIndex((b) => b.id === claimedBroadcastId);
         if (idx >= 0) {
           const failedAt = new Date().toISOString();
@@ -75,13 +75,15 @@ async function claimDueNewsletters(): Promise<void> {
 
 /** Drain queued recipients for broadcasts still in `sending` (large scheduled sends). */
 async function processSendingBroadcastQueues(): Promise<void> {
-  const sending = readStudioDocument()
+  const sending = studioDocumentService
+    .read()
     .newsletters.filter(
       (b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID && b.status === "sending",
     );
 
   for (const broadcast of sending) {
-    const pending = readStudioDocument()
+    const pending = studioDocumentService
+      .read()
       .recipients.filter(
         (r) =>
           r.newsletterId === broadcast.id &&
@@ -90,7 +92,7 @@ async function processSendingBroadcastQueues(): Promise<void> {
     if (pending.length === 0) continue;
 
     try {
-      await processNewsletterDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
+      await newsletterService.processDispatchBatch(broadcast.id, newsletterService.dispatchBatchSize);
     } catch (err) {
       console.error(`[studio-scheduler] batch send failed for ${broadcast.id}`, err);
     }
@@ -99,13 +101,13 @@ async function processSendingBroadcastQueues(): Promise<void> {
 
 /** Reconciles stored `stats` from the recipient ledger for in-flight/recently sent broadcasts. */
 async function rollupStats(): Promise<void> {
-  const data = readStudioDocument();
+  const data = studioDocumentService.read();
   const active = data.newsletters.filter((b) => b.status === "sent" || b.status === "sending");
 
   for (const broadcast of active) {
     const recipients = data.recipients.filter((r) => r.newsletterId === broadcast.id);
     const events = data.trackingEvents.filter((e) => e.newsletterId === broadcast.id);
-    const next = rollupNewsletterStatsFromRecipients(recipients, events);
+    const next = newsletterService.rollupStatsFromRecipients(recipients, events);
     const prev = broadcast.stats;
     if (
       next.sent === prev.sent &&
@@ -123,7 +125,7 @@ async function rollupStats(): Promise<void> {
       continue;
     }
 
-    mutateStudioDocument((draft) => {
+    studioDocumentService.mutate((draft) => {
       const idx = draft.newsletters.findIndex((b) => b.id === broadcast.id);
       if (idx < 0) return;
       draft.newsletters[idx] = { ...draft.newsletters[idx]!, stats: next };
@@ -133,7 +135,8 @@ async function rollupStats(): Promise<void> {
 
 async function pollSubscriberCron(): Promise<void> {
   const now = Date.now();
-  const groups = readStudioDocument()
+  const groups = studioDocumentService
+    .read()
     .subscriberGroups.filter(
       (g) =>
         g.accountLinkId === DEV_ACCOUNT_LINK_ID &&
@@ -145,7 +148,7 @@ async function pollSubscriberCron(): Promise<void> {
     const intervalMs = Math.max(15, group.cronIntervalMinutes) * 60_000;
     const last = group.lastSyncAt ? new Date(group.lastSyncAt).getTime() : 0;
     if (last && now - last < intervalMs) continue;
-    await syncSubscriberGroupAsync(group.id, "cron");
+    await subscriberGroupService.syncGroup(group.id, "cron");
   }
 }
 

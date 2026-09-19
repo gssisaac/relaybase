@@ -1,33 +1,30 @@
-import { Hono } from "hono";
-
-import { verifyCrmWebhookSecret } from "@lib/webhooks/verify-secret";
-import { fireTrigger, recordUnmatchedTriggerEvent } from "@lib/triggers/fire";
 import {
-  findTriggerById,
-  findTriggerForInbound,
-} from "@lib/triggers/matcher";
-import { verifyTriggerWebhookSecret } from "@lib/triggers/trigger-auth";
-import { triggerSource } from "@lib/messages/resolve";
+  messageService,
+  triggerService,
+} from "@services/index";
+
+import { Hono } from "hono";
 import { parseJsonBody } from "@lib/shared/parse-json-body";
+import { verifyCrmWebhookSecret } from "@lib/webhooks/verify-secret";
 
 export const studioTriggerHooks = new Hono();
 
 // POST /studio/hooks/trigger/:triggerId — http_webhook
 studioTriggerHooks.post("/trigger/:triggerId", async (c) => {
-  const automation = findTriggerById(c.req.param("triggerId")!);
+  const automation = triggerService.findByIdInDocument(c.req.param("triggerId")!);
   if (!automation) return c.json({ error: "not found" }, 404);
-  const source = triggerSource(automation);
+  const source = messageService.triggerSource(automation);
   if (source.type !== "http_webhook") {
     return c.json({ error: "automation is not configured for http_webhook" }, 409);
   }
-  if (!verifyTriggerWebhookSecret(c, source.secret)) {
+  if (!triggerService.verifyWebhookSecret(c, source.secret)) {
     return c.json({ error: "unauthorized" }, 401);
   }
 
   const payload = (await parseJsonBody(c)) ?? {};
   const idempotencyKey = c.req.header("Idempotency-Key")?.trim() || null;
 
-  const result = await fireTrigger({
+  const result = await triggerService.fire({
     automation,
     triggerType: "http_webhook",
     payload,
@@ -70,7 +67,7 @@ studioTriggerHooks.post("/inbound", async (c) => {
     messageId: body.messageId ?? null,
   };
 
-  const automation = findTriggerForInbound({
+  const automation = triggerService.findForInbound({
     domain,
     localPart,
     subject: body.subject,
@@ -78,7 +75,7 @@ studioTriggerHooks.post("/inbound", async (c) => {
   });
 
   if (!automation) {
-    const triggerEventId = recordUnmatchedTriggerEvent({
+    const triggerEventId = triggerService.recordUnmatched({
       triggerType: "mailbox_inbound",
       payload,
       recipientEmail: body.fromEmail,
@@ -88,7 +85,7 @@ studioTriggerHooks.post("/inbound", async (c) => {
   }
 
   const idempotencyKey = body.messageId?.trim() || null;
-  const result = await fireTrigger({
+  const result = await triggerService.fire({
     automation,
     triggerType: "mailbox_inbound",
     payload,

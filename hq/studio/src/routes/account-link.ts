@@ -1,17 +1,15 @@
-import { Hono } from "hono";
-
-import { serializeAccountLink } from "@lib/account-link/serialize";
 import {
-  accountDefaultComplianceIdentityId,
-  syncAccountComplianceMirror,
-} from "@lib/compliance/identity";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
+  DEV_ACCOUNT_LINK_ID,
+  accountService,
+  studioDocumentService,
+} from "@services/index";
+
+import { Hono } from "hono";
 
 export const studioAccountLink = new Hono();
 
 // GET /studio/account-link
-studioAccountLink.get("/", (c) => c.json(serializeAccountLink()));
+studioAccountLink.get("/", (c) => c.json(accountService.serializeAccountLink()));
 
 // PATCH /studio/account-link { domain?, workerUrl?, defaultComplianceIdentityId?, compliance? }
 studioAccountLink.patch("/", async (c) => {
@@ -43,7 +41,7 @@ studioAccountLink.patch("/", async (c) => {
       ? undefined
       : body.sendApiKey?.trim() || null;
 
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     if (draft.account.id !== DEV_ACCOUNT_LINK_ID) return;
     if (domain !== undefined) draft.account.domain = domain;
     if (workerUrl !== undefined) draft.account.workerUrl = workerUrl;
@@ -55,11 +53,11 @@ studioAccountLink.patch("/", async (c) => {
         return;
       }
       draft.account.defaultComplianceIdentityId = next;
-      syncAccountComplianceMirror(draft);
+      accountService.syncComplianceMirror(draft);
     }
 
     if (body.compliance) {
-      const defaultId = accountDefaultComplianceIdentityId(draft);
+      const defaultId = accountService.defaultComplianceIdentityId(draft);
       const idx = draft.complianceIdentities.findIndex((row) => row.id === defaultId);
       if (idx < 0) return;
       const prev = draft.complianceIdentities[idx]!;
@@ -75,9 +73,9 @@ studioAccountLink.patch("/", async (c) => {
       }
       prev.updatedAt = now;
       draft.complianceIdentities[idx] = prev;
-      syncAccountComplianceMirror(draft);
+      accountService.syncComplianceMirror(draft);
     }
   });
 
-  return c.json(serializeAccountLink());
+  return c.json(accountService.serializeAccountLink());
 });

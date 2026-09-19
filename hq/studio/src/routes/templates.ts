@@ -1,37 +1,40 @@
 import { Hono } from "hono";
+import {
+  accountService,
+  analyticsService,
+  assetService,
+  DEV_ACCOUNT_LINK_ID,
+  messageService,
+  newsletterService,
+  subscriberGroupService,
+  studioDocumentService,
+  templateService,
+  trackingService,
+  triggerService,
+} from "@services/index";
 import type { Layout } from "@db/types";
 import { newId } from "@lib/shared/ids";
-import { serializeLayout } from "@lib/templates/layout-serialize";
-import { prepareTemplateImport } from "@lib/templates/prepare-import";
-import {
-  canAccessCustomLayout,
-  layoutReferencedByMessages,
-  nextCustomForkName,
-} from "@lib/templates/layout-access";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
-
 export const studioTemplates = new Hono();
 
 // GET /studio/templates — built-in (shared) + this account's custom HTML layouts
 studioTemplates.get("/", async (c) => {
-  const data = readStudioDocument();
+  const data = studioDocumentService.read();
   const rows = data.layouts.filter(
     (t) => t.isBuiltin || t.accountLinkId === DEV_ACCOUNT_LINK_ID || t.accountLinkId === null,
   );
-  return c.json({ layouts: rows.map(serializeLayout) });
+  return c.json({ layouts: rows.map((row) => templateService.serializeLayout(row)) });
 });
 
 // GET /studio/layouts/:id
 studioTemplates.get("/:id", (c) => {
   const id = c.req.param("id");
-  const data = readStudioDocument();
+  const data = studioDocumentService.read();
   const row = data.layouts.find((t) => t.id === id);
   if (!row) return c.json({ error: "template not found" }, 404);
-  if (!row.isBuiltin && !canAccessCustomLayout(row)) {
+  if (!row.isBuiltin && !templateService.canAccessCustomLayout(row)) {
     return c.json({ error: "forbidden" }, 403);
   }
-  return c.json({ layout: serializeLayout(row) });
+  return c.json({ layout: templateService.serializeLayout(row) });
 });
 
 // POST /studio/templates { name, htmlSource } — custom layout import
@@ -49,7 +52,7 @@ studioTemplates.post("/", async (c) => {
     return c.json({ error: "name and htmlSource are required" }, 400);
   }
 
-  const prepared = prepareTemplateImport({
+  const prepared = templateService.prepareImport({
     htmlSource,
     variablesYaml: body.variablesYaml,
   });
@@ -60,7 +63,7 @@ studioTemplates.post("/", async (c) => {
   const id = newId("template");
   const now = new Date().toISOString();
   let created: Layout | null = null;
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     created = {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -74,7 +77,7 @@ studioTemplates.post("/", async (c) => {
     draft.layouts.push(created);
   });
 
-  return c.json({ layout: serializeLayout(created!), warnings: prepared.warnings }, 201);
+  return c.json({ layout: templateService.serializeLayout(created!), warnings: prepared.warnings }, 201);
 });
 
 /**
@@ -96,13 +99,13 @@ studioTemplates.patch("/:id/source", async (c) => {
   }
   const nameFromBody = body.name?.trim();
 
-  const data = readStudioDocument();
+  const data = studioDocumentService.read();
   const existing = data.layouts.find((t) => t.id === id);
   if (!existing) {
     return c.json({ error: "template not found" }, 404);
   }
 
-  const prepared = prepareTemplateImport({ htmlSource });
+  const prepared = templateService.prepareImport({ htmlSource });
   if ("error" in prepared) {
     return c.json({ error: prepared.error }, 400);
   }
@@ -110,10 +113,10 @@ studioTemplates.patch("/:id/source", async (c) => {
   if (existing.isBuiltin) {
     const now = new Date().toISOString();
     let created: Layout | null = null;
-    mutateStudioDocument((draft) => {
+    studioDocumentService.mutate((draft) => {
       const source = draft.layouts.find((t) => t.id === id);
       if (!source?.isBuiltin) return;
-      const forkName = nextCustomForkName(draft.layouts, source.name);
+      const forkName = templateService.nextCustomForkName(draft.layouts, source.name);
       created = {
         id: newId("template"),
         accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -133,7 +136,7 @@ studioTemplates.patch("/:id/source", async (c) => {
 
     return c.json(
       {
-        layout: serializeLayout(created),
+        layout: templateService.serializeLayout(created),
         forked: true,
         warnings: prepared.warnings,
       },
@@ -141,7 +144,7 @@ studioTemplates.patch("/:id/source", async (c) => {
     );
   }
 
-  if (!canAccessCustomLayout(existing)) {
+  if (!templateService.canAccessCustomLayout(existing)) {
     return c.json({ error: "forbidden" }, 403);
   }
 
@@ -150,9 +153,9 @@ studioTemplates.patch("/:id/source", async (c) => {
   }
 
   let updated: Layout | null = null;
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const row = draft.layouts.find((t) => t.id === id);
-    if (!row || row.isBuiltin || !canAccessCustomLayout(row)) return;
+    if (!row || row.isBuiltin || !templateService.canAccessCustomLayout(row)) return;
     row.htmlSource = prepared.htmlSource;
     if (nameFromBody) row.name = nameFromBody;
     updated = row;
@@ -163,7 +166,7 @@ studioTemplates.patch("/:id/source", async (c) => {
   }
 
   return c.json({
-    layout: serializeLayout(updated),
+    layout: templateService.serializeLayout(updated),
     forked: false,
     warnings: prepared.warnings,
   });
@@ -172,25 +175,25 @@ studioTemplates.patch("/:id/source", async (c) => {
 // DELETE /studio/layouts/:id — custom layouts only
 studioTemplates.delete("/:id", (c) => {
   const id = c.req.param("id");
-  const data = readStudioDocument();
+  const data = studioDocumentService.read();
   const existing = data.layouts.find((t) => t.id === id);
   if (!existing) return c.json({ error: "template not found" }, 404);
   if (existing.isBuiltin) {
     return c.json({ error: "built-in layouts cannot be deleted" }, 409);
   }
-  if (!canAccessCustomLayout(existing)) {
+  if (!templateService.canAccessCustomLayout(existing)) {
     return c.json({ error: "forbidden" }, 403);
   }
-  if (layoutReferencedByMessages(id)) {
+  if (templateService.layoutReferencedByMessages(id)) {
     return c.json({ error: "layout is used by one or more message templates" }, 409);
   }
 
   let removed = false;
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     const idx = draft.layouts.findIndex((t) => t.id === id);
     if (idx < 0) return;
     const row = draft.layouts[idx]!;
-    if (row.isBuiltin || !canAccessCustomLayout(row)) return;
+    if (row.isBuiltin || !templateService.canAccessCustomLayout(row)) return;
     draft.layouts.splice(idx, 1);
     removed = true;
   });

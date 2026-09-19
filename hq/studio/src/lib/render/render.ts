@@ -1,14 +1,14 @@
 import { marked } from "marked";
 
-import { applyComplianceMergeTags } from "@lib/compliance/footer";
-import { prepareBroadcastTemplateHtml } from "@lib/templates/standard-footer";
-import { isPlainTextTemplate } from "@lib/templates/builtin-templates";
+import { applyComplianceMergeTags } from "@services/account/footer";
+import { prepareBroadcastTemplateHtml } from "@services/template/standard-footer";
+import { isPlainTextTemplate } from "@services/template/builtin-templates";
 import {
   applyTemplateVariablesToHtml,
   applyTemplateVariablesToPlainText,
   type TemplateVariablesSchema,
-} from "@lib/templates/variable-schema";
-import { resolveStudioAssetUrl } from "@lib/assets/resolve-url";
+} from "@services/template/variable-schema";
+import { resolveStudioAssetUrl } from "@services/asset/resolve-url";
 import { applyGmailContentLinkStyles } from "@lib/render/gmail-link-style";
 import { transformEmailButtonMarkersToBulletproof } from "./email-button-html.js";
 import { transformYouTubeEmbedsToHtml } from "./youtube.js";

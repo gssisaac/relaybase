@@ -1,52 +1,39 @@
 import { Hono } from "hono";
+import {
+  accountService,
+  assetService,
+  DEV_ACCOUNT_LINK_ID,
+  messageService,
+  newsletterService,
+  studioDocumentService,
+  templateService,
+} from "@services/index";
 
-import { newsletterAssetKey } from "@lib/assets/key";
 import { resolveWorkerSendCredentials } from "@lib/mail/credentials";
 import { sendMail } from "@lib/mail/sender";
-import { createMessage, patchMessage } from "@lib/messages/message";
-import { requireMessage } from "@lib/messages/resolve";
-import { serializeMessage } from "@lib/messages/serialize-message";
-import {
-  getNewsletterLayoutHtml,
-  getNewsletterLayoutSchema,
-} from "@lib/newsletters/serialize";
-import {
-  accountDefaultComplianceIdentityId,
-  complianceSettingsFromIdentity,
-  findComplianceIdentity,
-} from "@lib/compliance/identity";
 import {
   buildListUnsubscribeUrl,
   renderNewsletterForRecipient,
   resolveBroadcastSubject,
 } from "@lib/render/render";
-import {
-  resolveTemplateVariableDefaults,
-  sanitizeTemplateVariables,
-} from "@lib/templates/variable-schema";
-import { applyMergeTagValues, recipientDisplayName } from "@lib/messages/merge-tags";
 import { isValidEmail } from "@lib/shared/email";
 import { newId, newToken } from "@lib/shared/ids";
 import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
-import { messageFileStore } from "@lib/messages/message-file-store";
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
-import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
-
 export const studioMessages = new Hono();
 
 studioMessages.get("/", (c) => {
-  const rows = messageFileStore
+  const rows = messageService
     .listForGallery()
     .filter((m) => m.accountLinkId === DEV_ACCOUNT_LINK_ID);
-  return c.json({ messages: rows.map(serializeMessage) });
+  return c.json({ messages: rows.map((row) => messageService.serializeMessage(row)) });
 });
 
 studioMessages.get("/:id", (c) => {
-  const row = messageFileStore.findById(c.req.param("id"));
+  const row = messageService.findById(c.req.param("id"));
   if (!row || row.accountLinkId !== DEV_ACCOUNT_LINK_ID) {
     return c.json({ error: "not found" }, 404);
   }
-  return c.json({ message: serializeMessage(row) });
+  return c.json({ message: messageService.serializeMessage(row) });
 });
 
 studioMessages.post("/", async (c) => {
@@ -67,8 +54,8 @@ studioMessages.post("/", async (c) => {
   if (!name) return c.json({ error: "name is required" }, 400);
 
   const now = new Date().toISOString();
-  const created = mutateStudioDocument((draft) =>
-    createMessage(
+  const created = studioDocumentService.mutate((draft) =>
+    messageService.create(
       draft,
       {
         accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -84,12 +71,12 @@ studioMessages.post("/", async (c) => {
   );
 
   const row = created.messages.find((m) => m.name === name && m.updatedAt === now)!;
-  return c.json({ message: serializeMessage(row) }, 201);
+  return c.json({ message: messageService.serializeMessage(row) }, 201);
 });
 
 studioMessages.post("/:id/assets", async (c) => {
   const messageId = c.req.param("id");
-  const message = messageFileStore.findById(messageId);
+  const message = messageService.findById(messageId);
   if (!message) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -106,9 +93,9 @@ studioMessages.post("/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = newsletterAssetKey(messageId, filename);
+  const key = assetService.newsletterAssetKey(messageId, filename);
   const storedFilename = key.slice(messageId.length + 1);
-  mutateStudioDocument((draft) => {
+  studioDocumentService.mutate((draft) => {
     if (!draft.messageAssets) draft.messageAssets = [];
     draft.messageAssets = draft.messageAssets.filter((a) => a.key !== key);
     draft.messageAssets.push({
@@ -128,7 +115,7 @@ studioMessages.post("/:id/assets", async (c) => {
 
 studioMessages.post("/:id/test-send", async (c) => {
   const id = c.req.param("id");
-  if (!messageFileStore.findById(id)) return c.json({ error: "not found" }, 404);
+  if (!messageService.findById(id)) return c.json({ error: "not found" }, 404);
 
   let body: {
     to?: string;
@@ -157,22 +144,22 @@ studioMessages.post("/:id/test-send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const message = requireMessage(readStudioDocument(), id);
+  const message = messageService.requireMessage(studioDocumentService.read(), id);
   const layoutId = message.layoutId ?? "tpl-minimal";
-  const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
+  const templateHtml = newsletterService.layoutHtml(layoutId) ?? "<div>{{content}}</div>";
   const mergeTags: Record<string, string> = {
     ...(body.mergeTags ?? {}),
     "contact.email": body.mergeTags?.["contact.email"]?.trim() || to,
   };
-  const recipientName = recipientDisplayName(mergeTags, to);
+  const recipientName = messageService.recipientDisplayName(mergeTags, to);
 
-  const data = readStudioDocument();
-  const defaultComplianceId = accountDefaultComplianceIdentityId(data);
+  const data = studioDocumentService.read();
+  const defaultComplianceId = accountService.defaultComplianceIdentityId(data);
   const orgName = defaultComplianceId
-    ? complianceSettingsFromIdentity(findComplianceIdentity(defaultComplianceId)).organizationName
+    ? accountService.complianceSettingsFromIdentity(accountService.findComplianceIdentity(defaultComplianceId)).organizationName
     : null;
-  const resolvedTemplateVariables = resolveTemplateVariableDefaults({
-    schema: getNewsletterLayoutSchema(layoutId),
+  const resolvedTemplateVariables = templateService.resolveVariableDefaults({
+    schema: newsletterService.layoutSchema(layoutId),
     values: message.templateVariables,
     complianceOrganizationName: orgName,
   });
@@ -184,7 +171,7 @@ studioMessages.post("/:id/test-send", async (c) => {
     bodyMarkdown: message.bodyMarkdown,
     templateId: layoutId,
     templateHtml,
-    templateVariablesSchema: getNewsletterLayoutSchema(layoutId),
+    templateVariablesSchema: newsletterService.layoutSchema(layoutId),
     templateVariables: resolvedTemplateVariables,
     recipient: { email: to, name: recipientName },
     unsubscribeToken,
@@ -193,14 +180,14 @@ studioMessages.post("/:id/test-send", async (c) => {
   const listUnsubscribeUrl = buildListUnsubscribeUrl(STUDIO_PUBLIC_BASE_URL, id, unsubscribeToken);
   const subjectWithLayoutVars = resolveBroadcastSubject({
     subject: message.subject,
-    templateVariablesSchema: getNewsletterLayoutSchema(layoutId),
+    templateVariablesSchema: newsletterService.layoutSchema(layoutId),
     templateVariables: resolvedTemplateVariables,
     recipient: { email: to, name: recipientName },
     broadcastId: id,
     unsubscribeToken,
     studioBaseUrl: STUDIO_PUBLIC_BASE_URL,
   });
-  const subject = applyMergeTagValues(subjectWithLayoutVars, mergeTags);
+  const subject = messageService.applyMergeTags(subjectWithLayoutVars, mergeTags);
   const result = await sendMail({
     to,
     from: fromEmail,
@@ -218,7 +205,7 @@ studioMessages.post("/:id/test-send", async (c) => {
 
 studioMessages.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const existing = messageFileStore.findById(id);
+  const existing = messageService.findById(id);
   if (!existing) return c.json({ error: "not found" }, 404);
 
   let body: {
@@ -236,8 +223,8 @@ studioMessages.patch("/:id", async (c) => {
   }
 
   const now = new Date().toISOString();
-  mutateStudioDocument((draft) => {
-    patchMessage(
+  studioDocumentService.mutate((draft) => {
+    messageService.patch(
       draft,
       id,
       {
@@ -248,23 +235,23 @@ studioMessages.patch("/:id", async (c) => {
         layoutId: body.layoutId,
         templateVariables:
           body.templateVariables !== undefined
-            ? sanitizeTemplateVariables(body.templateVariables)
+            ? templateService.sanitizeVariables(body.templateVariables)
             : undefined,
       },
       now,
     );
   });
 
-  const row = messageFileStore.findById(id)!;
-  return c.json({ message: serializeMessage(row) });
+  const row = messageService.findById(id)!;
+  return c.json({ message: messageService.serializeMessage(row) });
 });
 
 studioMessages.delete("/:id", (c) => {
   const id = c.req.param("id");
-  if (!messageFileStore.findById(id)) return c.json({ error: "not found" }, 404);
+  if (!messageService.findById(id)) return c.json({ error: "not found" }, 404);
 
-  messageFileStore.delete(id);
-  mutateStudioDocument((draft) => {
+  messageService.delete(id);
+  studioDocumentService.mutate((draft) => {
     draft.messageAssets = (draft.messageAssets ?? []).filter((a) => a.messageId !== id);
     draft.messages = draft.messages.filter((m) => m.id !== id);
   });

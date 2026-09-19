@@ -1,13 +1,13 @@
 import type { AccountComplianceSettings, Newsletter, StudioDataStore, Trigger } from "@db/types";
-import { ensureComplianceIdentitiesFromLegacy } from "@lib/compliance/identity";
-import { ensureOwnerMessageFiles } from "@lib/messages/ensure-owner-message-files";
-import { messageIdForOwner } from "@lib/messages/resolve";
-import { ensureDevScheduleFixtures } from "@lib/newsletters/dev-schedule-fixtures";
-import { emptyNewsletterStats, normalizeNewsletterStats } from "@lib/newsletters/stats";
+import { ensureComplianceIdentitiesFromLegacy } from "@services/account/identity";
+import { ensureOwnerMessageFiles } from "@services/message/ensure-owner-message-files";
+import { messageIdForOwner } from "@services/message/resolve";
+import { ensureDevScheduleFixtures } from "@services/newsletter/dev-schedule-fixtures";
+import { emptyNewsletterStats, normalizeNewsletterStats } from "@services/newsletter/stats";
 import { newId, newToken } from "@lib/shared/ids";
-import { getBuiltinTemplates } from "@lib/templates/builtin-templates";
-import { templateCatalogStore } from "@lib/templates/template-catalog-store";
-import { normalizeTriggerStats } from "@lib/triggers/stats";
+import { getBuiltinTemplates } from "@services/template/builtin-templates";
+import { templateCatalogStore } from "@services/template/catalog-store";
+import { normalizeTriggerStats } from "@services/trigger/stats";
 import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
 
 function defaultCompliance(now: string): AccountComplianceSettings {

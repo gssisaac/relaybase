@@ -1,0 +1,165 @@
+"use client";
+
+import { ArrowRight, Loader2 } from "lucide-react";
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { CfOauthInstallDetailsSheet } from "@/console/components/setup/common/dialogs/CfOauthInstallDetailsSheet";
+import {
+  CF_OAUTH_INSTALL_SCOPES,
+  type DesktopErrorHelp,
+} from "@/lib/desktop/bridge";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { cn } from "@/lib/utils";
+
+const ACTION_WIDTH = "w-[300px] max-w-full";
+
+export const CLOUDFLARE_MARK_SRC = "/setup/cloudflare-mark.png";
+
+function CloudflareMark({ className }: { className?: string }) {
+  return (
+    <img
+      src={CLOUDFLARE_MARK_SRC}
+      alt=""
+      width={40}
+      height={40}
+      className={cn("size-10 object-contain", className)}
+    />
+  );
+}
+
+function OAuthConnectDiagram({
+  waiting,
+  subtitle,
+}: {
+  waiting: boolean;
+  subtitle?: string | null;
+}) {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="flex items-center gap-5">
+        <div className="flex size-18 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-sm">
+          <img src="/icon.png" alt="" width={40} height={40} className="size-10" />
+        </div>
+        <div className="flex min-w-18 items-center gap-1 text-muted-foreground">
+          <span className="h-px flex-1 border-t border-dashed border-muted-foreground/70" />
+          <ArrowRight
+            className={
+              "size-4 shrink-0 " + (waiting ? "animate-pulse text-brand" : "")
+            }
+          />
+          <span className="h-px flex-1 border-t border-dashed border-muted-foreground/70" />
+        </div>
+        <div className="flex size-18 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-sm">
+          <CloudflareMark />
+        </div>
+      </div>
+      {waiting && subtitle ? (
+        <p className="mt-1.5 text-center text-xs text-muted-foreground">
+          {subtitle}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function SetupCloudflareAuthorizeCard({
+  oauthBusy,
+  oauthError,
+  onAuthorize,
+  onCancelWait,
+  authorizeLabel = "Authorize and install on Cloudflare",
+  waitingLabel = "Waiting for authorization…",
+  waitingSubtitle,
+  diagramWaiting,
+  showCancelWait = true,
+  scopes = CF_OAUTH_INSTALL_SCOPES,
+  detailsVariant = "install",
+}: {
+  oauthBusy: boolean;
+  oauthError: DesktopErrorHelp | null;
+  onAuthorize: () => void;
+  onCancelWait: () => void;
+  authorizeLabel?: string;
+  waitingLabel?: string;
+  waitingSubtitle?: string | null;
+  diagramWaiting?: boolean;
+  showCancelWait?: boolean;
+  scopes?: readonly string[];
+  detailsVariant?: "install" | "recover";
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const buttonLabel = oauthBusy ? waitingLabel : authorizeLabel;
+  const isDiagramWaiting = diagramWaiting ?? oauthBusy;
+  const diagramSubtitle =
+    waitingSubtitle !== undefined
+      ? waitingSubtitle
+      : "Complete authorization in your browser, then return here.";
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
+      <div className="flex flex-col items-center gap-2">
+        <OAuthConnectDiagram
+          waiting={isDiagramWaiting}
+          subtitle={diagramSubtitle}
+        />
+
+        <div className={`flex ${ACTION_WIDTH} flex-col items-center`}>
+          <p className="text-sm font-medium">
+            {scopes.length === 1
+              ? "We are asking one permission"
+              : "We are asking permissions"}
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
+            {scopes.map((scope) => (
+              <li key={scope}>{scope}</li>
+            ))}
+          </ul>
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="mt-1 h-auto px-0 text-xs"
+            onClick={() => setDetailsOpen(true)}
+          >
+            View details
+          </Button>
+        </div>
+
+        {oauthError ? (
+          <div className={ACTION_WIDTH}>
+            <DesktopErrorBanner error={oauthError} />
+          </div>
+        ) : null}
+
+        <div className={`flex ${ACTION_WIDTH} flex-col items-center gap-1`}>
+          <Button
+            type="button"
+            className="w-full"
+            disabled={oauthBusy}
+            onClick={onAuthorize}
+          >
+            {oauthBusy ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : null}
+            {buttonLabel}
+          </Button>
+          {oauthBusy && showCancelWait ? (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={onCancelWait}
+            >
+              Cancel authorization
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <CfOauthInstallDetailsSheet
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        variant={detailsVariant}
+      />
+    </div>
+  );
+}

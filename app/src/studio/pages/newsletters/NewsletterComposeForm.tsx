@@ -1,0 +1,382 @@
+"use client";
+
+import { Braces, Code2, Monitor, Smartphone } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ComposeMergeTagInsertList } from "@/studio/components/ComposeMergeTagInsertList";
+import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
+import { NewsletterComposeSidebar } from "@/studio/pages/newsletters/NewsletterComposeSidebar";
+import { composeBroadcastMergeTagSections } from "@/studio/lib/layouts/compose-merge-tag-sections";
+import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-template-variables";
+import type { ComposeMergeTagSection } from "@/studio/lib/triggers/trigger-merge-tags";
+import type { StudioAccountCompliance, StudioLayout } from "@/studio/api";
+import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
+import MarkdownEditor, {
+  type MarkdownSourceView,
+} from "@/lib/markdown-editor/components/MarkdownEditor";
+import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
+import { cn } from "@/lib/utils";
+/**
+ * Content editor for a newsletter — template, subject, body, preview, Save.
+ * Recipients and Send live on the Publish tab.
+ */
+export function NewsletterComposeForm({
+  newsletterId,
+  assetOwner = "newsletter",
+  editorRef,
+  templates,
+  templateId,
+  setTemplateId,
+  templateVariables,
+  setTemplateVariables,
+  subject,
+  setSubject,
+  bodyMarkdown,
+  onBodyChange,
+  renderedPreview,
+  previewSubject,
+  previewFromName,
+  previewFromEmail,
+  previewToEmail,
+  previewIsPlainText,
+  device,
+  setDevice,
+  editable,
+  saveState,
+  onSave,
+  compliance,
+  complianceIdentityId,
+  accountDefaultComplianceIdentityId,
+  onComplianceIdentityChange,
+  onComplianceIdentitySaved,
+  onTemplateImported,
+  onTemplateSourceSaved,
+  mergeTagSections,
+  layoutVariablesSchema,
+  hideSaveButton,
+  settingsPresentation = "inline",
+  settingsSheetOpen,
+  onSettingsSheetOpenChange,
+}: {
+  /** Newsletter id — asset upload namespace (`/studio/newsletters/:id/assets`). */
+  newsletterId: string;
+  assetOwner?: CrmContentAssetOwner;
+  editorRef: RefObject<EditorSnapshotProvider | null>;
+  templates: StudioLayout[];
+  templateId: string;
+  setTemplateId: (id: string) => void;
+  templateVariables: Record<string, string>;
+  setTemplateVariables: (values: Record<string, string>) => void;
+  subject: string;
+  setSubject: (v: string) => void;
+  bodyMarkdown: string;
+  onBodyChange: (content: { markdown: string; html: string }) => void;
+  renderedPreview: string;
+  previewSubject: string;
+  previewFromName: string | null;
+  previewFromEmail: string;
+  previewToEmail: string;
+  previewIsPlainText: boolean;
+  device: "desktop" | "mobile";
+  setDevice: (device: "desktop" | "mobile") => void;
+  editable: boolean;
+  saveState: "idle" | "saving" | "error";
+  onSave: () => void;
+  compliance: StudioAccountCompliance | null;
+  complianceIdentityId: string | null;
+  accountDefaultComplianceIdentityId: string | null;
+  onComplianceIdentityChange: (id: string | null) => void | Promise<void>;
+  onComplianceIdentitySaved?: () => void;
+  onTemplateImported?: (templateId: string) => void;
+  onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
+  /** When set (automations), subject/body tag pickers include trigger payload tags. */
+  mergeTagSections?: ComposeMergeTagSection[];
+  /** Active layout schema — adds `{{vars.*}}` to the tag picker when mergeTagSections is omitted. */
+  layoutVariablesSchema?: TemplateVariablesSchema | null;
+  /** Hide the editor footer Save control (e.g. message template edit saves from the page header). */
+  hideSaveButton?: boolean;
+  /** Newsletter detail: layout and variables in a header Sheet. */
+  settingsPresentation?: "inline" | "sheet";
+  settingsSheetOpen?: boolean;
+  onSettingsSheetOpenChange?: (open: boolean) => void;
+}) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sourceView, setSourceView] = useState<MarkdownSourceView>("wysiwyg");
+  const subjectInputRef = useRef<HTMLInputElement>(null);
+  const editorShellRef = useRef<HTMLDivElement>(null);
+  const insertTargetRef = useRef<"subject" | "body">("body");
+
+  useEffect(() => {
+    setSourceView("wysiwyg");
+  }, [newsletterId]);
+
+  const resolveInsertTarget = useCallback((): "subject" | "body" => {
+    const active = document.activeElement;
+    const subjectEl = subjectInputRef.current;
+    if (subjectEl && active === subjectEl) return "subject";
+    if (editorShellRef.current && active && editorShellRef.current.contains(active)) {
+      return "body";
+    }
+    return insertTargetRef.current;
+  }, []);
+
+  const insertMergeTag = useCallback(
+    (token: string) => {
+      const target = resolveInsertTarget();
+      if (target === "subject" && subjectInputRef.current) {
+        const el = subjectInputRef.current;
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? start;
+        const next = `${el.value.slice(0, start)}${token}${el.value.slice(end)}`;
+        setSubject(next);
+        requestAnimationFrame(() => {
+          el.focus();
+          const pos = start + token.length;
+          el.setSelectionRange(pos, pos);
+        });
+        return;
+      }
+      editorRef.current?.insertText?.(token);
+    },
+    [editorRef, resolveInsertTarget, setSubject],
+  );
+
+  const draftStatus =
+    !editable
+      ? null
+      : saveState === "saving"
+        ? "Saving…"
+        : saveState === "error"
+          ? "Unsaved · retrying"
+          : "Saved";
+
+  const tagSections: ComposeMergeTagSection[] =
+    mergeTagSections ?? composeBroadcastMergeTagSections(layoutVariablesSchema);
+
+  const settingsSidebar = editable ? (
+    <NewsletterComposeSidebar
+      newsletterId={newsletterId}
+      assetOwner={assetOwner}
+      templates={templates}
+      templateId={templateId}
+      setTemplateId={setTemplateId}
+      templateVariables={templateVariables}
+      setTemplateVariables={setTemplateVariables}
+      editable={editable}
+      compliance={compliance}
+      complianceIdentityId={complianceIdentityId}
+      accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
+      onComplianceIdentityChange={onComplianceIdentityChange}
+      onComplianceIdentitySaved={onComplianceIdentitySaved}
+      onTemplateImported={onTemplateImported}
+      onTemplateSourceSaved={onTemplateSourceSaved}
+      mergeTagSections={tagSections}
+      onInsertMergeTag={insertMergeTag}
+      collapsed={sidebarCollapsed}
+      onCollapsedChange={setSidebarCollapsed}
+      presentation={settingsPresentation === "sheet" ? "panel" : "aside"}
+    />
+  ) : null;
+
+  const composeCardClassName =
+    "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm";
+
+  return (
+    <div
+      data-allow-tab-focus
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/15"
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:px-6 lg:pb-6">
+        <div className={composeCardClassName}>
+          <div className="flex shrink-0 flex-col divide-y divide-border/20 px-4">
+            <div className="flex min-h-10 shrink-0 items-center gap-2 pt-3 pb-1">
+              <span className="shrink-0 select-none text-xs font-medium text-muted-foreground">
+                Subject:
+              </span>
+              <input
+                ref={subjectInputRef}
+                type="text"
+                value={subject}
+                onFocus={() => {
+                  insertTargetRef.current = "subject";
+                }}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Subject…"
+                autoFocus={editable}
+                disabled={!editable}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              {editable ? (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant={sourceView === "raw" ? "secondary" : "ghost"}
+                  className="shrink-0"
+                  aria-label={sourceView === "raw" ? "Rich text" : "Edit source"}
+                  aria-pressed={sourceView === "raw"}
+                  title={sourceView === "raw" ? "Rich text" : "Edit source"}
+                  onClick={() => setSourceView((view) => (view === "raw" ? "wysiwyg" : "raw"))}
+                >
+                  <Code2 className={cn("size-4", sourceView !== "raw" && "text-muted-foreground")} />
+                </Button>
+              ) : null}
+              {editable ? (
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        aria-label="Insert personalization tag"
+                        onMouseDown={(e) => {
+                          insertTargetRef.current = resolveInsertTarget();
+                          e.preventDefault();
+                        }}
+                      />
+                    }
+                  >
+                    <Braces className="size-4" />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="max-h-[min(420px,70vh)] w-[420px] max-w-[min(420px,calc(100vw-2rem))] overflow-y-auto p-2"
+                  >
+                    <p className="mb-2 px-1 text-[11px] text-muted-foreground">
+                      Inserts at the cursor in the subject or body field you last focused.
+                    </p>
+                    <ComposeMergeTagInsertList
+                      compact
+                      sections={tagSections}
+                      onInsert={insertMergeTag}
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
+          </div>
+          <div
+            ref={editorShellRef}
+            className="relative min-h-0 flex-1 overflow-hidden p-4 pt-2"
+            onFocusCapture={() => {
+              insertTargetRef.current = "body";
+            }}
+          >
+            <div className="absolute inset-4 top-2 bg-card">
+              <MarkdownEditor
+                ref={editorRef}
+                key={newsletterId}
+                newsletterId={newsletterId}
+                documentId={newsletterId}
+                assetOwner={assetOwner}
+                value={bodyMarkdown}
+                onChange={onBodyChange}
+                editable={editable}
+                sourceView={sourceView}
+                onSourceViewChange={setSourceView}
+                mergeTagSections={tagSections}
+              />
+            </div>
+          </div>
+          {editable ? (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/20 bg-muted/10 px-4 py-3">
+              <span className="min-w-0 select-none truncate text-xs text-muted-foreground/60">
+                {draftStatus ?? ""}
+              </span>
+              {!hideSaveButton ? (
+                <Button
+                  size="sm"
+                  onClick={onSave}
+                  disabled={saveState === "saving"}
+                  className="shrink-0 px-4"
+                >
+                  {saveState === "saving" ? "Saving…" : "Save"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <div className={cn(composeCardClassName, "overflow-hidden")}>
+          <div className="flex shrink-0 items-center justify-center gap-0.5 border-b border-border/20 px-2 py-2">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant={device === "desktop" ? "secondary" : "ghost"}
+              aria-label="Desktop preview"
+              aria-pressed={device === "desktop"}
+              onClick={() => setDevice("desktop")}
+            >
+              <Monitor className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant={device === "mobile" ? "secondary" : "ghost"}
+              aria-label="Mobile preview"
+              aria-pressed={device === "mobile"}
+              onClick={() => setDevice("mobile")}
+            >
+              <Smartphone className="size-4" />
+            </Button>
+          </div>
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col overflow-hidden",
+              device === "mobile" ? "bg-neutral-700" : "bg-[#f6f8fc]",
+            )}
+            style={{ colorScheme: "light" }}
+          >
+            <NewsletterEmailPreview
+              subject={previewSubject}
+              fromName={previewFromName}
+              fromEmail={previewFromEmail}
+              toEmail={previewToEmail}
+              bodyHtml={renderedPreview}
+              bodyPlainText={renderedPreview}
+              previewIsPlainText={previewIsPlainText}
+              device={device}
+            />
+          </div>
+        </div>
+
+        {editable && settingsPresentation === "inline" ? settingsSidebar : null}
+      </div>
+
+      {editable && settingsPresentation === "sheet" ? (
+        <Sheet open={settingsSheetOpen} onOpenChange={onSettingsSheetOpenChange}>
+          <SheetContent
+            className="flex h-full flex-col gap-0 p-0 sm:max-w-[600px]"
+            style={{ width: "min(600px, 100vw)", maxWidth: 600 }}
+          >
+            <SheetHeader className="border-b border-border">
+              <SheetTitle>Customize</SheetTitle>
+              <SheetDescription>
+                Layout, logo & footer, and template variables.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{settingsSidebar}</div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
+    </div>
+  );
+}

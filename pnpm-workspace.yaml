@@ -2,5 +2,7 @@ packages:
   - hq/admin
   - app
   - hq/console
+  - hq/scale
   - desktop
   - hq/website
+  - hq/studio

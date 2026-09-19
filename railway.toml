@@ -1,0 +1,12 @@
+# Used by Railway service hq-relaybase-studio (monorepo root deploy).
+# Dockerfile path is relative to repository root.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "hq/studio/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

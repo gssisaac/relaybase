@@ -12,17 +12,16 @@ import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { ConsoleAppProviders, WebConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
-import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SendingHealthProvider } from "@/lib/dashboard/SendingHealthContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
-import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
-import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
+import { EnableEmailApiDialogHost } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
+import { ConsoleRouteGate } from "@/console/components/setup/common/layout/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
-import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
-import { getWebTeamAuth } from "@/mail-platform/session/email-session";
-import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
+import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
+import { isStudioSettingsPath } from "@/lib/navigation/studio-settings-path";
+import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -31,19 +30,27 @@ import {
 import { MailAccountsProvider } from "@/email/components/accounts/MailAccountsContext";
 import { EmailMailboxProvider } from "@/email/components/mailbox/EmailMailboxContext";
 import { SenderIconProvider } from "@/email/components/sender/SenderIconContext";
-import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
+import { SessionPhaseScreen } from "@/console/components/setup/common/layout/SessionPhaseScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
 const WEB_OWNER_USER_ID = "web-owner";
+
+function isStudioShellPath(pathname: string): boolean {
+  return pathname === "/studio" || pathname.startsWith("/studio/");
+}
+
+function webPathNeedsWorker(pathname: string): boolean {
+  if (isStudioShellPath(pathname)) return false;
+  const mode = modeFromPathname(pathname);
+  return mode === "dashboard" || mode === "email";
+}
 
 /** Console-scoped dashboard stores — mount only after the route gate passes. */
 function OwnerConsoleDashboard({ children }: { children: ReactNode }) {
   return (
     <AccountsProvider>
-      <BroadcastProvider>
-        <AccountsSyncBridge />
-        {children}
-      </BroadcastProvider>
+      <AccountsSyncBridge />
+      {children}
     </AccountsProvider>
   );
 }
@@ -60,6 +67,7 @@ function DashboardShell({
   const pathname = usePathname();
   const isEmailSettings =
     pathname === "/email/settings" || pathname.startsWith("/email/settings?");
+  const hideMainSidebar = isEmailSettings || isStudioSettingsPath(pathname);
 
   if (teamMode) {
     return (
@@ -71,7 +79,7 @@ function DashboardShell({
               <EmailMailboxProvider>
                 <EmailCommandRuntimeProvider>
                   <DisableAppTabFocus />
-                  <AppShellFrame teamMode hideSidebar={isEmailSettings}>
+                  <AppShellFrame teamMode hideSidebar={hideMainSidebar}>
                     {children}
                   </AppShellFrame>
                   <AppHotkeys />
@@ -94,10 +102,10 @@ function DashboardShell({
             <EmailMailboxProvider>
               <EmailCommandRuntimeProvider>
                 <DisableAppTabFocus />
-                <AppShellFrame hideSidebar={isEmailSettings}>
+                <AppShellFrame hideSidebar={hideMainSidebar}>
                   <ConsoleRouteGate>
                     <OwnerConsoleDashboard>
-                      {isEmailSettings ? null : <DomainProgressBanner />}
+                      {hideMainSidebar ? null : <DomainProgressBanner />}
                       {children}
                     </OwnerConsoleDashboard>
                   </ConsoleRouteGate>
@@ -136,34 +144,27 @@ function GateInner({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Web owner: no keyring / Touch ID phase machine — `hasWebOwnerSession()`
- * (in-memory access token from `webOwnerLogin()`, or re-minted from tab
- * sessionStorage by `restoreWebOwnerSession()` after a reload) is the whole
- * gate. Unauthenticated web visitors go to `/login`. Reuses the same DashboardShell as
- * desktop's owner path, just under WebConsoleAppProviders instead of
- * DesktopShell + ConsoleAppProviders.
- */
 function WebOwnerGate({ children }: { children: ReactNode }) {
   return (
     <WebConsoleAppProviders>
-      <DashboardShell userId={WEB_OWNER_USER_ID}>{children}</DashboardShell>
+      <EnableEmailApiDialogHost>
+        <DashboardShell userId={WEB_OWNER_USER_ID}>{children}</DashboardShell>
+      </EnableEmailApiDialogHost>
     </WebConsoleAppProviders>
   );
 }
 
-/**
- * Single dashboard chrome for every run mode. The phase switch is the only
- * gate — no scattered `hasOwnerSession()` / `ownerAccess` checks. Credentials
- * come from the root `DesktopProvider` (see `AppProviders`).
- */
-type DashboardGateMode = "loading" | "desktop" | "web-owner" | "web-redirect";
+type DashboardGateMode =
+  | "loading"
+  | "desktop"
+  | "web-owner"
+  | "web-redirect-login"
+  | "web-redirect-studio";
 
 export function DesktopDashboardGate({
   children,
 }: {
   children: ReactNode;
-  /** Ignored — kept for call-site compatibility during migration. */
   userId?: string;
 }) {
   const router = useRouter();
@@ -171,56 +172,58 @@ export function DesktopDashboardGate({
   const [gateMode, setGateMode] = useState<DashboardGateMode>("loading");
 
   useEffect(() => {
-    const desktop = isDesktopRuntime();
-    if (desktop) {
+    if (isDesktopRuntime()) {
       setGateMode("desktop");
       return;
     }
-    if (hasWebOwnerSession()) {
-      setGateMode("web-owner");
-      return;
-    }
-    // Web hard reload: memory is empty but the tab may still hold a refresh
-    // pair (`relaybase:owner-session`). Re-mint before deciding to redirect.
+
     let active = true;
-    void restoreWebOwnerSession().then((restored) => {
+
+    async function resolveWebGate() {
+      const auth = await ensureWebCloudAuth();
       if (!active) return;
-      setGateMode(
-        restored && hasWebOwnerSession() ? "web-owner" : "web-redirect",
-      );
-    });
+
+      if (auth === "login") {
+        setGateMode("web-redirect-login");
+        return;
+      }
+
+      if (auth === "ready") {
+        setGateMode("web-owner");
+        return;
+      }
+
+      if (webPathNeedsWorker(pathname)) {
+        setGateMode("web-redirect-studio");
+        return;
+      }
+
+      setGateMode("web-owner");
+    }
+
+    void resolveWebGate();
     return () => {
       active = false;
     };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
-    if (gateMode !== "web-redirect") return;
-    const search =
-      typeof window !== "undefined" ? window.location.search : "";
-    if (pathname === "/email/inbox" || pathname === "/email") {
-      router.replace(`/inbox${search}`);
-    } else if (pathname === "/email/sent") {
-      router.replace(`/sent${search}`);
-    } else if (pathname === "/email/drafts") {
-      router.replace(`/drafts${search}`);
-    } else if (pathname === "/email/trash") {
-      router.replace(`/trash${search}`);
-    } else if (pathname === "/email/compose") {
-      router.replace(`/compose${search}`);
-    } else if (pathname === "/email/settings") {
-      router.replace(`/mail-settings${search}`);
-    } else {
-      const auth = getWebTeamAuth();
-      if (auth) {
-        router.replace(`/inbox${search}`);
-      } else {
-        router.replace("/login");
-      }
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    if (gateMode === "web-redirect-login") {
+      const next = `${pathname}${search}`;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
+    if (gateMode === "web-redirect-studio") {
+      router.replace("/studio/dashboard");
     }
   }, [gateMode, pathname, router]);
 
-  if (gateMode === "loading" || gateMode === "web-redirect") {
+  if (
+    gateMode === "loading" ||
+    gateMode === "web-redirect-login" ||
+    gateMode === "web-redirect-studio"
+  ) {
     return <AppLoadingScreen />;
   }
 

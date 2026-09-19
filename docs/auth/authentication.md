@@ -1,399 +1,326 @@
-# Authentication architecture
+# Authentication Architecture & Specification
 
-**Audience:** humans and coding agents changing owner login, invited (team)
-login, Worker auth middleware, desktop unlock, or mobile companion auth.
-
-**Related docs:**
-
-- Phase machine + console gate: **[desktop-session-machine.md](./desktop-session-machine.md)**
-- Local secrets: **[home-storage.md](../desktop/home-storage.md)** → *OS keyring* (`owner-session:{workerUrl}` + `owner-passtoken:{workerUrl}`)
-- Remote owner model: **[storage-architecture.md](../architecture/storage-architecture.md)** → *Owner auth*
-- Archived pre–console-gate docs: **[legacy/](../archive/legacy/)**
+**Audience:** Engineers and AI agents designing, building, or modifying authentication, session gates, Cloudflare Worker access, Studio backend services, or desktop/mobile clients.
 
 ---
 
-## Summary
+## 1. Architectural Overview & Core Principles
 
-Four auth surfaces on the product Worker, plus **Cloudflare OAuth** for install
-/ recovery only (not daily mail).
-
-| Actor | Credential | Worker routes | Desktop unlock |
-|-------|------------|---------------|----------------|
-| **Owner** | **Passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Mail: silent boot from mail refresh. When a **new login** is needed: Touch ID reads the keyring passtoken. Typed form only if bio fails / is declined or the keyring item is missing |
-| **Invited teammate** | Per-account **mobile password** | `/mobile/*` (one email) | Silent `team_unlock` from keyring (no biometry) |
-| **Flutter mobile** | Same mobile password | `/mobile/*` | Secure storage per launch |
-| **API integrator** | Product API key (`rb-…`) | `/v1/*` | N/A |
-
-Desktop entry is unified in **`AppSessionStore`** + **`DesktopDashboardGate`**.
-Web (browser build, in development) owners sign in at **`/login`** — see
-**[Web owner session](#web-owner-session)**. Everything else in this doc about
-the keyring, Touch ID, and Rust is **desktop** policy.
-
----
-
-## Owner passtoken in the keyring
-
-**Rule:** After first enrollment on a machine, the owner passtoken plaintext
-lives in the OS keyring. The user types it at first install / first login, and
-only again if biometry fails or is declined, or the keyring item is missing.
-Daily use **must not** ask for the passtoken.
-
-The one-time download still exists (backup / another Mac). It is not the daily
-credential surface.
-
-### What Touch ID does
-
-Touch ID / Windows Hello has **one** job: decide whether the app may **read**
-the stored passtoken from the keyring.
-
-| Biometry result | What happens |
-|-----------------|--------------|
-| Success | Rust reads `owner-passtoken` (JS never sees it) → `POST /console/login` → mint mail + console sessions |
-| Fail or user cancel | The keyring item is **not** read. Show the typed passtoken form. |
-| No biometry (Linux / unsigned `tauri dev`) | Read the keyring item without a prompt if it exists; otherwise typed form. |
-
-Touch ID does **not** unlock refresh tokens, does **not** run on silent mail
-boot, and is **not** a separate “console privilege” check. If a scoped refresh
-can still mint access, do that silently — no Touch ID, no passtoken.
-
-A failed or cancelled bio **must not** proceed to a keyring passtoken read.
-Rust never returns the passtoken to JS.
-
-### Why a separate keyring item
-
-Silent mail boot must not load the passtoken. Put refresh tokens and the
-passtoken in **different** keyring accounts:
-
-| Keyring account | Contents | Read gate |
-|-----------------|----------|-----------|
-| `owner-session:{workerUrl}` | `workerUrl`, `refreshToken`, `mailRefreshToken` | Silent |
-| `owner-passtoken:{workerUrl}` | passtoken plaintext | Touch ID / Windows Hello |
-
-Service for both: `com.relaybase.desktop`. Account names are **per Worker URL** so two installs on the same Mac do not overwrite each other. Legacy unscoped `owner-session` / `owner-passtoken` items migrate on first matching read. Prefer an OS user-presence /
-biometry ACL on `owner-passtoken:{url}` so the platform itself refuses the read
-without bio.
-
-On desktop, still never: `~/.relaybase`, cookies, localStorage, sessionStorage.
-The Worker stores only `sha256(AUTH_PEPPER || salt || passtoken)`. (Web has no
-keyring; its policy is in [Web owner session](#web-owner-session).)
-
-### Write vs read
-
-| Direction | When | Touch ID? |
-|-----------|------|-----------|
-| **Write** | `setup-admin` reveal, first `/console/login`, rotate, `reset-admin`, typed fallback | No — the user just created or typed the secret |
-| **Read** | Any later login that needs the passtoken (console refresh expired, mail refresh expired or failed, re-login after logout cleared refreshes) | Yes |
-
-Successful typed entry **writes** `owner-passtoken` so the next time is Touch
-ID, not typing.
-
-### When the typed form is allowed
-
-- First enrollment on this Mac (no `owner-passtoken` item yet)
-- Biometry failed or declined
-- Keyring item missing or corrupt
-- After `rotate-passtoken` / `reset-admin`, until the new token is written back
-
-Those are the **only** times. Expired console refresh (30 days) or expired mail
-refresh (90 days) is **not** a reason to type — Touch ID reads the stored
-passtoken and logs in again.
-
-### Sign out
-
-Logout clears in-memory access and may clear refresh tokens.
-**`owner-passtoken` stays.** Next launch can Touch ID instead of typing.
-Clearing the passtoken item is an explicit “remove this Mac” action, not
-ordinary sign-out.
-
----
-
-## Scoped owner sessions (mail vs console)
-
-Login mints **two refresh tokens** and two in-memory access tokens:
-
-| Scope | Refresh TTL | Access TTL | Worker routes | Desktop command |
-|-------|-------------|------------|---------------|-------------------|
-| `mail` | 90 days | 60 min | `/mail/*` (inbox, sent, send, favicon, **GET `/mail/addresses`**) | `owner_boot_mail_cmd` (silent, no bio) |
-| `console` | 30 days | 30 min | `/console/*` | `owner_unlock_console_cmd` when console refresh is still valid (silent). If expired: Touch ID → keyring passtoken → `/console/login` |
-
-D1 `owner_sessions.label` uses `mail:` / `console:` prefixes.
-`POST /console/refresh` body: `{ refreshToken, scope: "mail" | "console" }`.
-
-Middleware: `requireMailSession` on `/mail/*`, `requireConsoleSession` on
-`/console/*` (`../relaybase-worker/src/lib/auth.ts`).
-
----
-
-## Layer diagram
+Relaybase implements a **Cloud-Unified Entry Authentication Model**. All web surfaces (HQ Studio, Console Dashboard, and Mailbox Client) share a single primary identity rooted in **Username + Password**, with **Cloudflare OAuth** acting as the hardware-level ownership and recovery anchor.
 
 ```mermaid
 flowchart TB
-  subgraph ui [app/]
-    Gate[DesktopDashboardGate]
-    Store[AppSessionStore]
-    Unlock[UnlockView / TeamLoginView]
-    ConsoleGate[ConsoleGateView]
-    Bridge[bridge/owner · bridge/team]
-    Fetch[desktopAwareFetch]
+  subgraph Client [Browser Client (app/)]
+    AuthUI["(auth) UI (/login, /signup, /forgot-password)"]
+    CloudSession["cloud-session.ts (HQ JWT + 30-Day Cookie)"]
+    WorkerBridge["cloud-worker-session.ts (Scoped Worker Bearer)"]
+    Gates["DesktopDashboardGate / HqStudioGate"]
   end
 
-  subgraph tauri [desktop/src-tauri]
-    Owner[owner_session.rs]
-    Team[team_session.rs]
-    KR[OS keyring]
-    Mem[split mail/console memory]
-    WR[worker_request / team_worker_request]
+  subgraph CloudHQ [Cloud HQ Studio (hq-relaybase-studio)]
+    AuthRoutes["/auth/* (login, signup/cloud, worker-session)"]
+    AuthStore[("PostgreSQL hq_auth_users (Users, Passwords, RefreshTokens)")]
+    Vault["passtoken-vault.ts (AES-256-GCM KMS)"]
   end
 
-  subgraph worker [Product Worker]
-    Auth[requireOwnerSession scope]
-    Routes[/console/* /mail/* /mobile/* /v1/*]
-    D1[(RELAYBASE_DB)]
+  subgraph Worker [Customer Cloudflare Worker (relaybase-worker)]
+    WorkerAuth["/console/login & Scoped Bearer Validation"]
+    WorkerDB[("Customer D1 & R2")]
   end
 
-  Gate --> Store
-  Store --> Unlock
-  Store --> ConsoleGate
-  Bridge --> Owner
-  Bridge --> Team
-  Fetch --> WR
-  Owner --> KR
-  Owner --> Mem
-  Team --> KR
-  WR --> Routes
-  Routes --> Auth
-  Auth --> D1
+  AuthUI -->|1. ID + Password| CloudSession
+  CloudSession -->|2. POST /auth/login| AuthRoutes
+  AuthRoutes -->|3. Validate argon2id & RTR| AuthStore
+  CloudSession -->|4. Bearer HQ JWT| WorkerBridge
+  WorkerBridge -->|5. POST /auth/worker-session| AuthRoutes
+  AuthRoutes -->|6. Decrypt passtokenEnc| Vault
+  AuthRoutes -->|7. POST /console/login| WorkerAuth
+  WorkerAuth -->|8. Mail & Console Tokens| WorkerBridge
+  Gates -->|9. Direct Scoped Access| Worker
+  WorkerAuth --> WorkerDB
 ```
 
-**Rule:** On desktop, JS never sees owner tokens, the keyring passtoken, or
-teammate mobile passwords. Rust attaches Bearer headers in `worker_request` /
-`team_worker_request`. The typed passtoken field is handed to Rust immediately
-and is not kept in JS after submit.
+### Core Security Principles
+
+1. **Zero-Knowledge Passtoken for Users & Browsers:**
+   - The master Worker `passtoken` is generated server-side during the initial Cloudflare installation flow (`setup-admin`).
+   - It is encrypted via AES-256-GCM using `HQ_VAULT_SECRET` (`passtokenEnc`) and stored exclusively in Cloud HQ backend storage.
+   - **Browsers and end-users never see, handle, download, or copy passtokens.**
+2. **Single Identity, Unified Access:**
+   - Users sign up with an ID (`username`) and password.
+   - Logging in unlocks HQ Studio (`/studio/*`), Cloud Console (`/dashboard`, `/domains`, `/accounts`, etc.), and Mailbox (`/inbox`, `/sent`, `/compose`) simultaneously.
+3. **Automated Server-Side Worker Exchange:**
+   - When a browser logs in or restores a session, Cloud HQ validates the session and mints scoped Worker tokens (`mail` + `console`) on the user's behalf via `POST /auth/worker-session`.
+   - The client uses short-lived scoped Bearer tokens to communicate with the customer Worker.
+4. **Ownership-Proof Password Recovery:**
+   - Password resets do not rely on unauthenticated email magic links.
+   - The user re-authenticates via Cloudflare OAuth. If the authorized Cloudflare Account ID strictly matches the account's registered `cfAccountId`, the password hash is updated immediately and existing sessions are invalidated across all devices.
 
 ---
 
-## Secret storage (short)
+## 2. Actor & Route Authentication Taxonomy
 
-### Owner
-
-| Secret | Where |
-|--------|-------|
-| Passtoken plaintext | OS keyring `owner-passtoken:{workerUrl}` (Touch ID to **read**). Also the one-time user download. Never `~/.relaybase` |
-| Passtoken hash | D1 `owner_config` |
-| `mailRefreshToken` + console `refreshToken` | OS keyring `owner-session:{workerUrl}` JSON (silent read) |
-| Mail / console access JWT | Tauri process memory (split) |
-| `AUTH_PEPPER` | Worker wrangler secret |
-| Worker URL | Keyring first, `workspace.json` mirror |
-
-### Invited teammate
-
-| Secret | Where |
-|--------|-------|
-| Mobile password | OS keyring `team-session:{email}` |
-| URL + email identity | `~/.relaybase/team-login.json` (no password) |
-
-Full layout: **[home-storage.md](../desktop/home-storage.md)**.
+| Actor | Credential | Primary Target Routes | Protocol & Token Lifetime |
+|---|---|---|---|
+| **Cloud Web User** | `username` + `password` | `/studio/*`, `/auth/*` | 30-day `HttpOnly`, `Secure`, `SameSite=Lax` cookie (RTR) + in-memory 15-min Access JWT |
+| **Worker Proxy (Client)** | Server-minted scoped access JWT | `/mail/*`, `/console/*` | Scoped Bearer JWT (`mail`: 60m / 90d refresh, `console`: 30m / 30d refresh) |
+| **Cloud Server-to-Server** | `X-Relaybase-Internal-Auth` | `/auth/signup/cloud`, `/auth/reset-password/oauth` | HMAC-SHA256 signature / pre-shared `HQ_INTERNAL_AUTH_SECRET` |
+| **OAuth Install / Recovery** | Cloudflare OAuth Token | `/api/install/*`, `/api/auth/reset-password-oauth` | Bearer CF Access Token verified against Cloudflare API (`/accounts`) |
+| **API Integrator** | Product API Key (`rb_live_…`) | `/v1/*` (Send, Triggers) | Static Bearer key stored hashed in customer D1 `api_keys` table |
+| **Flutter Mobile Companion** | Account Mobile Password | `/mobile/*` | Basic / Bearer auth with `X-Account-Email` |
 
 ---
 
-## Web owner session
+## 3. End-to-End Authentication Workflows
 
-Browser build only (`!isDesktopRuntime()`; in development, not live). No OS
-keyring, no Touch ID, no Rust — JS calls the Worker with `fetch` + Bearer
-(M-05). Follows N-01 in
-[rust-migration-strategy.md](../architecture/rust-migration-strategy.md).
-Desktop behavior above is unchanged by anything in this section.
-
-| Secret | Web storage |
-|--------|-------------|
-| Passtoken plaintext | **Never stored.** Typed on `/login` (or handed off once right after web install). Re-typed after the tab closes |
-| Owner `mailRefreshToken` + `consoleRefreshToken` + Worker URL | Tab `sessionStorage` `relaybase:owner-session` (`lib/desktop/auth/web-owner-persist.ts`) |
-| Mail / console access JWT | JS memory (`lib/desktop/auth/owner-session.ts`), re-minted via `POST /console/refresh` |
-| Teammate mobile password | Tab `sessionStorage` `relaybase:email-session` |
-| Recent Worker URLs | `localStorage` `relaybase.recentWorkerUrls` (URLs only, no secrets) |
-
-Never for owner tokens: localStorage, cookies, or a BFF session cookie.
-
-| Event | Behavior |
-|-------|----------|
-| Unauthenticated landing | `/login` (Owner tab default + Teammate). Install is `/setup`. Forgot passtoken: `/recover-admin` (same OAuth + reset flow as desktop). Legacy `/sign-in` redirects to `/login` |
-| Login | `AccountLoginView` → `webOwnerLogin()` → `/console/login`; refresh pair written to `relaybase:owner-session` |
-| Refresh rotation | Every successful `/console/refresh` overwrites the stored token for that scope (the Worker rotates refresh tokens) |
-| Same-tab hard reload | `/` immediately replaces to `/login` (or `/dashboard`/`/inbox` if memory already has a session). `/login` and `DesktopDashboardGate` call `restoreWebOwnerSession()` → refresh both scopes. Both must succeed; otherwise the survivor is revoked, storage cleared, user lands on `/login` |
-| Sign out | `ownerLogout()` + clear owner and team `sessionStorage` → `/login` |
-| Tab closed | `sessionStorage` is gone → `/login`, type passtoken again |
-| Duplicated tab | Copies `sessionStorage`; the first tab to refresh rotates the token, so the other tab's next refresh 401s and it must sign in again (the Worker does not revoke the family for this) |
-
-Gate every web persist / restore / redirect with `!isDesktopRuntime()`; desktop
-never reads or writes `relaybase:owner-session`.
-
----
-
-## Desktop boot and console gate
+### 3.1. Sign-Up & Automated Provisioning (`/signup`)
 
 ```mermaid
-flowchart TB
-  Boot[App boot] --> Status[setStatuses]
-  Status --> MailBoot[owner_boot_mail / team_unlock silent]
-  MailBoot --> MailReady[ownerReady / invitedReady]
-  MailBoot -->|Worker unreachable| OfflineMail[ownerReady / invitedReady + Offline badge]
-  MailReady --> MailRoutes[Mail shell OK]
-  OfflineMail --> MailRoutes
+sequenceDiagram
+  autonumber
+  actor User as User (Browser)
+  participant App as Next.js Web App
+  participant CF as Cloudflare OAuth
+  participant Worker as Customer Worker
+  participant Studio as HQ Studio Worker
 
-  DashEntry[Dashboard entry] --> Ensure[ensureConsoleAccess]
-  Ensure -->|console refresh valid| ConsoleUnlock[owner_unlock_console silent]
-  ConsoleUnlock --> DashReady[Dashboard + /console/* API]
-  Ensure -->|refresh expired + keyring passtoken| Bio[Touch ID]
-  Bio -->|ok| KeyringLogin[read owner-passtoken then /console/login]
-  KeyringLogin --> DashReady
-  Bio -->|fail or cancel| Typed[ConsoleGateView typed passtoken]
-  Ensure -->|no keyring passtoken| Typed
+  User->>App: 1. Click "Connect Cloudflare"
+  App->>CF: 2. OAuth Authorize flow
+  CF-->>App: 3. Return to /oauth/callback with CF Access Token
+  App->>User: 4. Check available usernames (GET /auth/check-username)
+  User->>App: 5. Submit username + password
+  App->>App: 6. Run install stream (deploy D1, R2, Worker)
+  App->>Worker: 7. POST /console/setup-admin (X-Auth-Pepper)
+  Worker-->>App: 8. Return master passtoken (server-side only)
+  App->>Studio: 9. POST /auth/signup/cloud (X-Relaybase-Internal-Auth)<br/>{ username, password, cfAccountId, workerUrl, passtoken }
+  Studio->>Studio: 10. Encrypt passtoken (AES-256-GCM) -> passtokenEnc<br/>Hash password (argon2id)
+  Studio-->>App: 11. Set 30-day Refresh Cookie + Return Access JWT
+  App->>Studio: 12. POST /auth/worker-session (Bearer HQ JWT)
+  Studio->>Worker: 13. POST /console/login { passtoken }
+  Worker-->>Studio: 14. Return mail/console token pair
+  Studio-->>App: 15. Return scoped Worker tokens
+  App-->>User: 16. Redirect to /dashboard (Fully authenticated)
 ```
 
-Enrolled owner and teammate users who cannot reach the Worker stay in the
-mailbox (`workerUnreachable` + sidebar Offline badge). `UnlockView` is
-first-login / bio-declined only — not an offline screen.
+### 3.2. Daily Sign-In & Worker Session Exchange (`/login`)
 
-**Dashboard entry points** (call `ensureConsoleAccess()`):
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User as User (Browser)
+  participant App as Next.js Web App
+  participant Studio as HQ Studio Worker
+  participant Worker as Customer Worker
 
-- `UserSidebar.switchMode("dashboard")` — stays on mail if Touch ID is dismissed (cannot read keyring passtoken) or the Worker is unreachable
-- `ConsoleRouteGate` on dashboard pathname
+  User->>App: 1. Enter username & password
+  App->>Studio: 2. POST /auth/login { username, password }
+  Studio->>Studio: 3. Verify argon2id hash & generate new RTR Refresh Token
+  Studio-->>App: 4. 200 OK + Set-Cookie (30-day Refresh) + Access JWT (15m)
+  App->>Studio: 5. POST /auth/worker-session (Bearer Access JWT)
+  Studio->>Studio: 6. Decrypt passtokenEnc with HQ_VAULT_SECRET
+  Studio->>Worker: 7. POST /console/login { passtoken, label: "cloud-web" }
+  Worker-->>Studio: 8. Scoped Access + Refresh Tokens
+  Studio-->>App: 9. 200 OK { workerUrl, mailAccessToken, consoleRefreshToken, ... }
+  App->>App: 10. Store Worker tokens in memory & tab sessionStorage
+  App-->>User: 11. Redirect to /dashboard or /inbox
+```
 
-Touch ID is invoked **only** to authorize a read of `owner-passtoken`.
-`ensureConsoleAccess()` is the usual call site; mail refresh expiry / 401
-that cannot be repaired with `owner_boot_mail` uses the same gate.
+### 3.3. Password Reset via Cloudflare Ownership Proof (`/forgot-password`)
 
----
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User (Browser)
+  participant App as Next.js Web App
+  participant CF as Cloudflare OAuth
+  participant Studio as HQ Studio Worker
 
-## 401 handling
-
-| Worker path | DOM event | Store action |
-|-------------|-----------|--------------|
-| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail`; if refresh expired/invalid, Touch ID → keyring passtoken → login; if still unauthenticated, immediately transitions to `UnlockView` (never enters or remains in mailbox shell) |
-| `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
-
-Neither path wipes Worker URL or keyring (`owner-session` / `owner-passtoken`).
-Implemented in `api-base.ts` + `context.tsx`.
-
-**DMG Reinstall / Session Invalidation Rule:**
-If the app binary or DMG is replaced or reinstalled and the Worker returns 401 Unauthorized for mail requests, the app strictly transitions to `UnlockView` (or `/setup`). The mailbox (`/email/inbox`) is inaccessible without valid `hasMailAccess`. Offline status (`workerUnreachable`) is strictly limited to network transport failures, never 401/403/session-expired responses.
-
----
-
-## Endpoint auth classification
-
-### Public
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /health` | Health probe |
-| `GET /console/auth-status` | `{ ownerConfigured, passtokenPrefix? }` |
-| `POST /console/login` | Passtoken |
-
-### Pepper bootstrap (`X-Auth-Pepper`)
-
-Install / reinstall bootstrap: `setup-admin`, `init-db`, `migrate-db`. Proving `AUTH_PEPPER` in `setup-admin` always resets D1 `owner_config` and issues a fresh passtoken (overwriting any previous owner and invalidating old sessions), guaranteeing new installs/reinstalls never fail with `OWNER_ALREADY_CONFIGURED`.
-
-### Cloudflare OAuth account proof (`X-Cf-Access-Token`)
-
-`init-db` and `migrate-db` also accept a Cloudflare OAuth access token that can prove the install account (install client): env `CF_ACCOUNT_ID`, D1 `owner_config.cf_account_id`, or `GET /accounts`. Desktop install and Worker upgrade already hold this token — an existing owner must not block migrate-db. `POST /console/reset-admin` uses the narrower passtoken-updater client (`secrets-store.write`) and proves Secrets Store access on that account. Worker `CF_ACCOUNT_ID` is optional — **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
-
-### Owner session (scoped Bearer)
-
-| Route group | Scope |
-|-------------|-------|
-| `/console/*` | `console` access JWT |
-| `/mail/*` | `mail` access JWT (includes read-only `GET /mail/addresses`) |
-
-Handlers: `../relaybase-worker/src/routes/console/owner-auth.ts`.
-
-### Mobile password
-
-`/mobile/*` — `Authorization: Bearer <password>` + `X-Account-Email`.
-
-### API key
-
-`/v1/*` — plaintext in `~/.relaybase/{scopeId}/api-keys.json`; hash in D1.
+  User->>App: 1. Click "Verify with Cloudflare"
+  App->>CF: 2. OAuth Authentication
+  CF-->>App: 3. Return verified cf_account_id
+  User->>App: 4. Input new password & confirmation
+  App->>Studio: 5. POST /auth/reset-password/oauth (X-Relaybase-Internal-Auth)<br/>{ cfAccountId, newPassword }
+  Studio->>Studio: 6. Find user by cfAccountId (strict === match)
+  alt Match found
+    Studio->>Studio: 7. Hash new password (argon2id)<br/>Revoke all existing refresh tokens for user
+    Studio-->>App: 8. 200 OK + Set-Cookie (fresh session) + Access JWT
+    App-->>User: 9. Redirect to /studio/dashboard
+  else No account linked
+    Studio-->>App: 10. 404 Error ("No Relaybase account linked to this CF account")
+    end
+```
 
 ---
 
-## Use case index
+## 4. Backend Data Schema & Vault Cryptography
 
-| ID | Use case | Mechanism |
-|----|----------|-----------|
-| O1 | Owner first install | CF OAuth + pepper + setup-admin |
-| O2 | Owner first login | `/console/login` → write `owner-passtoken` + dual refresh → `ownerReady` |
-| O3 | Owner mail boot | Silent `owner_boot_mail` → `ownerReady` |
-| O3b | Owner console gate | Valid console refresh → silent unlock. Else Touch ID → keyring passtoken → login |
-| O4 | Owner passtoken fallback | Typed form **only** if no keyring item or bio fail / decline |
-| O5 | Owner sign out | Logout + clear memory / refreshes; **`owner-passtoken` stays** |
-| O6 | Owner mail 401 | Silent mail refresh retry |
-| O6b | Owner console 401 | Console gate overlay |
-| O7 | Rotate passtoken | Logged-in owner; revokes all sessions; write new `owner-passtoken` |
-| O8 | Forgot passtoken | CF OAuth (Secrets Store) → `/console/reset-admin` → write new `owner-passtoken` |
-| T1 | Provision mobile password | Owner → `/console/addresses/mobile-password` |
-| T2 | Teammate first login | `/mobile/config` → keyring → `invitedReady` |
-| T3 | Teammate daily boot | Silent `team_unlock` → `invitedReady` |
-| T4 | Teammate sign out / switch owner | `team_logout` / `switchToOwnerLogin` |
-| T5 | Flutter login | Secure storage → `/mobile/*` |
-| A1 | API key call | `/v1/*` |
+### 4.1. Central Identity Schema (`authStore` / `hq_auth_users`)
 
-Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-machine.md)**.
+```typescript
+export interface HqAuthUser {
+  id: string;                         // e.g. "usr_01j8abc123def456"
+  email: string;                      // Generated as "${username}@users.relaybase"
+  passwordHash: string;               // $argon2id$v=19$m=65536,t=3,p=4$...
+  name: string;                       // Display name
+  accountLinkId: string;              // Linked workspace ID
+  username: string;                   // Unique handle (e.g. "john-82")
+  cfAccountId: string;                // Cloudflare Account ID hash/ID
+  workerUrl: string;                  // Customer Worker URL (e.g. "https://api.domain.workers.dev")
+  passtokenEnc?: string;              // AES-256-GCM encrypted vault string
+  createdAt: string;                  // ISO 8601
+  updatedAt: string;                  // ISO 8601
+}
 
----
+export interface HqRefreshTokenRecord {
+  id: string;                         // e.g. "rft_01j8token999"
+  tokenHash: string;                  // SHA-256(refreshToken)
+  userId: string;
+  expiresAt: string;                  // ISO 8601 (30 days)
+  createdAt: string;
+  userAgent: string | null;
+  ip: string | null;
+}
+```
 
-## File map (auth touchpoints)
+### 4.2. Passtoken Vault Encryption Specification
 
-### Worker
-
-| File | Role |
-|------|------|
-| `../relaybase-worker/src/lib/auth.ts` | `requireConsoleSession`, `requireMailSession`, API key, pepper |
-| `../relaybase-worker/src/lib/owner-auth.ts` | Login, scoped refresh, logout, rotate, reset |
-| `../relaybase-worker/src/lib/owner-tokens.ts` | Passtoken format, scoped access JWT, TTL constants |
-| `../relaybase-worker/src/lib/mobile-auth.ts` | `/mobile/*` password check |
-| `../relaybase-worker/src/routes/console/owner-auth.ts` | HTTP auth routes |
-| `../relaybase-worker/src/routes/console/*.ts` | Console scope |
-| `../relaybase-worker/src/routes/mail/*.ts` | Mail scope |
-
-### Tauri
-
-| File | Role |
-|------|------|
-| `auth/owner_session.rs` | Dual keyring refresh **per Worker URL**, `owner_login_from_keyring`, split memory, boot/unlock/logout, scoped `worker_request` |
-| `auth/owner_passtoken.rs` | `owner-passtoken:{url}` exists/store/load-after-auth |
-| `auth/worker_accounts.rs` | Worker URL → keyring account names + `owner-workers` index |
-| `auth/team_session.rs` | Team keyring, silent unlock, `team_worker_request` |
-| `keyring_store.rs` | OS secret store |
-| `secrets.rs` | `workspace.json`, `team-login.json` |
-
-### App
-
-| File | Role |
-|------|------|
-| `lib/desktop/app-session/store.ts` | Phase machine, `bootFromKeyring`, `ensureConsoleAccess` |
-| `lib/desktop/app-session/tests/` | Session store / error / Worker-URL unit tests |
-| `lib/desktop/app-session/context.tsx` | Boot hydrate, scoped 401 listeners |
-| `lib/desktop/bridge/owner.ts` | `desktopOwnerBootMail`, `desktopOwnerUnlockConsole`, `desktopOwnerLoginFromKeyring`, `desktopOwnerTouchId` |
-| `lib/desktop/api/api-base.ts` | Scoped 401 dispatch |
-| `console/components/setup/ConsoleGateView.tsx` | Touch ID (read keyring passtoken) + typed fallback |
-| `console/components/setup/ConsoleRouteGate.tsx` | Dashboard route blocker |
-| `console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
-| `lib/desktop/auth/owner-session.ts` | Web owner session: memory access, `restoreWebOwnerSession()` |
-| `lib/desktop/auth/web-owner-persist.ts` | Web-only `relaybase:owner-session` refresh storage |
-| `console/components/setup/AccountLoginView.tsx` | Web `/login` form (owner passtoken / teammate password, `WorkerUrlPicker`) |
-
-After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`** (see **AGENT.md**).
+Defined in `hq/studio/src/lib/vault/passtoken-vault.ts`:
+- **Algorithm:** AES-256-GCM authenticated symmetric encryption.
+- **Key Derivation:** `SHA-256(HQ_VAULT_SECRET || HQ_JWT_SECRET)`.
+- **Payload Format:** `v1:<iv_base64url>:<authTag_base64url>:<cipherText_base64url>`.
+- **Properties:**
+  - 96-bit cryptographically random IV generated per encryption operation.
+  - 128-bit authentication tag prevents ciphertext tampering.
+  - Decryption failure immediately rejects authentication with status `503`.
 
 ---
 
-## Agent checklist
+## 5. Client Gate Architecture & Route Resolution
 
-1. Read this doc + **desktop-session-machine.md** before changing unlock flow.
-2. Desktop: persist owner passtoken plaintext **only** in OS keyring `owner-passtoken:{workerUrl}`. Never `~/.relaybase`, cookies, localStorage, or sessionStorage. JS never reads it from the keyring. Web: never persist the passtoken anywhere; only owner refresh tokens go to tab `sessionStorage` ([Web owner session](#web-owner-session)).
-3. `/console/*` → console scope; `/mail/*` → mail scope.
-4. Touch ID **only** authorizes a read of `owner-passtoken`. Not on silent mail boot, not on teammate flows, not as a generic console privilege check.
-5. After first enrollment, do not show the typed passtoken form unless bio failed / was declined or the keyring item is missing.
-6. New desktop entry paths → `AppSessionStore` actions, not bypass routes.
-7. Rebuild Worker bundle after `../relaybase-worker/` auth changes.
-8. Web owner changes stay behind `!isDesktopRuntime()` — a desktop user must see the same screens, boot, and sign-out destination.
+Web client routing is enforced through layered React gates rather than multiple disconnected login views.
+
+```mermaid
+flowchart TD
+  RouteReq["Incoming Navigation Request"] --> PathCheck{"Is Route Public?<br/>(/login, /signup, /forgot-password)"}
+  PathCheck -- Yes --> RenderPublic["Render Auth Page"]
+  PathCheck -- No --> EnsureAuth["ensureWebCloudAuth()"]
+  
+  EnsureAuth --> CheckHQ{"Valid HQ Session?<br/>(Memory JWT or 30d Cookie)"}
+  CheckHQ -- No --> RefreshAttempt{"hqRefreshSession() (RTR)"}
+  RefreshAttempt -- Fail --> RedirectLogin["Redirect to /login?next=..."]
+  RefreshAttempt -- Success --> CheckWorker
+  CheckHQ -- Yes --> CheckWorker{"Linked Worker configured?"}
+
+  CheckWorker -- "No (Studio Only)" --> IsWorkerPath{"Path needs Worker?<br/>(/dashboard, /inbox, /domains)"}
+  IsWorkerPath -- Yes --> RedirectStudio["Redirect to /studio/dashboard"]
+  IsWorkerPath -- No --> RenderStudio["Render Studio Page"]
+
+  CheckWorker -- "Yes (Worker Linked)" --> ExchangeWorker["ensureCloudWorkerSession()<br/>(POST /auth/worker-session)"]
+  ExchangeWorker -- Success --> RenderApp["Mount WebConsoleAppProviders & Render Full Shell"]
+  ExchangeWorker -- Fail --> RedirectStudio
+```
+
+### Core Gate Components
+
+1. **`DesktopDashboardGate` (`app/src/app/_shell/DesktopDashboardGate.tsx`):**
+   - Covers all console shell routes (`/dashboard`, `/domains`, `/accounts`, `/keys`, `/logs`, `/studio/*`).
+   - Resolves `ensureWebCloudAuth()`.
+   - Mounts `WebConsoleAppProviders` with in-memory scoped Worker tokens.
+2. **`EmailAppLayout` (`app/src/app/(email-app)/layout.tsx`):**
+   - Covers standalone mailbox routes (`/inbox`, `/sent`, `/drafts`, `/compose`, `/mail-settings`).
+   - Ensures Worker owner session is primed before rendering mailbox stores.
+3. **`HqStudioGate` (`app/src/lib/hq-auth/HqStudioGate.tsx`):**
+   - Specifically protects HQ Studio routes and automatically synchronizes Worker tokens in the background.
+4. **Root Router (`app/src/app/page.tsx`):**
+   - Evaluates session state immediately on `/` visit:
+     - Unauthenticated $\rightarrow$ `/login`
+     - Authenticated + Worker Linked $\rightarrow$ `/dashboard`
+     - Authenticated + Studio Only $\rightarrow$ `/studio/dashboard`
+
+---
+
+## 6. Worker Scoped Token Architecture
+
+The customer Worker enforces fine-grained authorization scopes on incoming Bearer tokens:
+
+```mermaid
+flowchart LR
+  subgraph Scopes [Worker Authorization Scopes]
+    MailScope["'mail' Scope (TTL: 60m / Refresh: 90d)"]
+    ConsoleScope["'console' Scope (TTL: 30m / Refresh: 30d)"]
+    ApiKeyScope["'api_key' Scope (Static send key)"]
+  end
+
+  subgraph WorkerEndpoints [Worker Endpoints]
+    MailRoutes["/mail/* (inbox, sent, send, addresses)"]
+    ConsoleRoutes["/console/* (domains, accounts, keys, d1, r2)"]
+    V1Routes["/v1/* (send, templates, triggers)"]
+  end
+
+  MailScope --> MailRoutes
+  ConsoleScope --> ConsoleRoutes
+  ApiKeyScope --> V1Routes
+```
+
+- A `console`-scoped token returns `401 Unauthorized` on `/mail/*` routes.
+- A `mail`-scoped token returns `401 Unauthorized` on `/console/*` routes.
+- The web client (`workerFetch` in `api-base.ts`) automatically attaches and refreshes the appropriate token based on the requested endpoint URL prefix.
+
+---
+
+## 7. Threat Model & Security Guarantees
+
+| Threat Vector | Mitigation & Architectural Guarantee |
+|---|---|
+| **Credential Interception (Browser)** | Master `passtoken` is never transmitted to or held in browser storage (`localStorage`, `sessionStorage`, or cookies). Browsers only hold short-lived access JWTs. |
+| **Cross-Site Scripting (XSS)** | Primary 30-day session token is stored in an `HttpOnly`, `SameSite=Lax`, `Secure` cookie inaccessible to JavaScript. |
+| **User Enumeration** | `/auth/forgot-password` and `/auth/login` return generic error responses with consistent timing. |
+| **Replay & Stolen Refresh Tokens** | Refresh Token Rotation (RTR) ensures every refresh request invalidates the old refresh token and issues a new one. Stale token usage invalidates the entire session chain. |
+| **Unauthorized Password Reset** | Resets require proving cryptographic ownership of the linked Cloudflare Account ID via live OAuth challenge. Email link hijacks are impossible. |
+| **Session Invalidation on Credential Change** | Changing a password immediately purges all active `refreshTokens` across all devices in `authStore`. |
+
+---
+
+## 8. Desktop Migration Roadmap (Thin Shell Strategy)
+
+Currently, the Tauri desktop client uses a local OS keyring machine (`owner_session.rs`, `owner_passtoken.rs`, `team_session.rs`).
+
+```mermaid
+flowchart LR
+  subgraph Current [Current Desktop Model]
+    TauriKeyring["OS Keyring (owner-passtoken, owner-session)"]
+    TouchID["Touch ID / Biometry"]
+    LocalInstall["Local Wrangler Auto-Install"]
+  end
+
+  subgraph Target [Thin Shell Target Model]
+    CloudAuth["Cloud Login (/login)"]
+    KeyringToken["OS Keyring (Cloud Refresh Token Only)"]
+    WorkerExchange["Server-Side Worker Exchange"]
+  end
+
+  Current -.->|Migrate to Thin Shell| Target
+```
+
+1. **Phase 1 (Completed):** Unify web application completely on Cloud authentication root.
+2. **Phase 2 (In Progress):** Replace desktop `owner_passtoken.rs` and local Wrangler auto-install with Cloud OAuth install stream.
+3. **Phase 3:** Desktop OS Keyring stores only the Cloud 30-day session token for silent boot, delegating Worker authentication entirely to Cloud HQ Studio.
+
+---
+
+## 9. File Map & Code Locations
+
+| Component | Path | Responsibility |
+|---|---|---|
+| **Web Auth Pages** | `app/src/app/(auth)/*` | Unified `/login`, `/signup`, `/forgot-password` routes |
+| **Auth UI Components** | `app/src/features/auth/components/*` | `LoginForm.tsx`, `SignupWizard.tsx`, `ResetPasswordOAuthForm.tsx` |
+| **ID Availability Hook** | `app/src/features/auth/hooks/useIdAvailability.ts` | Real-time username validation and conflict resolution |
+| **Cloud Session Port** | `app/src/lib/auth/cloud-session.ts` | High-level login, logout, registration client interface |
+| **Worker Session Bridge** | `app/src/lib/auth/cloud-worker-session.ts` | Automated `POST /auth/worker-session` exchange & state maintenance |
+| **Shell Gates** | `app/src/app/_shell/DesktopDashboardGate.tsx` | Main unified gate for console and mailbox routes |
+| **Internal App Route Handlers** | `app/src/app/api/auth/*` | Next.js API route handlers for cloud registration and OAuth password reset |
+| **HQ Auth Routes** | `hq/studio/src/routes/auth.ts` | Hono router handling signup, login, refresh, worker-session, and check-username |
+| **HQ Auth Service** | `hq/studio/src/lib/auth/hq-auth-service.ts` | argon2id verification, session lifecycle, and user CRUD |
+| **Worker Session Minting** | `hq/studio/src/lib/auth/worker-owner-session.ts` | Server-side `passtokenEnc` decryption and Worker `POST /console/login` execution |
+| **Passtoken Vault** | `hq/studio/src/lib/vault/passtoken-vault.ts` | AES-256-GCM symmetric encryption/decryption module |
+| **Internal Auth Guard** | `hq/studio/src/lib/auth/internal-auth.ts` | Pre-shared secret / header validation for inter-service communication |

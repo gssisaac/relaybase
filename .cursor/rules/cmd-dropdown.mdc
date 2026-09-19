@@ -1,0 +1,14 @@
+---
+description: Use CmdDropdown for Worker domain and account/email pickers; Select for small enums.
+globs: app/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# CmdDropdown for domain & account pickers
+
+Full spec: [docs/desktop/cmd-dropdown-ui.md](../../docs/desktop/cmd-dropdown-ui.md)
+
+- **CmdDropdown** (`@/components/ui/cmd-dropdown`) for Worker **domains** and Console **account/sender email** lists (searchable popover).
+- **Select** (`@/components/ui/select`) for short static enums (purpose, template id, display name when list is tiny).
+- Pair `Label` + `triggerId` on `CmdDropdown`. Use `triggerClassName="min-w-0"` in grids.
+- Do not confuse with mail **Cmd+K** (`app/src/email/commands/`).

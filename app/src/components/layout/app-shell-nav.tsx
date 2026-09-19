@@ -70,7 +70,7 @@ export function AppShellFrame({
   );
 
   const sidebarFallback = (
-    <aside className="h-full w-52 shrink-0 border-r border-sidebar-border bg-sidebar" />
+    <aside className="h-full w-60 shrink-0 border-r border-sidebar-border bg-sidebar" />
   );
 
   return (

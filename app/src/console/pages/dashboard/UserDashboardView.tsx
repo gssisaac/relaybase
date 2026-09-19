@@ -41,7 +41,7 @@ type UserStatsResponse = {
   totals: {
     domains: number;
     addresses: number;
-    audience: number;
+    subscribers: number;
     broadcasts: number;
     drafts: number;
     sent: number;
@@ -82,13 +82,13 @@ const KPI_CARDS = [
   {
     key: "broadcasts" as const,
     label: "Broadcasts",
-    description: "Campaigns across domains",
+    description: "Studio broadcasts and audience",
     path: "broadcasts" as const,
   },
   {
-    key: "audience" as const,
-    label: "Audience",
-    description: "Contacts for broadcasts",
+    key: "subscribers" as const,
+    label: "Subscribers",
+    description: "Contact groups for Studio",
     path: "audience" as const,
   },
 ];
@@ -232,7 +232,12 @@ export function UserDashboardView() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {KPI_CARDS.map((card) => {
               const value = stats?.totals?.[card.key] ?? 0;
-              const href = paths[card.path];
+              const href =
+                card.path === "broadcasts"
+                  ? "/studio/newsletters"
+                  : card.path === "audience"
+                    ? "/studio/subscribers"
+                    : paths[card.path];
               return (
                 <Card
                   key={card.key}

@@ -1,0 +1,31 @@
+id: msgtpl_broadcast_sent_july_recap
+name: July Recap
+description: Deliverability tooling, faster inbox sync, and Scale groundwork
+subject: What shipped in July
+previewText: Deliverability tooling, faster inbox sync, and Scale groundwork
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  July was mostly infrastructure — the kind of work that does not show up in a screenshot but keeps mail landing in the inbox.
+
+  **Highlights**
+
+  1. **Domain onboarding** — clearer DNS checks and routing status in Console.
+
+  1. **Send logs** — dual-write to ops logs so failed API sends surface in the dashboard.
+
+  1. **Studio prototype** — audience + broadcast models landed behind the feature flag you are on.
+
+  We also fixed a handful of edge cases around partial bounces and local inbox delivery for `@relaybase.email` test addresses.
+
+  — Isaac & the Relaybase crew
+layoutId: tpl-editorial-serif
+templateVariables:
+  publication.title: Relaybase Chronicle
+  publication.issue_meta: July recap · Infrastructure edition
+target: newsletter
+category: null
+isBuiltin: true
+createdAt: 2026-07-20T10:00:00.000Z
+updatedAt: 2026-09-15T17:20:43.248Z
+

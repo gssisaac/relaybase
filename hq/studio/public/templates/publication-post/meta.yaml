@@ -1,0 +1,99 @@
+id: tpl-publication-post
+name: Publication Post
+html: |
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
+    <tr><td align="center" style="padding:24px 16px 40px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">
+        <tr><td style="padding:0 0 20px;text-align:right;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;color:#71717a;">
+          <span>{{vars.post.date}}</span>
+          <span style="padding:0 6px;color:#d4d4d8;">|</span>
+          <a href="{{unsubscribe_url}}" style="color:#71717a;text-decoration:underline;">Read online</a>
+        </td></tr>
+        <tr><td style="padding:0 0 12px;">
+          <h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;font-size:28px;font-weight:750;letter-spacing:-0.03em;color:#09090b;line-height:1.25;">
+            {{vars.post.title}}
+          </h1>
+        </td></tr>
+        <tr><td style="padding:0 0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;color:#52525b;">
+          {{vars.post.subtitle}}
+        </td></tr>
+        <tr><td style="padding:0 0 16px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:middle;padding-right:12px;line-height:0;font-size:0;">
+                {{vars.author.avatar}}
+              </td>
+              <td style="vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;font-weight:600;color:#18181b;line-height:1.3;">
+                {{vars.author.name}}
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:12px 0;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="vertical-align:middle;font-size:16px;line-height:1;color:#a1a1aa;">
+                <span style="display:inline-block;padding:6px 10px;border:1px solid #e4e4e7;border-radius:20px;font-size:12px;color:#71717a;font-family:-apple-system,sans-serif;">♡ Like</span>
+              </td>
+              <td align="right" style="vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#71717a;">
+                <span style="display:inline-block;padding:6px 10px;border:1px solid #e4e4e7;border-radius:20px;margin-left:4px;">Share</span>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:28px 0 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#18181b;font-size:16px;line-height:1.7;">
+          {{content}}
+        </td></tr>
+        <tr>
+          <td style="padding:24px 0 0;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #e4e4e7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+            <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 10px;">
+              <tr>
+                <td data-studio-footer-logo="1" style="vertical-align:middle;padding-right:8px;line-height:0;font-size:0;">{{vars.brand.logo}}</td>
+                <td style="vertical-align:middle;font-size:13px;font-weight:600;color:#3f3f46;line-height:1.3;text-align:left;">{{vars.brand.organization_name}}</td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;white-space:pre-line;">{{postal_address}}</p>
+            <p style="margin:0 0 10px;">{{compliance_contact_email}}</p>
+            <p style="margin:0;">
+              <a href="{{unsubscribe_url}}" style="color:#71717a;text-decoration:underline;">Unsubscribe</a>
+              from this publication.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+variables:
+  fields:
+    - key: post.title
+      type: text
+      label: Post title
+      required: true
+      defaultFrom: compliance.organizationName
+      description: Large headline at the top of the post.
+    - key: post.subtitle
+      type: text
+      label: Subtitle / Dek
+      description: Descriptive subtitle under the headline.
+    - key: post.date
+      type: text
+      label: Post date
+      description: Date stamp shown in the top right (e.g. September 07, 2026).
+    - key: author.name
+      type: text
+      label: Author name(s)
+      description: Name(s) of the post author(s).
+    - key: author.avatar
+      type: image
+      label: Author avatar
+      description: Circular photo next to the author name.
+    - key: brand.organization_name
+      type: text
+      label: Organization name
+      required: true
+      defaultFrom: compliance.organizationName
+    - key: brand.logo
+      type: image
+      label: Logo
+      required: true
+      description: Shown in the footer. Uses the Relaybase icon when unset.

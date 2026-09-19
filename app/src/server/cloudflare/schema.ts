@@ -129,6 +129,34 @@ export async function ownerSetupAdmin(
   return { passtoken };
 }
 
+/** POST /console/reset-admin — re-issue passtoken when setup-admin cannot run. */
+export async function resetOwnerAdmin(
+  workerUrl: string,
+  cfAccessToken: string,
+  cfAccountId?: string,
+): Promise<OwnerSetupResult> {
+  const base = workerUrl.trim().replace(/\/$/, "");
+  if (!base) throw new Error("Worker URL is required");
+  const token = cfAccessToken.trim();
+  if (!token) throw new Error("Cloudflare access token is required");
+  const res = await fetch(`${base}/console/reset-admin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cfAccessToken: token,
+      ...(cfAccountId?.trim() ? { cfAccountId: cfAccountId.trim() } : {}),
+    }),
+  });
+  const value = (await res.json().catch(() => ({}))) as {
+    passtoken?: string;
+    error?: string;
+  };
+  if (!res.ok || !value.passtoken) {
+    throw new Error(value.error ?? "Could not re-issue owner passtoken");
+  }
+  return { passtoken: value.passtoken };
+}
+
 export async function waitForWorkerReady(
   workerUrl: string,
   onLog?: (line: string) => void,

@@ -1,0 +1,315 @@
+/*
+ * BlockNote editor styles — align the editor's appearance with the reading
+ * mode (`.wmde-markdown`). These overrides counter BlockNote's built-in
+ * defaults so font size, line height, heading sizes, bullets, tables, and
+ * dividers match what the reader sees.
+ */
+
+/* Base font size: match reading mode's 15px (BlockNote defaults to 16px). */
+.gtm-md-editor .bn-editor {
+  font-size: 15px;
+}
+
+.gtm-md-editor .bn-default-styles {
+  font-size: 15px;
+}
+
+/* No outer chrome — transparent background, natural height. */
+.gtm-md-editor,
+.gtm-md-editor .bn-container,
+.gtm-md-editor .bn-editor {
+  background: transparent !important;
+  height: auto !important;
+  min-height: 0;
+  overflow: visible !important;
+}
+
+/* Override BlockNote's 1.5 line-height on block wrappers. */
+.gtm-md-editor .bn-block-outer {
+  line-height: 1.625;
+}
+
+.gtm-md-editor .bn-editor {
+  padding-inline: 0;
+  padding-block: 0;
+  color: var(--foreground);
+}
+
+/* Match heading sizes to reading mode (.wmde-markdown).
+   Reading mode uses margin-top: 24px, margin-bottom: 16px on all headings.
+   Margins collapse in reading mode but padding doesn't in the editor,
+   so we reduce heading padding-bottom to compensate for the next block's
+   padding-top (3-6px). */
+.gtm-md-editor .bn-block-content[data-content-type="heading"] {
+  --level: 2em;
+  padding-top: 24px !important;
+  padding-bottom: 10px !important;
+}
+.gtm-md-editor .bn-block-content[data-content-type="heading"][data-level="1"] {
+  padding-bottom: 10px !important;
+}
+.gtm-md-editor .bn-block-content[data-content-type="heading"][data-level="2"] {
+  --level: 1.5em;
+  padding-bottom: 10px !important;
+}
+.gtm-md-editor .bn-block-content[data-content-type="heading"][data-level="3"] {
+  --level: 1.25em;
+}
+.gtm-md-editor .bn-block-content[data-content-type="heading"][data-level="4"] {
+  --level: 1em;
+}
+.gtm-md-editor .bn-block-content[data-content-type="heading"][data-level="5"] {
+  --level: 0.875em;
+}
+.gtm-md-editor .bn-block-content[data-content-type="heading"][data-level="6"] {
+  --level: 0.85em;
+}
+
+/* First block: no extra top padding (the wrapper's py-8 already provides spacing). */
+.gtm-md-editor .bn-block-outer:first-child .bn-block-content,
+.gtm-md-editor .bn-block-group > .bn-block-outer:first-child .bn-block-content {
+  padding-top: 0 !important;
+}
+
+/* Block spacing: airier than BlockNote's default 3px. */
+.gtm-md-editor .bn-block-content {
+  font-size: inherit;
+  line-height: inherit;
+  font-family: inherit;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* Paragraphs: tighter spacing to match reading mode. */
+.gtm-md-editor [data-content-type="paragraph"] .bn-block-content {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+/* List items: tighter vertical gap than the default 6px block padding. */
+.gtm-md-editor .bn-block-content[data-content-type="bulletListItem"],
+.gtm-md-editor .bn-block-content[data-content-type="numberedListItem"],
+.gtm-md-editor .bn-block-content[data-content-type="checkListItem"] {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* Bullets and numbers: align with checkListItem (24px gutter, text starting at 24px).
+   Size the •/◦/▪ glyph on ::before while keeping fixed 24px column width. */
+.gtm-md-editor .bn-block-content[data-content-type="bulletListItem"]::before,
+.gtm-md-editor .bn-block-content[data-content-type="numberedListItem"]::before {
+  box-sizing: border-box;
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
+}
+
+.gtm-md-editor .bn-block-content[data-content-type="bulletListItem"]::before {
+  justify-content: center;
+  padding-right: 0;
+  font-size: 1.4em;
+  line-height: 0.9;
+}
+
+.gtm-md-editor .bn-block-content[data-content-type="numberedListItem"]::before {
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+
+/* BlockNote shadcn adds a nested-block guide (border-left on ::before) for every
+   block inside .bn-block-group .bn-block-group. Reading mode has no equivalent,
+   so nested bullets, numbers, and images (e.g. under a list item) stay clean. */
+.gtm-md-editor
+  .bn-block-group
+  .bn-block:not(:has(.bn-toggle-wrapper))
+  .bn-block-group
+  > .bn-block-outer:not([data-prev-depth-changed])::before,
+.gtm-md-editor-view
+  .bn-block-group
+  .bn-block:not(:has(.bn-toggle-wrapper))
+  .bn-block-group
+  > .bn-block-outer:not([data-prev-depth-changed])::before {
+  border-left: none !important;
+}
+
+/* Divider (hr): match reading mode's 24px margin and var(--border) color. */
+.gtm-md-editor [data-content-type="divider"] .bn-block-content {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.gtm-md-editor [data-content-type="divider"] hr {
+  margin: 24px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.gtm-md-editor [data-content-type="emailButton"] .bn-block-outer,
+.gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
+  overflow: visible !important;
+  width: 100%;
+  max-width: 100%;
+}
+
+.gtm-md-editor [data-content-type="emailButton"] .bn-block-content {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  display: block;
+}
+
+/* Table: force full width (BlockNote sets width: auto !important). */
+.gtm-md-editor [data-content-type="table"] table {
+  box-sizing: border-box;
+  max-width: 100%;
+  width: 100% !important;
+}
+
+/* Row/column grippers: 70% of the default 24px icon, square hit/bg area. */
+.gtm-md-editor .bn-table-handle,
+.gtm-md-editor-view .bn-table-handle {
+  box-sizing: border-box;
+  width: 21px !important;
+  height: 21px !important;
+  min-width: 21px !important;
+  min-height: 21px !important;
+  padding: 2px !important;
+  gap: 0 !important;
+  aspect-ratio: 1;
+  opacity: 0.5;
+}
+
+.gtm-md-editor .bn-table-handle svg,
+.gtm-md-editor-view .bn-table-handle svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+/* Vertical gripper (left of rows): nudge left. */
+.gtm-md-editor .bn-table-handle:not([style*="rotate"]),
+.gtm-md-editor-view .bn-table-handle:not([style*="rotate"]) {
+  translate: -1px 0;
+}
+
+/* Horizontal gripper (above columns): nudge up. Uses `translate` so
+   it does not override BlockNote's inline rotate(0.25turn). */
+.gtm-md-editor .bn-table-handle[style*="rotate"],
+.gtm-md-editor-view .bn-table-handle[style*="rotate"] {
+  translate: 0 -2px;
+}
+
+/* Column resize splitter: thinner, desaturated (prosemirror default is #adf). */
+.gtm-md-editor .column-resize-handle {
+  width: 2px;
+  right: -1px;
+  background-color: var(--muted-foreground);
+  opacity: 0.3;
+}
+
+/* Hide the + add-row / add-column widgets and their reserved gutter.
+   Inline padding (handle gutter) made a 100%-wide table overflow by ~9px. */
+.gtm-md-editor [data-content-type="table"] .tableWrapper {
+  --bn-table-widget-size: 0px;
+  box-sizing: border-box;
+  padding-inline: 0;
+}
+
+.gtm-md-editor .bn-extend-button,
+.gtm-md-editor :has(> .bn-extend-button),
+.gtm-md-editor-view .bn-extend-button,
+.gtm-md-editor-view :has(> .bn-extend-button) {
+  display: none !important;
+}
+
+/* File / document cards: match the reader `.rm-file-card`. */
+.gtm-md-editor .bn-file-name-with-icon,
+.gtm-md-editor-view .bn-file-name-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 28rem;
+  margin: 4px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+.gtm-md-editor .bn-file-icon,
+.gtm-md-editor-view .bn-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: calc(var(--radius) * 0.8);
+  background: color-mix(in oklch, var(--background) 70%, transparent);
+  color: var(--muted-foreground);
+}
+
+.gtm-md-editor .bn-file-icon svg,
+.gtm-md-editor-view .bn-file-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.gtm-md-editor .bn-file-name,
+.gtm-md-editor-view .bn-file-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.gtm-md-editor .bn-visual-media-wrapper video,
+.gtm-md-editor-view .bn-visual-media-wrapper video {
+  max-width: 100%;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+.gtm-md-editor [data-content-type="video"] .bn-visual-media-wrapper,
+.gtm-md-editor-view [data-content-type="video"] .bn-visual-media-wrapper {
+  max-width: 100%;
+}
+
+.gtm-md-editor [data-content-type="video"] .bn-file-block-content-wrapper,
+.gtm-md-editor-view [data-content-type="video"] .bn-file-block-content-wrapper {
+  max-width: 100%;
+}
+
+/* YouTube iframe embed — explicit width so BlockNote fit-content wrappers do not collapse. */
+.gtm-md-editor .bn-youtube-embed,
+.gtm-md-editor-view .bn-youtube-embed {
+  display: block;
+  width: min(560px, 100%);
+  min-width: 240px;
+}
+
+.gtm-md-editor .bn-youtube-embed-ratio,
+.gtm-md-editor-view .bn-youtube-embed-ratio {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  border: 1px solid color-mix(in oklch, var(--border) 40%, transparent);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+.gtm-md-editor .bn-youtube-embed-iframe,
+.gtm-md-editor-view .bn-youtube-embed-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.gtm-md-editor [data-content-type="video"] .bn-file-block-content-wrapper:has(.bn-youtube-embed),
+.gtm-md-editor-view [data-content-type="video"] .bn-file-block-content-wrapper:has(.bn-youtube-embed),
+.gtm-md-editor [data-content-type="image"] .bn-file-block-content-wrapper:has(.bn-youtube-embed),
+.gtm-md-editor-view [data-content-type="image"] .bn-file-block-content-wrapper:has(.bn-youtube-embed) {
+  width: min(560px, 100%) !important;
+  min-width: 240px;
+}

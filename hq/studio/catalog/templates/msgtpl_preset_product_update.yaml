@@ -1,0 +1,34 @@
+id: |-
+  msgtpl_preset_product_update
+accountLinkId: |-
+  dev
+name: |-
+  Product update (starter)
+subject: |-
+  What's new in {{vars.brand.organization_name}}
+previewText: |-
+  A short release note your subscribers can skim in under a minute.
+bodyMarkdown: |-
+  Hello {{contact.name}},
+
+  We shipped a few improvements this week:
+
+  - **Feature one** — one sentence on the outcome.
+  - **Feature two** — who it helps and how to turn it on.
+
+  [Read the full changelog](https://relaybase.com/changelog)
+
+  Thanks for reading,
+  The team
+layoutId: |-
+  tpl-minimal
+templateVariables: {}
+target: both
+category: |-
+  newsletter
+isPreset: true
+createdAt: |-
+  2026-09-17T04:32:33.810Z
+updatedAt: |-
+  2026-09-17T04:32:33.810Z
+

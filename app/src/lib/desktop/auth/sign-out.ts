@@ -1,8 +1,19 @@
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import type { AppSessionStore } from "@/lib/desktop/app-session";
+import { hasHqSession } from "@/lib/hq-auth/session";
+import { hasOwnerSession } from "./owner-session";
 
-import { ownerLogout } from "./owner-session";
-import { clearWebOwnerSessionStorage } from "./web-owner-persist";
+/** Web: cloud account and/or server-minted Worker owner session. */
+export function hasWebWorkerSession(_isTeam: boolean): boolean {
+  if (isDesktopRuntime()) return false;
+  return hasHqSession() && hasOwnerSession();
+}
+
+/** Web: revoke cloud cookie, access JWT, and Worker owner tokens. */
+export async function signOutHqStudio(): Promise<void> {
+  const { cloudLogout } = await import("@/lib/auth/cloud-session");
+  await cloudLogout();
+}
 
 /** Where to land after sign-out: unlock when a keyring session remains, else setup/login. */
 export function signOutRedirectPath(
@@ -24,19 +35,7 @@ export async function signOutRelaybase(
   store: AppSessionStore,
 ): Promise<void> {
   if (!isDesktopRuntime()) {
-    // Web: revoke owner refresh (needs the Worker URL global, so before the
-    // team clear below deletes it), then drop owner + team tab storage.
-    await ownerLogout();
-    clearWebOwnerSessionStorage();
-    const { setWebTeamAuth } = await import("@/mail-platform/session/email-session");
-    setWebTeamAuth(null);
-    if (typeof window !== "undefined") {
-      try {
-        sessionStorage.removeItem("relaybase:email-session");
-      } catch {
-        /* ignore */
-      }
-    }
+    await signOutHqStudio();
     return;
   }
   await store.signOut();

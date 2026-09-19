@@ -1,9 +1,13 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { AppShellFrame } from "@/components/layout/app-shell-nav";
-import { EmailAppProviders, useMailRuntime } from "@/mail-platform/runtime";
+import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
+import { AppHotkeys } from "@/components/layout/AppHotkeys";
+import { WebConsoleAppProviders } from "@/mail-platform/runtime";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SendingHealthProvider } from "@/lib/dashboard/SendingHealthContext";
@@ -14,45 +18,50 @@ import {
   EmailCommandRuntimeProvider,
   GlobalCommandPalette,
 } from "@/email/commands";
-import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
-import { AppHotkeys } from "@/components/layout/AppHotkeys";
+import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
+
+type MailGate = "loading" | "ready" | "login" | "studio-only";
 
 function WebMailShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { session } = useMailRuntime();
+  const [gate, setGate] = useState<MailGate>("loading");
+
   const isEmailSettings =
     pathname === "/mail-settings" ||
     pathname === "/mail-settings/" ||
     pathname.startsWith("/mail-settings?") ||
-    pathname.startsWith("/mail-settings/") ||
-    pathname === "/email/settings" ||
-    pathname === "/email/settings/" ||
-    pathname.startsWith("/email/settings?") ||
-    pathname.startsWith("/email/settings/");
+    pathname.startsWith("/mail-settings/");
 
   useEffect(() => {
-    if (session.ready && !session.identity) {
-      router.replace("/login");
+    let active = true;
+    void ensureWebCloudAuth().then((result) => {
+      if (!active) return;
+      if (result === "login") setGate("login");
+      else if (result === "studio-only") setGate("studio-only");
+      else setGate("ready");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gate === "login") {
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      const next = `${pathname}${search}`;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+    } else if (gate === "studio-only") {
+      router.replace("/studio/dashboard");
     }
-  }, [session.ready, session.identity, router]);
+  }, [gate, pathname, router]);
 
-  if (!session.ready) {
-    return (
-      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
+  if (gate !== "ready") {
+    return <AppLoadingScreen />;
   }
-
-  if (!session.identity) {
-    return null;
-  }
-
-  const userId = session.identity.accountEmail;
 
   return (
-    <SessionProvider userId={userId}>
+    <SessionProvider userId="web-owner">
       <DomainProvider>
         <SendingHealthProvider>
           <MailAccountsProvider>
@@ -75,20 +84,15 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Email app layout — web-only mail client.
- *
- * No console gate, no desktop shell, no Touch ID. Just the mail runtime
- * + the mail pages. Unauthenticated visitors go to `/login`.
- */
+/** Web mail routes (`/inbox`, `/sent`, …) — cloud account + server-minted Worker session. */
 export default function EmailAppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <EmailAppProviders>
+    <WebConsoleAppProviders>
       <WebMailShellInner>{children}</WebMailShellInner>
-    </EmailAppProviders>
+    </WebConsoleAppProviders>
   );
 }

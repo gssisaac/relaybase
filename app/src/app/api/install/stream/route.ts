@@ -9,6 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
+  accountWorkersDevUrl,
   assertR2Subscription,
   countD1UserRows,
   countR2Objects,
@@ -40,10 +41,16 @@ import {
   fetchWorkerVersion,
   initWorkerDb,
   migrateWorkerDb,
-  ownerSetupAdmin,
   waitForWorkerReady,
 } from "@/server/cloudflare/schema";
-import { applyRefreshedCookie } from "@/server/cloudflare/session";
+import { applyRefreshedCookie, sealSignupStaging } from "@/server/cloudflare/session";
+import {
+  SIGNUP_WORKER_SCRIPT,
+  d1ModuleIdForDbName,
+  installResourceAction,
+  shouldRunSignupModule,
+  type InstallModuleId,
+} from "@/features/auth/lib/signup-install-modules";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -78,6 +85,7 @@ export async function GET(request: NextRequest) {
   const wipeConfirmation = request.nextUrl.searchParams.get("wipeConfirmation");
   const mode =
     request.nextUrl.searchParams.get("mode") === "update" ? "update" : "install";
+  const cloudSignup = request.nextUrl.searchParams.get("cloudSignup") === "1";
 
   const client: CfClient = { accountId, apiToken: session.accessToken };
   const encoder = new TextEncoder();
@@ -91,154 +99,265 @@ export async function GET(request: NextRequest) {
       };
       const log = (step: string, level: "info" | "stderr", line: string) => send("log", { step, level, line });
 
+      const emitModule = (
+        id: InstallModuleId,
+        status: "pending" | "running" | "done" | "error",
+        cfResourceId?: string,
+      ) => {
+        send("module", { id, status, ...(cfResourceId ? { cfResourceId } : {}) });
+      };
+
+      const runR2 = shouldRunSignupModule("r2", decisions);
+      const runWorkerSetup = shouldRunSignupModule("worker-setup", decisions);
+      const workerAction = installResourceAction(decisions, "worker", SIGNUP_WORKER_SCRIPT);
+      const skipWorkerUpload = workerAction === "skip" && decisions.length > 0;
+      const pepperRequiredForCloudSignup = cloudSignup && mode === "install";
+
       try {
         const existingD1 = await listD1Databases(client).catch(() => []);
 
         // 1. R2
-        log("r2", "info", "Checking that R2 is enabled on this Cloudflare account…");
-        await assertR2Subscription(client);
-        const r2Decision = decisions.find((d) => d.kind === "r2");
-        if (r2Decision?.action === "reinstall" && (await findR2Bucket(client, R2_BUCKET))) {
-          const occ = await countR2Objects(client, R2_BUCKET);
-          if (occ.occupied && !wipeConfirmationAllows(wipeConfirmation, [R2_BUCKET])) {
-            throw new Error(
-              `${R2_BUCKET} already has data. Type DELETE ME or the resource name to permanently delete it.`,
-            );
+        if (runR2) {
+          emitModule("r2", "running");
+          log("r2", "info", "Checking that R2 is enabled on this Cloudflare account…");
+          await assertR2Subscription(client);
+          const r2Action = installResourceAction(decisions, "r2", R2_BUCKET);
+          if (r2Action === "reinstall" && (await findR2Bucket(client, R2_BUCKET))) {
+            const occ = await countR2Objects(client, R2_BUCKET);
+            if (occ.occupied && !wipeConfirmationAllows(wipeConfirmation, [R2_BUCKET])) {
+              throw new Error(
+                `${R2_BUCKET} already has data. Type DELETE ME or the resource name to permanently delete it.`,
+              );
+            }
+            log("r2", "info", `Reinstall — emptying and deleting R2 ${R2_BUCKET}…`);
+            await emptyR2Bucket(client, R2_BUCKET).catch(() => {});
+            await deleteR2Bucket(client, R2_BUCKET);
           }
-          log("r2", "info", `Reinstall — emptying and deleting R2 ${R2_BUCKET}…`);
-          await emptyR2Bucket(client, R2_BUCKET).catch(() => {});
-          await deleteR2Bucket(client, R2_BUCKET);
+          log("r2", "info", `Ensuring R2 bucket ${R2_BUCKET}…`);
+          await ensureR2Bucket(client, R2_BUCKET);
+          log("r2", "info", `R2 bucket ${R2_BUCKET} ready`);
+          emitModule("r2", "done");
         }
-        log("r2", "info", `Ensuring R2 bucket ${R2_BUCKET}…`);
-        await ensureR2Bucket(client, R2_BUCKET);
-        log("r2", "info", `R2 bucket ${R2_BUCKET} ready`);
 
-        // 2. D1
+        // 2. D1 (one module per database)
         const d1Ids: string[] = [];
         let anyD1Reused = false;
         for (const [, dbName] of D1_DATABASES) {
-          const decision = decisions.find((d) => d.kind === "d1" && d.name === dbName);
+          const moduleId = d1ModuleIdForDbName(dbName);
           const existing = existingD1.find(([n]) => n === dbName);
-          if (decision?.action === "reinstall" && existing) {
+          const d1Action = installResourceAction(decisions, "d1", dbName);
+          const runThisD1 = shouldRunSignupModule(moduleId!, decisions);
+
+          if (!runThisD1) {
+            if (existing) {
+              anyD1Reused = true;
+              d1Ids.push(existing[1]);
+            } else {
+              throw new Error(
+                `${dbName} is missing on this account. Reinstall or create it on the previous step.`,
+              );
+            }
+            continue;
+          }
+
+          emitModule(moduleId!, "running");
+          if (d1Action === "reinstall" && existing) {
             const occ = await countD1UserRows(client, existing[1]);
             if (occ.occupied && !wipeConfirmationAllows(wipeConfirmation, [dbName])) {
               throw new Error(
                 `${dbName} already has data. Type DELETE ME or the resource name to permanently delete it.`,
               );
             }
-            log("d1", "info", `Reinstall — deleting D1 ${dbName}…`);
+            log(moduleId!, "info", `Reinstall — deleting D1 ${dbName}…`);
             await deleteD1Database(client, existing[1]);
-            log("d1", "info", `Creating D1 ${dbName}…`);
+            log(moduleId!, "info", `Creating D1 ${dbName}…`);
             d1Ids.push(await createD1Database(client, dbName));
           } else if (existing) {
             anyD1Reused = true;
             d1Ids.push(existing[1]);
           } else {
-            log("d1", "info", `Creating D1 ${dbName}…`);
+            log(moduleId!, "info", `Creating D1 ${dbName}…`);
             d1Ids.push(await createD1Database(client, dbName));
           }
-          log("d1", "info", `D1 ${dbName} ready (id ${d1Ids[d1Ids.length - 1]})`);
+          const dbId = d1Ids[d1Ids.length - 1]!;
+          log(moduleId!, "info", `D1 ${dbName} ready (id ${dbId})`);
+          emitModule(moduleId!, "done", dbId);
         }
 
-        // 3. Deploy worker
-        log("prepare", "info", "Fetching Worker install manifest…");
-        const manifest = await fetchInstallManifest();
-        const staged = await stageInstallPackage(manifest, (line) => log("prepare", "info", line));
-
-        log("deploy", "info", `Uploading Worker \`${DEFAULT_SCRIPT}\`…`);
-        const d1ForUpload = D1_DATABASES.map(([binding], i) => ({ binding, id: d1Ids[i] }));
-        await uploadWorkerScript(
-          client,
-          DEFAULT_SCRIPT,
-          staged.workerJs,
-          R2_BUCKET,
-          d1ForUpload,
-          staged.version,
-          staged.desktopVersion ?? "unknown",
-        );
-        const bindings = await listWorkerBindings(client, DEFAULT_SCRIPT).catch(() => []);
-        log(
-          "deploy",
-          "info",
-          `Worker bindings: ${bindings.length ? bindings.map((b) => `${b.kind}:${b.name}`).join(", ") : "(none)"}`,
-        );
-        await putWorkerSchedules(client, DEFAULT_SCRIPT, "*/15 * * * *").catch((err) =>
-          log("deploy", "stderr", `Could not set Worker cron: ${err}`),
-        );
-        const workerUrl = await enableWorkersDev(client, DEFAULT_SCRIPT);
-        log("deploy", "info", `Deployed at ${workerUrl}`);
-
-        // 4. Secrets
-        const existingSecrets = await listWorkerSecrets(client, DEFAULT_SCRIPT).catch(
-          (): string[] => [],
-        );
-        const alreadyHasPepper = existingSecrets.includes("AUTH_PEPPER");
+        let workerUrl = "";
+        let stagedVersion = "unknown";
         let authPepper: string | undefined;
-        if (mode === "update" && alreadyHasPepper) {
-          log("secret", "info", "AUTH_PEPPER unchanged (Worker update)");
-        } else {
-          authPepper = generateAuthPepper();
-          await putWorkerSecret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", authPepper);
-          log("secret", "info", alreadyHasPepper ? "AUTH_PEPPER rotated" : "AUTH_PEPPER secret set");
-        }
-        await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
-        log("secret", "info", "CF_ACCOUNT_ID secret set");
+        let dbApplied: string[] = [];
+        let dbAlreadyInitialized = false;
 
-        // 5. Warm up + schema
-        await waitForWorkerReady(workerUrl, (line) => log("warmup", "info", line));
+        const applyWorkerSecrets = async (logStep: string) => {
+          const existingSecrets = await listWorkerSecrets(client, DEFAULT_SCRIPT).catch(
+            (): string[] => [],
+          );
+          const alreadyHasPepper = existingSecrets.includes("AUTH_PEPPER");
+          if (skipWorkerUpload && !pepperRequiredForCloudSignup) {
+            log(logStep, "info", "AUTH_PEPPER unchanged (Worker skipped)");
+          } else if (mode === "update" && alreadyHasPepper) {
+            log(logStep, "info", "AUTH_PEPPER unchanged (Worker update)");
+          } else {
+            authPepper = generateAuthPepper();
+            await putWorkerSecret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", authPepper);
+            log(
+              logStep,
+              "info",
+              skipWorkerUpload && pepperRequiredForCloudSignup
+                ? "AUTH_PEPPER rotated for cloud signup"
+                : alreadyHasPepper
+                  ? "AUTH_PEPPER rotated"
+                  : "AUTH_PEPPER secret set",
+            );
+          }
+          if (!skipWorkerUpload || pepperRequiredForCloudSignup) {
+            await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
+            log(logStep, "info", "CF_ACCOUNT_ID secret set");
+          }
+        };
+
+        if (runWorkerSetup) {
+          emitModule("worker-setup", "running");
+
+          if (skipWorkerUpload) {
+            log(
+              "worker-setup",
+              "info",
+              `Keeping Worker \`${DEFAULT_SCRIPT}\` as-is (Skip). Not uploading a new script.`,
+            );
+            workerUrl = await accountWorkersDevUrl(client, DEFAULT_SCRIPT);
+            log("worker-setup", "info", `Using existing Worker at ${workerUrl}`);
+          } else {
+            log("worker-setup", "info", "Fetching Worker install manifest…");
+            const manifest = await fetchInstallManifest();
+            const staged = await stageInstallPackage(manifest, (line) =>
+              log("worker-setup", "info", line),
+            );
+            stagedVersion = staged.version;
+
+            log("worker-setup", "info", `Uploading Worker \`${DEFAULT_SCRIPT}\`…`);
+            const d1ForUpload = D1_DATABASES.map(([binding], i) => ({ binding, id: d1Ids[i] }));
+            await uploadWorkerScript(
+              client,
+              DEFAULT_SCRIPT,
+              staged.workerJs,
+              R2_BUCKET,
+              d1ForUpload,
+              staged.version,
+              staged.desktopVersion ?? "unknown",
+            );
+            const bindings = await listWorkerBindings(client, DEFAULT_SCRIPT).catch(() => []);
+            log(
+              "worker-setup",
+              "info",
+              `Worker bindings: ${bindings.length ? bindings.map((b) => `${b.kind}:${b.name}`).join(", ") : "(none)"}`,
+            );
+            await putWorkerSchedules(client, DEFAULT_SCRIPT, "*/15 * * * *").catch((err) =>
+              log("worker-setup", "stderr", `Could not set Worker cron: ${err}`),
+            );
+            workerUrl = await enableWorkersDev(client, DEFAULT_SCRIPT);
+            log("worker-setup", "info", `Deployed at ${workerUrl}`);
+          }
+
+          await applyWorkerSecrets("worker-setup");
+
+          if (!skipWorkerUpload) {
+            await waitForWorkerReady(workerUrl, (line) => log("worker-setup", "info", line));
+
+            const ownerAlreadyConfigured =
+              mode === "update" ? true : await fetchOwnerConfigured(workerUrl);
+            const useMigrate = mode === "update" || anyD1Reused || ownerAlreadyConfigured;
+            const step = useMigrate ? "migrate-db" : "init-db";
+            const cfAccessForSchema =
+              (mode === "update" || skipWorkerUpload) && !authPepper
+                ? session.accessToken
+                : undefined;
+            try {
+              const result = useMigrate
+                ? await migrateWorkerDb(
+                    workerUrl,
+                    authPepper,
+                    (line) => log("worker-setup", "info", line),
+                    cfAccessForSchema,
+                  )
+                : await initWorkerDb(
+                    workerUrl,
+                    authPepper,
+                    (line) => log("worker-setup", "info", line),
+                  );
+              dbApplied = result.applied;
+              dbAlreadyInitialized = useMigrate || result.alreadyInitialized;
+              log(
+                "worker-setup",
+                "info",
+                useMigrate
+                  ? result.applied.length
+                    ? `D1 pending migrations applied (${result.applied.length})`
+                    : "D1 schema up to date — existing data kept"
+                  : `D1 schema initialized (${result.applied.length} migrations applied)`,
+              );
+            } catch (err) {
+              log("worker-setup", "stderr", `Worker ${step} call failed: ${String(err)}`);
+              throw err;
+            }
+
+            if (mode === "update") {
+              log("worker-setup", "info", "Worker update — your existing passtoken is unchanged.");
+            } else if (!authPepper && ownerAlreadyConfigured) {
+              log(
+                "worker-setup",
+                "info",
+                "Deploy complete — owner passtoken will be issued during sign-up.",
+              );
+            } else if (!authPepper) {
+              log(
+                "worker-setup",
+                "stderr",
+                "AUTH_PEPPER was not available — the app cannot issue a passtoken.",
+              );
+            } else {
+              log(
+                "worker-setup",
+                "info",
+                ownerAlreadyConfigured
+                  ? "Deploy complete — issuing a new owner passtoken during sign-up"
+                  : "Deploy complete — owner passtoken will be issued during sign-up",
+              );
+            }
+          } else {
+            log(
+              "worker-setup",
+              "info",
+              "Worker unchanged — skipping database initialization.",
+            );
+          }
+
+          emitModule("worker-setup", "done");
+        } else if (pepperRequiredForCloudSignup) {
+          workerUrl = await accountWorkersDevUrl(client, DEFAULT_SCRIPT);
+          await applyWorkerSecrets("_cloud-signup");
+        } else {
+          workerUrl = await accountWorkersDevUrl(client, DEFAULT_SCRIPT);
+        }
 
         const ownerAlreadyConfigured =
           mode === "update" ? true : await fetchOwnerConfigured(workerUrl);
-        const useMigrate = mode === "update" || anyD1Reused || ownerAlreadyConfigured;
-        const step = useMigrate ? "migrate-db" : "init-db";
-        const cfAccessForSchema =
-          mode === "update" && !authPepper ? session.accessToken : undefined;
-        let dbApplied: string[] = [];
-        let dbAlreadyInitialized = false;
-        try {
-          const result = useMigrate
-            ? await migrateWorkerDb(
-                workerUrl,
-                authPepper,
-                (line) => log(step, "info", line),
-                cfAccessForSchema,
-              )
-            : await initWorkerDb(workerUrl, authPepper, (line) => log(step, "info", line));
-          dbApplied = result.applied;
-          dbAlreadyInitialized = useMigrate || result.alreadyInitialized;
-          log(
-            step,
-            "info",
-            useMigrate
-              ? result.applied.length
-                ? `D1 pending migrations applied (${result.applied.length})`
-                : "D1 schema up to date — existing data kept"
-              : `D1 schema initialized (${result.applied.length} migrations applied)`,
-          );
-        } catch (err) {
-          log(step, "stderr", `Worker ${step} call failed: ${String(err)}`);
-          throw err;
-        }
 
-        // 6. Owner passtoken (fresh install only — an existing owner keeps
-        // their passtoken; re-issuing needs the separate reset-admin flow).
-        let passtoken: string | null = null;
-        if (!ownerAlreadyConfigured) {
-          if (!authPepper) {
-            throw new Error("AUTH_PEPPER is required to issue the owner passtoken");
-          }
-          const issued = await ownerSetupAdmin(workerUrl, authPepper);
-          passtoken = issued.passtoken;
-          log("setup-admin", "info", "Owner passtoken issued");
-        } else {
-          log(
-            "setup-admin",
-            "info",
-            "Owner already configured on this Worker — sign in with your existing passtoken.",
-          );
-        }
+        const workerVersion = (await fetchWorkerVersion(workerUrl)) ?? stagedVersion;
 
-        const workerVersion = (await fetchWorkerVersion(workerUrl)) ?? staged.version;
+        const pepperForClient =
+          cloudSignup || mode === "update" ? "" : mode === "install" && authPepper ? authPepper : "";
+
+        const cloudSignupReady = Boolean(cloudSignup && authPepper && mode === "install");
+        const installToken = cloudSignupReady
+          ? sealSignupStaging({
+              workerUrl,
+              accountId,
+              authPepper: authPepper!,
+            })
+          : "";
 
         send("done", {
           workerUrl,
@@ -251,8 +370,10 @@ export async function GET(request: NextRequest) {
           dbAlreadyInitialized,
           dbApplied,
           workerVersion,
-          passtoken,
+          authPepper: pepperForClient,
           ownerAlreadyConfigured,
+          cloudSignupReady,
+          installToken,
         });
       } catch (err) {
         send("error", { error: err instanceof Error ? err.message : String(err) });

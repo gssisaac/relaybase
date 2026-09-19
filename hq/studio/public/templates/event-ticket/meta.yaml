@@ -1,0 +1,84 @@
+id: tpl-event-ticket
+name: Event Ticket
+html: |
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;">
+    <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;background:#ffffff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;">
+        <tr>
+          <td style="background:#0f172a;padding:28px 28px 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:middle;width:80px;padding-right:16px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.22);width:76px;text-align:center;">
+                    <tr>
+                      <td style="padding:10px 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff;line-height:1.2;">
+                        {{vars.event.date_badge}}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td style="vertical-align:middle;">
+                  <p style="margin:0 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:#ffffff;line-height:1.3;">
+                    {{vars.event.title}}
+                  </p>
+                  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#94a3b8;line-height:1.4;">
+                    {{vars.event.time_location}}
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0;background:#0f172a;">
+            <div style="border-top:2px dashed rgba(255,255,255,0.2);height:1px;line-height:1px;font-size:0;">&nbsp;</div>
+          </td>
+        </tr>
+        <tr><td style="padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;font-size:15px;line-height:1.65;">
+          {{content}}
+        </td></tr>
+        <tr>
+          <td style="padding:24px 28px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+            <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 10px;">
+              <tr>
+                <td data-studio-footer-logo="1" style="vertical-align:middle;padding-right:8px;line-height:0;font-size:0;">{{vars.brand.logo}}</td>
+                <td style="vertical-align:middle;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;">{{vars.brand.organization_name}}</td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;white-space:pre-line;">{{postal_address}}</p>
+            <p style="margin:0 0 12px;">{{compliance_contact_email}}</p>
+            <p style="margin:0;">
+              <a href="{{unsubscribe_url}}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+              from event updates and invitations.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+variables:
+  fields:
+    - key: event.title
+      type: text
+      label: Event title
+      required: true
+      defaultFrom: compliance.organizationName
+      description: Main headline of the event or webinar.
+    - key: event.date_badge
+      type: text
+      label: Date badge
+      description: Short date stamp in ticket header (e.g. SEP 24, NOV 02).
+    - key: event.time_location
+      type: text
+      label: Time & location
+      description: Subtitle under event title (e.g. Thu 10:00 AM UTC · Online / Zoom).
+    - key: brand.organization_name
+      type: text
+      label: Organization name
+      required: true
+      defaultFrom: compliance.organizationName
+    - key: brand.logo
+      type: image
+      label: Logo
+      required: true
+      description: Shown in the footer. Uses the Relaybase icon when unset.

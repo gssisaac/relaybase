@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
+import { EnableEmailApiDialogHost } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 
@@ -74,17 +74,35 @@ function SetupShell({ children }: { children: ReactNode }) {
 /**
  * Setup / install flow. Both desktop and web render this: desktop drives
  * the keyring-backed AppSessionStore install wizard; web renders the OAuth
- * install flow (WebAuthorizeCard / WebInstallProgress, see WebInstallFlow)
+ * install flow (OAuth on /setup/install, probe + install on /setup/progress)
  * spliced into the same WorkerInstallPanel / SetupProgressPanel screens.
  */
+function WebSetupRedirect({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const { isDesktop } = useDesktopChrome();
+
+  useEffect(() => {
+    if (isDesktop) return;
+    router.replace("/signup");
+  }, [isDesktop, router]);
+
+  if (!isDesktop) {
+    return null;
+  }
+
+  return children;
+}
+
 export default function SetupLayout({ children }: { children: ReactNode }) {
   // DesktopProvider + AppSessionProvider live at the root layout now, so
   // setup and the dashboard shell share one session.
   return (
+    <WebSetupRedirect>
     <DesktopShell>
       <EnableEmailApiDialogHost>
         <SetupShell>{children}</SetupShell>
       </EnableEmailApiDialogHost>
     </DesktopShell>
+    </WebSetupRedirect>
   );
 }

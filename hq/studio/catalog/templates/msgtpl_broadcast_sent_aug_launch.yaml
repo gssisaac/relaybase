@@ -1,0 +1,34 @@
+id: msgtpl_broadcast_sent_aug_launch
+name: August Launch
+description: Your domain, your keys, your broadcast pipeline
+subject: Relaybase 2.0 is live
+previewText: Your domain, your keys, your broadcast pipeline
+bodyMarkdown: |
+  Hello {{contact.name}},
+
+  **Relaybase 2.0** is live for early access accounts. The headline change: everything runs on **your** Cloudflare Worker and verified domain — we do not sit in the SMTP path as a shared sender.
+
+  ### Three things to try this week
+
+  * Send a **test broadcast** to your own `@relaybase.email` inbox.
+
+  * Rotate to a **domain-scoped API key** labeled for Scale sends.
+
+  * Open **Sent statistics** after a send and confirm rollups match the recipient list.
+
+  [Launch notes](https://relaybase.com/blog/v2) · [Watch the 8-minute demo](https://relaybase.com/demo)
+
+  If you hit a blocker, reply to this thread — we are actively pairing with design partners.
+
+  Cheers,\
+   Relaybase
+layoutId: tpl-keynote-banner
+templateVariables:
+  hero.image: /studio/sample-banners/keynote-hero.png
+  event.headline: "Relaybase 2.0 is Live: Built for Global Scale"
+target: newsletter
+category: null
+isBuiltin: true
+createdAt: 2026-08-01T09:00:00.000Z
+updatedAt: 2026-09-15T17:19:33.562Z
+

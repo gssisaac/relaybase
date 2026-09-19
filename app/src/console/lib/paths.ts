@@ -6,10 +6,8 @@ import {
   Globe,
   KeyRound,
   LayoutDashboard,
-  Megaphone,
   ScrollText,
   Settings,
-  Users,
 } from "lucide-react";
 
 import {
@@ -26,16 +24,12 @@ export function useDashboardPaths() {
   const keys = useProductHref("keys");
   const logs = useProductHref("logs");
   const accounts = useProductHref("accounts");
-  const broadcasts = useProductHref("broadcasts");
-  const audience = useProductHref("audience");
   const settingsBase = useProductHref("settings");
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: domains, label: "Domains", icon: Globe },
     { href: accounts, label: "Accounts", icon: AtSign },
-    { href: audience, label: "Audience", icon: Users },
-    { href: broadcasts, label: "Broadcasts", icon: Megaphone },
     { href: keys, label: "API Keys", icon: KeyRound },
     { href: logs, label: "Log", icon: ScrollText },
     { href: settingsBase, label: "Settings", icon: Settings },
@@ -49,8 +43,6 @@ export function useDashboardPaths() {
     keys,
     logs,
     accounts,
-    broadcasts,
-    audience,
     settingsBase,
     tabs,
   };
@@ -105,14 +97,6 @@ export type AccountDetailTab =
   | "settings"
   | "teammate-login";
 
-export type AudienceDetailTab = "contacts" | "history" | "settings";
-
-export type BroadcastDetailTab =
-  | "overview"
-  | "audience"
-  | "content"
-  | "progress";
-
 /**
  * Account detail deep link for static-export-safe navigation.
  * Opens the account sheet on `/accounts` via `?email=` (+ optional `tab`).
@@ -143,48 +127,3 @@ export function accountDetailFromSearch(searchParams: {
   return { email, tab };
 }
 
-/** Audience group detail — `/audience?id=&tab=`. */
-export function audienceDetailHref(
-  groupId: string,
-  tab: AudienceDetailTab = "contacts",
-): string {
-  const params = new URLSearchParams();
-  params.set("id", groupId.trim());
-  if (tab !== "contacts") params.set("tab", tab);
-  return `/audience?${params.toString()}`;
-}
-
-export function audienceDetailFromSearch(searchParams: {
-  get: (name: string) => string | null;
-}): { groupId: string; tab: AudienceDetailTab } | null {
-  const groupId = searchParams.get("id")?.trim() ?? "";
-  if (!groupId) return null;
-  const raw = searchParams.get("tab")?.trim().toLowerCase();
-  const tab: AudienceDetailTab =
-    raw === "history" || raw === "settings" ? raw : "contacts";
-  return { groupId, tab };
-}
-
-/** Broadcast detail — `/broadcasts?id=&tab=` (list create dialog keeps `?new=1`). */
-export function broadcastDetailHref(
-  broadcastId: string,
-  tab: BroadcastDetailTab = "overview",
-): string {
-  const params = new URLSearchParams();
-  params.set("id", broadcastId.trim());
-  if (tab !== "overview") params.set("tab", tab);
-  return `/broadcasts?${params.toString()}`;
-}
-
-export function broadcastDetailFromSearch(searchParams: {
-  get: (name: string) => string | null;
-}): { broadcastId: string; tab: BroadcastDetailTab } | null {
-  const broadcastId = searchParams.get("id")?.trim() ?? "";
-  if (!broadcastId) return null;
-  const raw = searchParams.get("tab")?.trim().toLowerCase();
-  const tab: BroadcastDetailTab =
-    raw === "audience" || raw === "content" || raw === "progress"
-      ? raw
-      : "overview";
-  return { broadcastId, tab };
-}

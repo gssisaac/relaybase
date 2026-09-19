@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-09-16T07:44:32.639Z",
+  "layouts": [
+    {
+      "id": "tpl-minimal",
+      "name": "Minimal",
+      "file": "tpl-minimal.png"
+    },
+    {
+      "id": "tpl-header",
+      "name": "Header",
+      "file": "tpl-header.png"
+    },
+    {
+      "id": "tpl-card",
+      "name": "Card",
+      "file": "tpl-card.png"
+    },
+    {
+      "id": "tpl-plain-text",
+      "name": "Plain text",
+      "file": "tpl-plain-text.png"
+    },
+    {
+      "id": "tpl-dark-obsidian",
+      "name": "Dark Obsidian",
+      "file": "tpl-dark-obsidian.png"
+    },
+    {
+      "id": "tpl-editorial-serif",
+      "name": "Editorial Serif",
+      "file": "tpl-editorial-serif.png"
+    },
+    {
+      "id": "tpl-product-launch",
+      "name": "Product Launch",
+      "file": "tpl-product-launch.png"
+    },
+    {
+      "id": "tpl-warm-sand",
+      "name": "Warm Sand",
+      "file": "tpl-warm-sand.png"
+    },
+    {
+      "id": "tpl-curated-digest",
+      "name": "Curated Digest",
+      "file": "tpl-curated-digest.png"
+    },
+    {
+      "id": "tpl-receipt-invoice",
+      "name": "Receipt / Invoice",
+      "file": "tpl-receipt-invoice.png"
+    },
+    {
+      "id": "tpl-event-ticket",
+      "name": "Event Ticket",
+      "file": "tpl-event-ticket.png"
+    },
+    {
+      "id": "tpl-founder-letter",
+      "name": "Founder Letter",
+      "file": "tpl-founder-letter.png"
+    },
+    {
+      "id": "tpl-spotlight-minimal",
+      "name": "Spotlight Minimal",
+      "file": "tpl-spotlight-minimal.png"
+    },
+    {
+      "id": "tpl-publication-post",
+      "name": "Publication Post",
+      "file": "tpl-publication-post.png"
+    },
+    {
+      "id": "tpl-keynote-banner",
+      "name": "Keynote Banner",
+      "file": "tpl-keynote-banner.png"
+    },
+    {
+      "id": "tpl-event-invite",
+      "name": "Event Invite",
+      "file": "tpl-event-invite.png"
+    }
+  ]
+}

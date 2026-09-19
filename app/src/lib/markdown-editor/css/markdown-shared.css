@@ -1,0 +1,61 @@
+/* Shared markdown type between editor surfaces (from Railmark index.css). */
+.gtm-md-editor .bn-editor {
+  font-family: var(--font-sans);
+  line-height: 1.625;
+}
+
+.gtm-md-editor .bn-editor a,
+.gtm-md-editor [data-content-type="table"] a {
+  color: #8ab4f8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.gtm-md-editor[data-theme="light"] .bn-editor a,
+.gtm-md-editor[data-theme="light"] [data-content-type="table"] a {
+  color: #1155cc;
+}
+
+.gtm-md-editor .bn-inline-content code,
+.gtm-md-editor .bn-editor pre,
+.gtm-md-editor .bn-editor code {
+  font-family: var(--font-mono);
+}
+
+.gtm-md-editor [data-content-type="table"] table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.gtm-md-editor [data-content-type="table"] tr,
+.gtm-md-editor [data-content-type="table"] tr:nth-child(2n) {
+  background-color: transparent !important;
+  border-top: none;
+}
+
+.gtm-md-editor [data-content-type="table"] th,
+.gtm-md-editor [data-content-type="table"] td {
+  background-color: transparent !important;
+  border: 1px solid var(--border) !important;
+  color: var(--foreground);
+  padding: 6px 13px !important;
+  vertical-align: top;
+}
+
+.gtm-md-editor [data-content-type="table"] th {
+  background-color: color-mix(in oklch, var(--muted) 80%, transparent) !important;
+  font-weight: 600;
+}
+
+/* Fill-height variant for newsletter compose pane. */
+.gtm-md-editor.gtm-md-editor-fill,
+.gtm-md-editor-fill .bn-container,
+.gtm-md-editor-fill .bn-editor {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+.gtm-md-editor-fill .bn-editor {
+  overflow-y: auto !important;
+}

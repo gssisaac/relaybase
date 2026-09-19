@@ -1,0 +1,229 @@
+"use client";
+
+import Link from "next/link";
+import { RefreshCw, WifiOff } from "lucide-react";
+import { useEffect } from "react";
+import { toast } from "sonner";
+
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { EmptyListState } from "@/email/components/mailbox/EmailListShell";
+import { studioUserMessages } from "@/studio/lib/studio-user-messages";
+import { CF_EMAIL_SENDING_LIMITS_URL } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
+import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
+import { useAnalytics } from "@/studio/stores/analytics";
+import { cn } from "@/lib/utils";
+
+import { OverviewExpandableBody } from "./OverviewExpandableBody";
+import { formatOverviewWhen, overviewInsetItemClassName } from "./overview-inset-styles";
+import { StudioAnalyticsSkeleton } from "./StudioAnalyticsSkeleton";
+import { StudioOverviewTopSection } from "./StudioOverviewTopSection";
+
+export function StudioAnalyticsView() {
+  const { schedule, newsletters, triggers, subscribers } = useStudioPaths();
+  const templateBrowseHref = `${newsletters}?new=1`;
+  const analytics = useAnalytics();
+  const data = analytics.data;
+
+  useEffect(() => {
+    analytics.ensureLoaded().catch(() => {
+      toast.error(analytics.loadError ?? studioUserMessages.loadAnalytics);
+    });
+  }, [analytics]);
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <DesktopTitleBar
+        className="shrink-0 px-4 py-3"
+        end={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void analytics.refresh({ force: true }).catch(() => {
+                toast.error(
+                  analytics.loadError ?? studioUserMessages.loadAnalytics,
+                );
+              });
+            }}
+            disabled={analytics.fetching && !data}
+          >
+            <RefreshCw
+              className={cn("size-3.5", analytics.isRefreshing && "animate-spin")}
+              aria-hidden
+            />
+            Refresh
+          </Button>
+        }
+      >
+        <div className="min-w-0 space-y-1">
+          <h1 className="truncate text-lg font-semibold tracking-tight">Analytics</h1>
+          <p className="text-sm text-muted-foreground">
+            Send volume, engagement, triggers, and recent activity.
+          </p>
+        </div>
+      </DesktopTitleBar>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+        <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
+          {analytics.showPlaceholder ? <StudioAnalyticsSkeleton /> : null}
+
+          {data ? (
+            <>
+              <StudioOverviewTopSection
+                data={data}
+                paths={{
+                  schedule,
+                  templateBrowseHref,
+                  triggers,
+                  newsletters,
+                  subscribers,
+                }}
+              />
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
+                    <div>
+                      <CardTitle className="text-base">Recent newsletters</CardTitle>
+                      <CardDescription>
+                        {data.newsletters.draftCount} drafts · {data.newsletters.inProgressCount} in progress
+                      </CardDescription>
+                    </div>
+                    <Link href={newsletters} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      All newsletters
+                    </Link>
+                  </CardHeader>
+                  <CardContent>
+                    <OverviewExpandableBody className="space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Sent today (Studio)</span>
+                          <span className="tabular-nums font-medium">
+                            {data.newsletters.cloudflareQuota.usedToday}
+                          </span>
+                        </div>
+                        <p className="text-[11px] leading-snug text-muted-foreground">
+                          Cloudflare&apos;s daily cap is account-specific and not shown here.{" "}
+                          <a
+                            href={CF_EMAIL_SENDING_LIMITS_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline-offset-2 hover:underline"
+                          >
+                            Limits docs
+                          </a>
+                        </p>
+                      </div>
+                      {data.newsletters.recentSent.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No completed sends yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {data.newsletters.recentSent.map((row) => (
+                            <li key={row.id}>
+                              <Link
+                                href={newsletterDetailHref(row.id, "stats", "sent")}
+                                className={cn(overviewInsetItemClassName, "block")}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="truncate text-sm font-medium">
+                                    {row.subject || "(No subject)"}
+                                  </p>
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {formatOverviewWhen(row.sentAt)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {row.recipientCount.toLocaleString()} sent · {row.openRate}% open · {row.clickRate}%
+                                  click
+                                </p>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </OverviewExpandableBody>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
+                    <div>
+                      <CardTitle className="text-base">Trigger activity</CardTitle>
+                      <CardDescription>
+                        {data.triggers.activeCount} active · {data.triggers.triggers24h} triggers / 24h
+                      </CardDescription>
+                    </div>
+                    <Link href={triggers} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      Triggers
+                    </Link>
+                  </CardHeader>
+                  <CardContent>
+                    <OverviewExpandableBody>
+                      {data.triggers.recentEvents.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No trigger events yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {data.triggers.recentEvents.map((row) => (
+                            <li
+                              key={row.id}
+                              className={cn(
+                                overviewInsetItemClassName,
+                                "flex items-start justify-between gap-2 text-sm",
+                              )}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{row.triggerName}</p>
+                                <p className="truncate text-xs text-muted-foreground">{row.recipientEmail}</p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {row.status}
+                                </Badge>
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {formatOverviewWhen(row.occurredAt)}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </OverviewExpandableBody>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          ) : null}
+
+          {!analytics.fetching && !data ? (
+            <EmptyListState
+              icon={WifiOff}
+              title="Analytics unavailable"
+              description={
+                analytics.loadError ?? studioUserMessages.analyticsUnavailable
+              }
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void analytics.refresh({ force: true }).catch(() => {
+                      toast.error(
+                        analytics.loadError ?? studioUserMessages.loadAnalytics,
+                      );
+                    });
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  Retry
+                </Button>
+              }
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}

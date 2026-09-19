@@ -1,0 +1,42 @@
+id: msgtpl_broadcast_scheduled_ama
+name: Thursday AMA invite
+description: Live Q&A — scheduling, stats, and send credentials
+subject: Join Thursday's AMA on Scale broadcasts
+previewText: Live Q&A — scheduling, stats, and send credentials
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  You are invited to a **live AMA** about Scale broadcasts this **Thursday, 4:00 PM UTC+7**.
+
+  **Agenda**
+
+  - How scheduled sends resolve audience at dispatch time
+  - Reading delivery vs. open stats (and what is still stubbed)
+  - Q&A — bring your strangest edge cases
+
+  **Join**
+
+  - Video link will be posted in Console → Notifications the morning of the event.
+  - Cannot make it? Reply with questions and we will answer async.
+
+  [Add to calendar](https://relaybase.com/events/studio-ama) (placeholder link)
+
+  See you Thursday,
+  Relaybase
+layoutId: tpl-event-invite
+templateVariables:
+  invite.title: THE DEAL LOUNGE - CHAMPIONSHIP EDITION
+  invite.kicker: You're invited to
+  host.name: Dwayne Campbell
+  invite.month: AUG
+  invite.day: "24"
+  invite.date_title: Monday, August 24
+  invite.time_details: 9:00 AM - Aug 27, 9:30 PM PDT
+  invite.location_name: Hwy17 Studios ↗
+  invite.location_address: Santa Cruz, CA
+target: newsletter
+category: null
+isBuiltin: true
+createdAt: 2026-09-14T18:00:00.000Z
+updatedAt: 2026-09-15T03:08:16.042Z
+

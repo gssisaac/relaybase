@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { UnlockView } from "@/console/components/setup/UnlockView";
+import { UnlockView } from "@/console/components/setup/desktop/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
@@ -29,7 +29,7 @@ export default function SetupConnectPage() {
         router.replace("/inbox");
         return;
       }
-      router.replace(`/login${window.location.search}`);
+      router.replace(`/worker/login${window.location.search}`);
       return;
     }
     if (store.phase.kind === "ownerRecover") {

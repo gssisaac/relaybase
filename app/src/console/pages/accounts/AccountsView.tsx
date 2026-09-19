@@ -1,9 +1,5 @@
 "use client";
 
-import {
-  hydrateAccountsUiState,
-  setDomainExpanded,
-} from "@/console/pages/accounts/accounts-ui-state";
 import { AccountDetailSheet } from "@/console/pages/accounts/AccountDetailSheet";
 import {
   accountDetailFromSearch,
@@ -12,7 +8,9 @@ import {
   useDashboardPaths,
 } from "@/console/lib/paths";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
+import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
+import { getAccountColor } from "@/email/lib/accounts/account-colors";
 import {
   AlertCircle,
   ExternalLink,
@@ -33,7 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useAccounts } from "@/lib/dashboard/AccountsContext";
+import { useAccounts, type AccountsStore } from "@/lib/dashboard/AccountsContext";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useMailboxHealth, lastInboundForDomain } from "@/lib/dashboard/mailbox-health";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
@@ -93,18 +91,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
   TableRow,
 } from "@/components/ui/table";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
 
 function initialDefaultSelection(): Record<string, boolean> {
@@ -172,15 +164,25 @@ type RenameTarget = {
   displayName: string;
 };
 
-const COMPACT_EMAIL_PREVIEW_COUNT = 2;
+function domainUnreadCount(store: AccountsStore, domain: string): number {
+  if (!store.hasHydratedCounts(domain)) return 0;
+  return store.addressesFor(domain).reduce((sum, address) => {
+    if (address.inboundEnabled === false) return sum;
+    return sum + (store.countsFor(domain, address.email)?.unread ?? 0);
+  }, 0);
+}
 
-/** e.g. `a@x.com, b@x.com + 3 more` */
-function compactEmailPreview(emails: string[], take = COMPACT_EMAIL_PREVIEW_COUNT) {
-  if (emails.length === 0) return null;
-  const shown = emails.slice(0, take);
-  const rest = emails.length - shown.length;
-  const list = shown.join(", ");
-  return rest > 0 ? `${list} + ${rest} more` : list;
+function DomainSidebarUnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const label = count > 99 ? "99+" : String(count);
+  return (
+    <span
+      className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground tabular-nums"
+      aria-label={`${count} unread`}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function AccountsView() {
@@ -193,6 +195,7 @@ export function AccountsView() {
   const domainStore = useDomain();
   const { domains, loading: domainsLoading } = domainStore;
   const accountsStore = useAccounts();
+  const { accountColors, getColor } = useMailAccounts();
   const mailboxHealth = useMailboxHealth();
   const sendingHealth = useSendingHealth();
   const desktop = useOptionalDesktop();
@@ -228,10 +231,6 @@ export function AccountsView() {
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameDisplayName, setRenameDisplayName] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
-  /** Domains with expanded cards. Default / missing = collapsed compact. */
-  const [expandedDomains, setExpandedDomains] = useState<Set<string>>(
-    () => new Set(),
-  );
   const [repairingRoutingDomain, setRepairingRoutingDomain] = useState<
     string | null
   >(null);
@@ -250,46 +249,36 @@ export function AccountsView() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    void hydrateAccountsUiState(productId).then((state) => {
-      if (cancelled) return;
-      setExpandedDomains(new Set(state.expandedDomains));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [productId]);
-
-  const toggleDomainExpanded = useCallback(
-    (domain: string) => {
-      const key = domain.trim().toLowerCase();
-      if (!key) return;
-      setExpandedDomains((prev) => {
-        const next = new Set(prev);
-        const expanded = !next.has(key);
-        if (expanded) next.add(key);
-        else next.delete(key);
-        setDomainExpanded(productId, key, expanded);
-        return next;
-      });
-    },
-    [productId],
+  const accountCountForDomain = useCallback(
+    (domain: string) => accountsStore.addressesFor(domain).length,
+    [accountsStore],
   );
 
-  const ensureDomainExpanded = useCallback(
+  const allAccountCount = useMemo(
+    () =>
+      readyDomains.reduce(
+        (sum, entry) => sum + accountCountForDomain(entry.domain),
+        0,
+      ),
+    [accountCountForDomain, readyDomains],
+  );
+
+  const allDomainUnread = useMemo(
+    () =>
+      readyDomains.reduce(
+        (sum, entry) => sum + domainUnreadCount(accountsStore, entry.domain),
+        0,
+      ),
+    [accountsStore, readyDomains],
+  );
+
+  const domainSidebarColor = useCallback(
     (domain: string) => {
-      const key = domain.trim().toLowerCase();
-      if (!key) return;
-      setExpandedDomains((prev) => {
-        if (prev.has(key)) return prev;
-        const next = new Set(prev);
-        next.add(key);
-        setDomainExpanded(productId, key, true);
-        return next;
-      });
+      const firstEmail = accountsStore.addressesFor(domain)[0]?.email;
+      if (firstEmail) return getColor(firstEmail);
+      return getAccountColor(`accounts@${domain.trim().toLowerCase()}`, accountColors);
     },
-    [productId],
+    [accountColors, accountsStore, getColor],
   );
 
   const visibleDomains = useMemo(() => {
@@ -391,6 +380,19 @@ export function AccountsView() {
     accountsByDomain.set(entry.domain, filtered);
   }
 
+  const filteredVisibleDomains = useMemo(
+    () =>
+      visibleDomains.filter((entry) => {
+        if (!searchQuery) return true;
+        if (!accountsStore.hasHydrated(entry.domain)) return true;
+        return (accountsByDomain.get(entry.domain)?.length ?? 0) > 0;
+      }),
+    [accountsByDomain, accountsStore, searchQuery, visibleDomains],
+  );
+
+  /** All: page scroll. Single domain: content pane scrolls the full card. */
+  const listAllDomains = domainFilter === "all";
+
   const selectedDefaultParts = useMemo(
     () => DEFAULT_ADDRESS_LOCAL_PARTS.filter((part) => selectedDefaults[part]),
     [selectedDefaults],
@@ -425,7 +427,7 @@ export function AccountsView() {
     setDisplayName("");
     setAddInboundEnabled(true);
     setAddOpen(false);
-    ensureDomainExpanded(domainKey);
+    setDomainFilter(domainKey);
     void accountsStore.create(domainKey, input).catch(() => {
       // toast + optimistic rollback handled in store
     });
@@ -454,7 +456,7 @@ export function AccountsView() {
     setDefaultsOpen(false);
     setSelectedDefaults(initialDefaultSelection());
     setBlockNoreplyInbound(true);
-    ensureDomainExpanded(domainKey);
+    setDomainFilter(domainKey);
     void accountsStore.create(domainKey, input).catch(() => {
       // toast + optimistic rollback handled in store
     });
@@ -532,34 +534,6 @@ export function AccountsView() {
         className="px-4 py-3"
         end={
           <>
-            <Select
-              value={domainFilter}
-              onValueChange={(next) => {
-                if (next) setDomainFilter(next);
-              }}
-              disabled={domainsLoading || readyDomains.length === 0}
-            >
-              <SelectTrigger className="h-8 w-[220px]" size="sm">
-                <SelectValue
-                  placeholder={
-                    domainsLoading ? "Loading domains…" : "Filter domain"
-                  }
-                >
-                  {(value: string | null) => {
-                    if (!value || value === "all") return "All";
-                    return value;
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {readyDomains.map((entry) => (
-                  <SelectItem key={entry.domain} value={entry.domain}>
-                    {entry.domain}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <div className="relative">
               <Search
                 className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -595,10 +569,23 @@ export function AccountsView() {
         </div>
       </DesktopTitleBar>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={dashboardScrollBodyClassName("space-y-4")}>
-        <EmailAlerts error={error} message={message} />
-        <CloudflareConfigAlert show={!config?.cloudflareConfigured} />
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col",
+          listAllDomains ? "overflow-y-auto" : "overflow-hidden",
+        )}
+      >
+      <div
+        className={dashboardScrollBodyClassName(
+          listAllDomains
+            ? "space-y-4"
+            : "flex min-h-0 flex-1 flex-col gap-4 overflow-hidden",
+        )}
+      >
+        <div className={cn(!listAllDomains && "shrink-0 space-y-4")}>
+          <EmailAlerts error={error} message={message} />
+          <CloudflareConfigAlert show={!config?.cloudflareConfigured} />
+        </div>
 
         {!domainsLoading && readyDomains.length === 0 ? (
           <Card>
@@ -617,18 +604,76 @@ export function AccountsView() {
         ) : loading && visibleDomains.length === 0 ? (
           <div className="min-h-[200px]" />
         ) : (
-          <div className="space-y-4">
-            {visibleDomains
-              .filter((entry) => {
-                if (!searchQuery) return true;
-                if (!accountsStore.hasHydrated(entry.domain)) return true;
-                return (accountsByDomain.get(entry.domain)?.length ?? 0) > 0;
-              })
-              .map((entry) => {
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 gap-6",
+              listAllDomains ? "items-start" : "overflow-hidden",
+            )}
+          >
+            <nav
+              className={cn(
+                "flex w-48 shrink-0 flex-col gap-0.5",
+                listAllDomains
+                  ? "sticky top-0 self-start"
+                  : "min-h-0 overflow-y-auto",
+              )}
+              aria-label="Filter by domain"
+            >
+              {readyDomains.map((entry) => {
+                const count = accountCountForDomain(entry.domain);
+                const unread = domainUnreadCount(accountsStore, entry.domain);
+                const active = domainFilter === entry.domain;
+                return (
+                  <button
+                    key={entry.domain}
+                    type="button"
+                    title={entry.domain}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                    )}
+                    aria-current={active ? "true" : undefined}
+                    onClick={() => setDomainFilter(entry.domain)}
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: domainSidebarColor(entry.domain) }}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate tabular-nums">
+                      {entry.domain} ({count})
+                    </span>
+                    <DomainSidebarUnreadBadge count={unread} />
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors",
+                  domainFilter === "all"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                )}
+                aria-current={domainFilter === "all" ? "true" : undefined}
+                onClick={() => setDomainFilter("all")}
+              >
+                <span className="min-w-0 flex-1 tabular-nums">All ({allAccountCount})</span>
+                <DomainSidebarUnreadBadge count={allDomainUnread} />
+              </button>
+            </nav>
+            <div
+              className={cn(
+                "min-h-0 min-w-0 flex-1",
+                listAllDomains ? "space-y-4" : "overflow-y-auto",
+              )}
+            >
+            {filteredVisibleDomains.map((entry) => {
                 const domainAddresses = accountsByDomain.get(entry.domain) ?? [];
                 const totalCount = accountsStore.addressesFor(entry.domain).length;
                 const domainKey = entry.domain.toLowerCase();
-                const expanded = expandedDomains.has(domainKey);
                 const domainLoading =
                   !accountsStore.hasHydrated(entry.domain) &&
                   accountsStore.loadingDomain === domainKey;
@@ -636,11 +681,6 @@ export function AccountsView() {
                   totalCount === 0
                     ? "No accounts yet"
                     : `${totalCount} account${totalCount === 1 ? "" : "s"}`;
-                const emailPreview = !expanded
-                  ? compactEmailPreview(
-                      domainAddresses.map((a) => a.email),
-                    )
-                  : null;
                 const countsReady = accountsStore.hasHydratedCounts(
                   entry.domain,
                 );
@@ -649,86 +689,63 @@ export function AccountsView() {
                     ?.missingAddresses ?? [],
                 );
                 const domainUnread = countsReady
-                  ? accountsStore
-                      .addressesFor(entry.domain)
-                      .reduce((sum, a) => {
-                        if (a.inboundEnabled === false) return sum;
-                        return sum + (accountsStore.countsFor(entry.domain, a.email)?.unread ?? 0);
-                      }, 0)
+                  ? domainUnreadCount(accountsStore, entry.domain)
                   : 0;
 
                 return (
                   <Card key={entry.domain}>
                     <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-4">
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-expanded={expanded}
-                        aria-label={
-                          expanded
-                            ? `Collapse ${entry.domain}`
-                            : `Expand ${entry.domain}`
-                        }
-                        onClick={() => toggleDomainExpanded(entry.domain)}
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <CardTitle className="flex items-center gap-2 text-base">
-                            <Globe
-                              className="size-4 shrink-0 text-muted-foreground"
-                              aria-hidden
-                            />
-                            <span className="truncate">{entry.domain}</span>
-                            <SendingWarningIcon
-                              entry={sendingHealth.statusForDomain(entry.domain)}
-                            />
-                            {domainUnread > 0 ? (
-                              <span
-                                className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-none text-primary-foreground tabular-nums"
-                                aria-label={`${domainUnread} unread`}
-                              >
-                                {domainUnread > 99 ? "99+" : domainUnread}
-                              </span>
-                            ) : null}
-                            {(() => {
-                              const last = lastInboundForDomain(
-                                mailboxHealth.snapshot,
-                                entry.domain,
-                              );
-                              if (!last.stale) return null;
-                              return (
-                                <span
-                                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/60 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                                  title={`Last inbound: ${last.label}`}
-                                >
-                                  <MailX className="size-3" />
-                                  No recent inbound
-                                </span>
-                              );
-                            })()}
-                            {missingRoutingSet.size > 0 ? (
-                              <span
-                                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-destructive/50 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
-                                title={`No Cloudflare routing rule for: ${[...missingRoutingSet].join(", ")}. Mail to these addresses is silently dropped.`}
-                              >
-                                <AlertCircle className="size-3" />
-                                {missingRoutingSet.size} not routed in
-                                Cloudflare
-                              </span>
-                            ) : null}
-                          </CardTitle>
-                          <CardDescription>
-                            {accountSummary}
-                            {searchQuery && totalCount > 0
-                              ? ` · ${domainAddresses.length} shown`
-                              : null}
-                          </CardDescription>
-                          {emailPreview ? (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {emailPreview}
-                            </p>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                          <Globe
+                            className="size-4 shrink-0 text-muted-foreground"
+                            aria-hidden
+                          />
+                          <span className="truncate">{entry.domain}</span>
+                          <SendingWarningIcon
+                            entry={sendingHealth.statusForDomain(entry.domain)}
+                          />
+                          {domainUnread > 0 ? (
+                            <span
+                              className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-none text-primary-foreground tabular-nums"
+                              aria-label={`${domainUnread} unread`}
+                            >
+                              {domainUnread > 99 ? "99+" : domainUnread}
+                            </span>
                           ) : null}
-                        </div>
-                      </button>
+                          {(() => {
+                            const last = lastInboundForDomain(
+                              mailboxHealth.snapshot,
+                              entry.domain,
+                            );
+                            if (!last.stale) return null;
+                            return (
+                              <span
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/60 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                                title={`Last inbound: ${last.label}`}
+                              >
+                                <MailX className="size-3" />
+                                No recent inbound
+                              </span>
+                            );
+                          })()}
+                          {missingRoutingSet.size > 0 ? (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-destructive/50 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
+                              title={`No Cloudflare routing rule for: ${[...missingRoutingSet].join(", ")}. Mail to these addresses is silently dropped.`}
+                            >
+                              <AlertCircle className="size-3" />
+                              {missingRoutingSet.size} not routed in Cloudflare
+                            </span>
+                          ) : null}
+                        </CardTitle>
+                        <CardDescription>
+                          {accountSummary}
+                          {searchQuery && totalCount > 0
+                            ? ` · ${domainAddresses.length} shown`
+                            : null}
+                        </CardDescription>
+                      </div>
                       {missingRoutingSet.size > 0 ? (
                         <Button
                           size="sm"
@@ -768,10 +785,9 @@ export function AccountsView() {
                         Add account
                       </Button>
                     </CardHeader>
-                    {expanded ? (
-                      <CardContent className="px-0 pb-0">
+                      <CardContent className="flex flex-col px-0 pb-0">
                         {domainLoading ? (
-                          <div className="min-h-[80px] px-6" />
+                          <div className="min-h-20 px-6" />
                         ) : domainAddresses.length > 0 ? (
                           <DashboardTableScroll minWidthClassName="min-w-[520px]">
                             <Table>
@@ -987,11 +1003,11 @@ export function AccountsView() {
                           </div>
                         )}
                       </CardContent>
-                    ) : null}
                   </Card>
                 );
               })}
             {searchQuery &&
+            filteredVisibleDomains.length === 0 &&
             visibleDomains.every(
               (entry) =>
                 accountsStore.hasHydrated(entry.domain) &&
@@ -1001,6 +1017,7 @@ export function AccountsView() {
                 No accounts match “{search.trim()}”.
               </p>
             ) : null}
+            </div>
           </div>
         )}
 
@@ -1040,7 +1057,7 @@ export function AccountsView() {
                         defaultInboundEnabledForLocalPart(next),
                       );
                     }}
-                    placeholder="support"
+                    placeholder={examplePlaceholder("support")}
                   />
                 </div>
                 <span className="pb-2 text-sm text-muted-foreground">
@@ -1052,7 +1069,7 @@ export function AccountsView() {
                 <Input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Support Team"
+                  placeholder={examplePlaceholder("Support Team")}
                 />
                 <p className="text-xs text-muted-foreground">
                   Shown as the From name when sending from this address.

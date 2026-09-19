@@ -42,25 +42,27 @@ describe("mapEmailApiToWorker", () => {
       "/console/sending-onboard",
     );
     assert.equal(
+      mapEmailApiToWorker("/api/email/email-routing/addresses"),
+      "/console/email-routing/addresses",
+    );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/email-routing/addresses/abc123"),
+      "/console/email-routing/addresses/abc123",
+    );
+    assert.equal(
       mapEmailApiToWorker("/api/email/config"),
       "/console/mailbox/config",
     );
   });
 
-  it("maps keys, audience, broadcasts, stats", () => {
+  it("maps keys, stats; Studio owns audience/broadcasts", () => {
     assert.equal(mapEmailApiToWorker("/api/email/keys"), "/console/keys");
     assert.equal(
       mapEmailApiToWorker("/api/email/keys/abc/rotate"),
       "/console/keys/abc/rotate",
     );
-    assert.equal(
-      mapEmailApiToWorker("/api/email/audience-groups"),
-      "/console/audience-groups",
-    );
-    assert.equal(
-      mapEmailApiToWorker("/api/email/broadcasts/x/send"),
-      "/console/broadcasts/x/send",
-    );
+    assert.equal(mapEmailApiToWorker("/api/email/subscriber-groups"), null);
+    assert.equal(mapEmailApiToWorker("/api/email/broadcasts/x/send"), null);
     assert.equal(mapEmailApiToWorker("/api/email/stats"), "/console/stats");
     assert.equal(
       mapEmailApiToWorker("/api/email/account-stats?email=a@b.com"),
@@ -121,9 +123,6 @@ describe("mapEmailApiToWorker", () => {
       ),
       "/mail/account-state/drafts/d1/attachments/a1",
     );
-    assert.equal(
-      mapEmailApiToWorker("/api/email/broadcast-drafts"),
-      "/console/broadcast-drafts",
-    );
+    assert.equal(mapEmailApiToWorker("/api/email/broadcast-drafts"), null);
   });
 });

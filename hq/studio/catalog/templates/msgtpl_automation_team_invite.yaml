@@ -1,0 +1,30 @@
+id: msgtpl_automation_team_invite
+name: Team invite
+description: Accept to join the workspace — you do not need to reconnect DNS
+subject: "{{trigger.inviterName}} invited you to {{trigger.workspaceName}}"
+previewText: Accept to join the workspace — you do not need to reconnect DNS
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  **{{trigger.inviterName}}** invited you to the **{{trigger.workspaceName}}** workspace on Relaybase.
+
+   
+
+  This link expires in **{{trigger.expiresInDays}} days**. After you accept, you can send from the workspace domain and see the same audience groups — you do not need to reconnect DNS.
+
+  If you were not expecting this, you can ignore the email. Nobody is added to the workspace until you click.
+
+  Questions? Reply and we will loop in {{trigger.inviterName}}.
+
+  — Relaybase
+layoutId: tpl-event-ticket
+templateVariables:
+  event.title: Workspace invite
+  event.date_badge: INVITE
+  event.time_location: Accept within 7 days
+target: trigger
+category: null
+isBuiltin: true
+createdAt: 2026-09-08T10:15:00.000Z
+updatedAt: 2026-09-16T16:13:05.413Z
+

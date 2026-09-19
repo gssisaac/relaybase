@@ -15,6 +15,12 @@ describe("modeFromPathname", () => {
     assert.equal(modeFromPathname("/email/inbox"), "email");
   });
 
+  it("treats /studio as studio mode", () => {
+    assert.equal(modeFromPathname("/studio/subscribers"), "studio");
+    assert.equal(modeFromPathname("/studio/newsletters"), "studio");
+    assert.equal(modeFromPathname("/studio/settings"), "studio");
+  });
+
   it("treats everything else as dashboard", () => {
     assert.equal(modeFromPathname("/dashboard"), "dashboard");
     assert.equal(modeFromPathname("/accounts"), "dashboard");
@@ -73,16 +79,67 @@ describe("normalizeEntryPath", () => {
     );
   });
 
-  it("rewrites audience and broadcast path details into ?id=&tab=", () => {
+  it("rewrites subscriber and broadcast path details into nested studio routes", () => {
     assert.equal(
       normalizeEntryPath("/audience/grp1/settings"),
-      "/audience?id=grp1&tab=settings",
+      "/studio/subscribers?id=grp1&tab=settings",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),
-      "/broadcasts?id=bc1&tab=progress",
+      "/studio/newsletters/bc1/stats",
     );
-    assert.equal(normalizeEntryPath("/broadcasts/new"), "/broadcasts?new=1");
+    assert.equal(normalizeEntryPath("/broadcasts/new"), "/studio/newsletters?new=1");
+    assert.equal(
+      normalizeEntryPath("/studio/layouts?id=custom-1"),
+      "/studio/settings/layouts?id=custom-1",
+    );
+  });
+
+  it("rewrites automation nested tabs into ?id=&tab= for last-path restore", () => {
+    assert.equal(
+      normalizeEntryPath("/studio/triggers/automation_abc/settings"),
+      "/studio/triggers?id=automation_abc&tab=config",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/triggers/automation_abc/preview"),
+      "/studio/triggers?id=automation_abc&tab=config",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/triggers/automation_abc/config"),
+      "/studio/triggers?id=automation_abc&tab=config",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/triggers/automation_abc/edit"),
+      "/studio/triggers/edit?id=automation_abc",
+    );
+  });
+
+  it("rewrites legacy /studio/broadcasts paths to /studio/newsletters", () => {
+    assert.equal(normalizeEntryPath("/studio/broadcasts/sent"), "/studio/newsletters/sent");
+    assert.equal(normalizeEntryPath("/studio/automations/edit"), "/studio/triggers/edit");
+  });
+
+  it("keeps newsletter section sub-routes for sidebar highlighting", () => {
+    assert.equal(
+      normalizeEntryPath("/studio/newsletters/sent"),
+      "/studio/newsletters/sent",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/newsletters/in-progress"),
+      "/studio/newsletters/in-progress",
+    );
+    assert.equal(
+      normalizeEntryPath("/broadcasts/sent"),
+      "/studio/newsletters/sent",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/newsletters/broadcast_abc/stats"),
+      "/studio/newsletters/broadcast_abc/stats",
+    );
+    assert.equal(
+      normalizeEntryPath("/studio/newsletters?id=broadcast_abc&tab=stats"),
+      "/studio/newsletters/broadcast_abc/stats",
+    );
   });
 
   it("keeps /settings/{tab} as nested routes", () => {

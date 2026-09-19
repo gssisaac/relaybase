@@ -6,7 +6,7 @@
 
 This document defines two major product extensions:
 
-1. **Newsletters** — a publishing engine for recurring, designed email campaigns to Audience groups.
+1. **Newsletters** — a publishing engine for recurring, designed email newsletters to Audience groups.
 2. **AI Support** — inbound triage, suggested replies, rules, and webhooks for support-style mail (`support@`, `help@`, etc.).
 
 Both extensions run on **Relaybase Cloud (managed SaaS)** while core mail storage and delivery remain in the **customer's Cloudflare account (BYOCF)**.
@@ -69,7 +69,7 @@ Relaybase Desktop today has two sidebar modes: **Mailbox** and **Console** (dash
 │ 1. Mailbox       │ 2. Newsletters       │ 3. Console                   │
 │ (existing)       │ (new mode)           │ (existing)                   │
 ├──────────────────┼──────────────────────┼──────────────────────────────┤
-│ • Inbox / Sent   │ • Campaign list      │ • Domains / DNS              │
+│ • Inbox / Sent   │ • Newsletter list      │ • Domains / DNS              │
 │ • Compose / team │ • Block editor       │ • Accounts / API keys        │
 │ • 1:1 mail       │ • Templates          │ • Audience groups & sync     │
 │ • AI draft hints │ • Schedule / send    │ • Logs / Settings            │
@@ -118,7 +118,7 @@ Relaybase Desktop today has two sidebar modes: **Mailbox** and **Console** (dash
 
 ### 3.2 Trust boundary
 
-- SaaS receives **only what each feature needs** (campaign JSON, inbound metadata/body for triage, KB documents).
+- SaaS receives **only what each feature needs** (newsletter JSON, inbound metadata/body for triage, KB documents).
 - **Zero-data-retention option for AI:** process inbound text in memory for classification/draft; do not persist full message bodies in SaaS unless the customer opts in to training/history.
 - Worker ↔ SaaS calls use **signed tokens** tied to `account_workers` linkage; no passtoken leaves the desktop keyring for SaaS (separate OAuth/session for cloud features).
 
@@ -130,7 +130,7 @@ Relaybase Desktop today has two sidebar modes: **Mailbox** and **Console** (dash
 
 **Newsletters** are designed, repeatable publications sent to one or more **Audience groups**. They extend (and eventually supersede) Console **Broadcasts** for anything that needs layout, templates, compliance footers, scheduling, and analytics.
 
-**Not in scope for v1:** full marketing automation platform (drip sequences of arbitrary depth), CRM, or hosted ESP replacement on Relaybase infrastructure.
+**Not in scope for v1:** full marketing automation platform (drip sequences of arbitrary depth), Scale, or hosted ESP replacement on Relaybase infrastructure.
 
 ### 4.2 Relationship to Broadcasts
 
@@ -157,7 +157,7 @@ A production **BlockNote** editor already exists in the **Railmark** project (`p
 **Newsletter adaptation work** (not a greenfield editor):
 
 - Add email-specific blocks: CTA button, footer, unsubscribe placeholder, spacer, social row.
-- Block JSON schema distinct from campaign storage (versioned).
+- Block JSON schema distinct from newsletter storage (versioned).
 - Server-side compile: Block JSON → inline-CSS HTML + plaintext fallback.
 - Image blocks: upload to R2 via User CF (or SaaS staging → User R2); never blob URLs in sent mail.
 
@@ -170,7 +170,7 @@ Estimated editor port + email blocks: **~1–1.5 weeks** (vs **~2.5 weeks** for 
 | **Editor** | Block-based visual editor | Slash commands; text, headings, quote, lists, divider, image, CTA, callout, link preview |
 | **Editor** | Email-safe HTML compiler | Block JSON → inline CSS + table layout HTML; plaintext alternative |
 | **Templates** | Built-in presets | e.g. Weekly Digest, Product Update, Minimal Letter, Announcement |
-| **Templates** | Save as my template | One-click save layout from any campaign |
+| **Templates** | Save as my template | One-click save layout from any newsletter |
 | **Personalization** | Merge tags | `{{subscriber.name}}`, `{{subscriber.email}}`, `{{unsubscribe_url}}`, `{{current_date}}`; fallback syntax `{{subscriber.name \| "there"}}` |
 | **Compliance** | One-click unsubscribe | RFC 8058: `List-Unsubscribe`, `List-Unsubscribe-Post`; footer block auto-injected |
 | **Compliance** | Legal footer block | Sender identity + unsubscribe link; non-removable in sent mail |
@@ -182,7 +182,7 @@ Estimated editor port + email blocks: **~1–1.5 weeks** (vs **~2.5 weeks** for 
 | **Send** | Schedule | Date/time scheduling (SaaS cron → batch jobs → User CF send) |
 | **Send** | Batch queue | Fan-out beyond single Worker request; pause/resume (stretch) |
 | **Analytics** | Core metrics | Sent, delivered, bounced, unique opens, unique clicks, unsubscribes |
-| **Desktop UI** | Newsletters mode | List, editor, preview, campaign detail with stats |
+| **Desktop UI** | Newsletters mode | List, editor, preview, newsletter detail with stats |
 | **Account** | Relaybase login required | Link Worker to cloud account; Pro gate |
 
 ### 4.5 Feature list — Advanced
@@ -190,7 +190,7 @@ Estimated editor port + email blocks: **~1–1.5 weeks** (vs **~2.5 weeks** for 
 | Area | Feature | Description |
 |------|---------|-------------|
 | **Publishing** | Public web archive | `https://newsletter.{domain}/p/{slug}` — SEO page from same content (R2 + Worker or SaaS-hosted) |
-| **Audience** | Smart segments | Filter within groups: joined in last N days, opened/clicked prior campaign, tag filters |
+| **Audience** | Smart segments | Filter within groups: joined in last N days, opened/clicked prior newsletter, tag filters |
 | **Optimization** | A/B test (subject) | Send A/B to sample %; auto-winner to remainder after delay |
 | **Growth** | Subscribe widget + API | Embeddable form; `POST` subscribe endpoint; optional welcome email |
 | **AI** | Subject & summary assist | Generate subject lines and short summary block from body |
@@ -201,7 +201,7 @@ Estimated editor port + email blocks: **~1–1.5 weeks** (vs **~2.5 weeks** for 
 ### 4.6 Newsletter send pipeline
 
 ```
-[Block editor → campaign JSON (SaaS)]
+[Block editor → newsletter JSON (SaaS)]
         │
         ▼
 [Compiler: HTML + inline CSS + plaintext (SaaS)]
@@ -228,9 +228,9 @@ Estimated editor port + email blocks: **~1–1.5 weeks** (vs **~2.5 weeks** for 
 
 | Table | Purpose |
 |-------|---------|
-| `newsletter_campaigns` | id, account_id, worker_url, domain, title, subject, preheader, status, scheduled_at, sent_at, content_json, content_html, content_text, target_group_ids, target_filter_json, stats_* |
+| `newsletter_newsletters` | id, account_id, worker_url, domain, title, subject, preheader, status, scheduled_at, sent_at, content_json, content_html, content_text, target_group_ids, target_filter_json, stats_* |
 | `newsletter_templates` | id, account_id, name, thumbnail_url, content_json, is_preset, created_at |
-| `newsletter_analytics_events` | campaign_id, recipient_hash, event_type, link_url, user_agent, created_at |
+| `newsletter_analytics_events` | newsletter_id, recipient_hash, event_type, link_url, user_agent, created_at |
 | `newsletter_unsubscribes` | email, domain, group_id (nullable = all), reason, created_at |
 
 **User CF (existing / minimal extension)**
@@ -242,7 +242,7 @@ Estimated editor port + email blocks: **~1–1.5 weeks** (vs **~2.5 weeks** for 
 
 | Path | View |
 |------|------|
-| `/newsletters` | Campaign list + **New newsletter** dialog |
+| `/newsletters` | Newsletter list + **New newsletter** dialog |
 | `/newsletters?id=<id>` | Draft editor or sent overview |
 | `/newsletters?id=<id>&tab=content` | Sent — content + duplicate to new draft |
 | `/newsletters?id=<id>&tab=audience` | Sent — recipient summary |
@@ -360,9 +360,9 @@ Both extensions depend on the same cloud layer. Build **once** before feature-sp
 | Desktop ↔ SaaS auth | Relaybase account session; link to existing Worker via `account_workers` |
 | Feature gates | License tier / subscription flags (Newsletters, AI Support) |
 | Worker ↔ SaaS channel | Signed requests: inbound events, audience read, send batch, health ping |
-| Quotas | Per-tier limits: campaigns/month, recipients/campaign, AI triage/month |
+| Quotas | Per-tier limits: newsletters/month, recipients/newsletter, AI triage/month |
 | Degraded mode | Core mail works when SaaS unreachable; extension UI shows offline state |
-| Observability | SaaS-side logs, webhook delivery dashboard, campaign job status |
+| Observability | SaaS-side logs, webhook delivery dashboard, newsletter job status |
 
 **Existing assets to reuse**
 
@@ -383,7 +383,7 @@ Aligns with `PRICING.md` draft tiers; numbers are **not locked**.
 | Core mail (Mailbox, domains, API) | Yes (capped) | Yes |
 | Audience groups | Limited / no | Yes |
 | Broadcasts (legacy) | No | Yes (beta) |
-| **Newsletters** | No | Yes (quota: e.g. N campaigns/mo, M recipients/campaign) |
+| **Newsletters** | No | Yes (quota: e.g. N newsletters/mo, M recipients/newsletter) |
 | **AI Support** | No | Suggested draft + rules; autopilot optional higher tier |
 | **AI Support autopilot** | No | Team / add-on |
 
@@ -527,7 +527,7 @@ Phase 3 — Advanced (as needed)
 
 ### Newsletters
 
-- Campaigns created / sent per account
+- Newsletters created / sent per account
 - Median open rate / click rate (benchmarked internally)
 - Unsubscribe rate < industry norm for cohort
 - Time from draft to send

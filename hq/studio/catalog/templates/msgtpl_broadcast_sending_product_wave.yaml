@@ -1,0 +1,30 @@
+id: msgtpl_broadcast_sending_product_wave
+name: Product Launch Wave
+description: Five steps before your first real broadcast
+subject: Wave 2 — onboarding checklist
+previewText: Five steps before your first real broadcast
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  You are in **Wave 2** of the Scale beta. Before you press **Send Now**, walk through this checklist:
+
+  1. **Verify domain** — Console shows `ready` for `relaybase.xyz`.
+  2. **Create a sender** — pick `hello@` or `jon@` on that domain.
+  3. **Compliance sender** — organization name + postal address filled in.
+  4. **Audience** — at least one active contact (your test inbox counts).
+  5. **Test send** — Publish tab → send to yourself; confirm HTML + footer.
+
+  [Open the onboarding checklist](https://relaybase.com/start)
+
+  Once green, duplicate this broadcast and send to the full Product Updates group.
+
+  Thanks for helping us harden the pipeline,
+  Customer success
+layoutId: tpl-product-launch
+templateVariables: {}
+target: newsletter
+category: null
+isBuiltin: true
+createdAt: 2026-09-15T11:00:00.000Z
+updatedAt: 2026-09-15T03:08:16.042Z
+

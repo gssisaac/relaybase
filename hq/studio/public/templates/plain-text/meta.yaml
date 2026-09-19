@@ -1,0 +1,9 @@
+id: tpl-plain-text
+name: Plain text
+html: |
+  {{content}}
+
+  Sent by {{organization_name}}
+  {{postal_address}}
+  {{compliance_contact_email}}
+  Unsubscribe: {{unsubscribe_url}}

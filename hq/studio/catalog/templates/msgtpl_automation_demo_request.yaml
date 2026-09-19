@@ -1,0 +1,32 @@
+id: msgtpl_automation_demo_request
+name: Demo request confirmation
+description: We will reply with times within one business day
+subject: We received your demo request
+previewText: We will reply with times within one business day
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  We received your demo request for **{{trigger.company}}**.
+
+  Someone on the team will reply to **{{contact.email}}** within one business day with two or three times that work. If you already know when you are free, reply with a window in your timezone.
+
+  **What we captured**
+
+  - Company: {{trigger.company}}
+  - Role: {{trigger.role}}
+  - Preferred time: {{trigger.preferredTime}}
+  - Notes: {{trigger.message}}
+
+  The session is usually **25 minutes**: domain + Worker setup, one test broadcast, and questions. No deck unless you ask for one.
+
+  If you would rather self-serve first, start here: [docs/start](https://relaybase.com/docs/start)
+
+  — Relaybase
+layoutId: tpl-header
+templateVariables: {}
+target: trigger
+category: null
+isBuiltin: true
+createdAt: 2026-09-06T11:00:00.000Z
+updatedAt: 2026-09-06T11:00:00.000Z
+

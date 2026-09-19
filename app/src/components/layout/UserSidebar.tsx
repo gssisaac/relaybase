@@ -4,27 +4,35 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeftRight,
+  ArrowLeft,
+  Check,
   ChevronDown,
   Download,
   FilePen,
   Inbox,
-  LayoutGrid,
+  Megaphone,
   Loader2,
   LogOut,
   Mails,
   MessageSquare,
-  PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Plus,
   Send,
+  Settings,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
+import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
+import { SidebarChromeNav } from "@/components/layout/SidebarChromeNav";
+import {
+  useSidebarHistoryNavigation,
+  useSidebarHistoryShortcuts,
+} from "@/components/layout/SidebarHistoryNav";
+import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
+import { usePersistedSidebarWidth } from "@/hooks/use-persisted-sidebar-width";
 import { AppUpdateBanner } from "@/console/components/AppUpdateBanner";
 import { WorkerUpdateBanner } from "@/console/components/WorkerUpdateBanner";
 import { useProductUpdateStatus } from "@/console/hooks/useProductUpdateStatus";
@@ -34,8 +42,6 @@ import { AddTeamAccountDialog } from "@/email/components/accounts/AddTeamAccount
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import {
-  DEFAULT_DASHBOARD_PATH,
-  DEFAULT_EMAIL_PATH,
   modeFromPathname,
   hydrateSidebarState,
   readLastPath,
@@ -45,11 +51,8 @@ import {
   writeSidebarMode,
   type SidebarMode,
 } from "@/lib/navigation/sidebar-mode";
-import {
-  composeFeedbackHref,
-  composeNewHref,
-  FEEDBACK_TO_EMAIL,
-} from "@/email/lib/compose/compose-open";
+import { composeNewHref } from "@/email/lib/compose/compose-open";
+import { useFeedbackDialog } from "@/components/feedback/FeedbackDialogProvider";
 import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/lib/paths";
 import {
   AlertDialog,
@@ -64,12 +67,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -81,6 +78,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useStudioPaths } from "@/studio/lib/paths";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
@@ -88,16 +86,18 @@ import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 import { useMailRuntime } from "@/mail-platform/runtime";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
+  hasWebWorkerSession,
+  signOutHqStudio,
   signOutRedirectPath,
   signOutRelaybase,
 } from "@/lib/desktop/auth";
+import { useHqStudioSignedIn } from "@/lib/hq-auth/use-hq-studio-signed-in";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
-import { Settings } from "lucide-react";
 
-/** Matches the product mail mark (orange), as a Lucide stroke. */
-const MAILBOX_TITLE_ICON_COLOR = "#D8663B";
+/** Matches the product mail mark (orange), as a Lucide stroke — Mailbox & Studio. */
+const MODE_TITLE_ICON_COLOR = "#D8663B";
 
 function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
   const session = useAppSession();
@@ -130,15 +130,30 @@ function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function TitleIcon({ mode }: { mode: SidebarMode }) {
+function sidebarTitleForMode(mode: SidebarMode) {
+  if (mode === "email") return "Mailbox";
+  if (mode === "studio") return "Studio";
+  return "Console";
+}
+
+function ModeIcon({
+  mode,
+  className,
+}: {
+  mode: SidebarMode;
+  className?: string;
+}) {
+  const accentIconProps = {
+    className: cn("size-4 shrink-0", className),
+    style: { color: MODE_TITLE_ICON_COLOR },
+    "aria-hidden": true as const,
+  };
+
   if (mode === "email") {
-    return (
-      <Mails
-        className="size-4 shrink-0"
-        style={{ color: MAILBOX_TITLE_ICON_COLOR }}
-        aria-hidden
-      />
-    );
+    return <Mails {...accentIconProps} />;
+  }
+  if (mode === "studio") {
+    return <Megaphone {...accentIconProps} />;
   }
   return (
     <img
@@ -146,99 +161,126 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
       alt=""
       width={16}
       height={16}
-      className="size-4 shrink-0"
+      className={cn("size-4 shrink-0", className)}
     />
   );
 }
 
-function sidebarTitleForMode(mode: SidebarMode) {
-  return mode === "email" ? "Mailbox" : "Relaybase console";
+function TitleIcon({ mode }: { mode: SidebarMode }) {
+  return <ModeIcon mode={mode} />;
 }
 
-function ModeSwitchButton({
+function StudioProBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        "h-4 shrink-0 border-0 px-1.5 py-0 text-[10px] font-semibold tracking-wide",
+        className,
+      )}
+    >
+      Pro
+    </Badge>
+  );
+}
+
+function ModeSignedOutHint() {
+  return (
+    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+      Signed out
+    </span>
+  );
+}
+
+function ModeMenuItem({
+  label,
   mode,
-  collapsed,
+  active,
+  proBadge,
+  signedOut,
   onClick,
 }: {
+  label: string;
   mode: SidebarMode;
-  collapsed: boolean;
+  active: boolean;
+  proBadge?: boolean;
+  signedOut?: boolean;
   onClick: () => void;
 }) {
-  const nextMode: SidebarMode = mode === "email" ? "dashboard" : "email";
-  const nextLabel = sidebarTitleForMode(nextMode);
-
   return (
-    <TooltipProvider delay={0}>
-      <Tooltip>
-        <TooltipTrigger
-          delay={0}
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size={collapsed ? "icon" : "icon-sm"}
-              className="shrink-0"
-              aria-label={`Switch to ${nextLabel}`}
-              onClick={onClick}
-            />
-          }
-        >
-          <ArrowLeftRight className={collapsed ? undefined : "size-3.5"} />
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          sideOffset={8}
-          className="animate-none data-open:animate-none data-[state=delayed-open]:animate-none"
-        >
-          <TitleIcon mode={nextMode} />
-          {nextLabel}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <DropdownMenuItem onClick={onClick}>
+      <ModeIcon
+        mode={mode}
+        className={cn("size-3.5", signedOut && "opacity-50")}
+      />
+      <span
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1.5",
+          signedOut && "text-muted-foreground",
+        )}
+      >
+        {label}
+        {proBadge ? <StudioProBadge /> : null}
+      </span>
+      {active ? (
+        <Check className="ml-auto size-3.5 shrink-0" aria-hidden />
+      ) : signedOut ? (
+        <ModeSignedOutHint />
+      ) : (
+        <Check className="ml-auto size-3.5 shrink-0 opacity-0" aria-hidden />
+      )}
+    </DropdownMenuItem>
   );
 }
 
 function TitleMenuItems({
   mode,
   teamMode,
+  studioSignedIn,
   canAddAccount = true,
   onAddAccount,
   onOpenSettings,
-  onSwitchMode,
+  onSwitchTo,
   onSignOut,
 }: {
   mode: SidebarMode;
   teamMode: boolean;
+  studioSignedIn: boolean;
   canAddAccount?: boolean;
   onAddAccount: () => void;
   onOpenSettings: () => void;
-  onSwitchMode: () => void;
+  onSwitchTo: (mode: SidebarMode) => void;
   onSignOut: () => void;
 }) {
   return (
     <>
+      <ModeMenuItem
+        label="Mailbox"
+        mode="email"
+        active={mode === "email"}
+        onClick={() => onSwitchTo("email")}
+      />
+      <ModeMenuItem
+        label="Studio"
+        mode="studio"
+        active={mode === "studio"}
+        proBadge
+        signedOut={!studioSignedIn}
+        onClick={() => onSwitchTo("studio")}
+      />
+      <div role="separator" className="my-1 h-px bg-border" />
       {mode === "email" ? (
         <DropdownMenuItem onClick={onAddAccount} disabled={!canAddAccount}>
           <Plus className="size-3.5" />
           Add account
         </DropdownMenuItem>
       ) : null}
-      {mode === "email" ? (
+      {mode === "email" || mode === "studio" ? (
         <DropdownMenuItem onClick={onOpenSettings}>
           <Settings className="size-3.5" />
           Settings
         </DropdownMenuItem>
       ) : null}
-      {teamMode ? null : (
-        <DropdownMenuItem onClick={onSwitchMode}>
-          {mode === "email" ? (
-            <LayoutGrid className="size-3.5" />
-          ) : (
-            <Mails className="size-3.5" />
-          )}
-          {mode === "email" ? "Open dashboard" : "Open mailbox"}
-        </DropdownMenuItem>
-      )}
       <DropdownMenuItem variant="destructive" onClick={onSignOut}>
         <LogOut className="size-3.5" />
         Sign out
@@ -641,42 +683,145 @@ function EmailModeNav({
   );
 }
 
-function SendFeedbackButton({
-  collapsed,
-  account,
-}: {
-  collapsed: boolean;
-  account?: string | null;
-}) {
+function sidebarFooterRowClass(collapsed: boolean, extra?: string) {
+  return cn(
+    "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors",
+    "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+    collapsed ? "justify-center gap-0" : "justify-start gap-2",
+    extra,
+  );
+}
+
+function RelaybaseMark({ className }: { className?: string }) {
+  return (
+    <img
+      src="/icon.png"
+      alt=""
+      width={14}
+      height={14}
+      className={cn("size-3.5 shrink-0", className)}
+      aria-hidden
+    />
+  );
+}
+
+function MailSettingsButton({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const href = composeFeedbackHref(account);
-  const to = searchParams.get("to")?.trim().toLowerCase();
-  const inCompose =
-    pathname === "/compose" ||
-    pathname.startsWith("/compose/") ||
-    pathname === "/email/compose" ||
-    pathname.startsWith("/email/compose/");
-  const active = inCompose && to === FEEDBACK_TO_EMAIL;
+  const { settings: emailSettingsHref } = useEmailPaths();
+  const inSettings =
+    pathname === emailSettingsHref ||
+    pathname.startsWith(`${emailSettingsHref}/`) ||
+    pathname === "/mail-settings" ||
+    pathname.startsWith("/mail-settings/");
+  const account =
+    searchParams.get("account")?.trim() ||
+    searchParams.get("from")?.trim() ||
+    null;
+  const href = account
+    ? `${emailSettingsHref}?account=${encodeURIComponent(account)}`
+    : emailSettingsHref;
 
   return (
     <Link
       href={href}
-      title={collapsed ? "Send feedback" : undefined}
-      aria-label="Send feedback"
+      title={collapsed ? "Settings" : undefined}
+      aria-label="Settings"
       className={cn(
-        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
-        active
+        sidebarFooterRowClass(collapsed),
+        inSettings
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-        collapsed ? "justify-center gap-0" : "gap-2",
+          : undefined,
       )}
     >
-      <MessageSquare className="size-3.5 shrink-0" aria-hidden />
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 truncate">Send feedback</span>
-      ) : null}
+      <Settings className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? <span className="truncate">Settings</span> : null}
     </Link>
+  );
+}
+
+function StudioSettingsButton({ collapsed }: { collapsed: boolean }) {
+  const pathname = usePathname();
+  const { settings } = useStudioPaths();
+  const active = pathname === settings || pathname.startsWith(`${settings}/`);
+
+  return (
+    <Link
+      href={settings}
+      title={collapsed ? "Settings" : undefined}
+      aria-label="Settings"
+      className={cn(
+        sidebarFooterRowClass(collapsed),
+        active ? "bg-sidebar-accent text-sidebar-accent-foreground" : undefined,
+      )}
+    >
+      <Settings className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? <span className="truncate">Settings</span> : null}
+    </Link>
+  );
+}
+
+function GoToConsoleButton({
+  collapsed,
+  onGoToConsole,
+}: {
+  collapsed: boolean;
+  onGoToConsole: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={collapsed ? "Go to Console" : undefined}
+      aria-label="Go to Console"
+      className={sidebarFooterRowClass(collapsed)}
+      onClick={onGoToConsole}
+    >
+      <RelaybaseMark />
+      {!collapsed ? <span className="truncate">Go to Console</span> : null}
+    </button>
+  );
+}
+
+function ConsoleSignOutButton({
+  collapsed,
+  onSignOut,
+}: {
+  collapsed: boolean;
+  onSignOut: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={collapsed ? "Sign out" : undefined}
+      aria-label="Sign out"
+      className={sidebarFooterRowClass(collapsed, "hover:text-destructive")}
+      onClick={onSignOut}
+    >
+      <LogOut className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? <span className="truncate">Sign out</span> : null}
+    </button>
+  );
+}
+
+function FeedbackFabButton({ collapsed }: { collapsed: boolean }) {
+  const { openFeedback } = useFeedbackDialog();
+  const { noDragClassName, isDesktop } = useDesktopChrome();
+
+  return (
+    <button
+      type="button"
+      aria-label="Send feedback"
+      title="Send feedback"
+      onClick={openFeedback}
+      className={cn(
+        "absolute bottom-3 right-3 z-30 flex items-center justify-center rounded-full bg-background text-muted-foreground shadow-lg ring-1 ring-border/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        collapsed ? "size-8" : "size-10",
+        noDragClassName,
+      )}
+      {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+    >
+      <MessageSquare className={collapsed ? "size-3.5" : "size-4"} aria-hidden />
+    </button>
   );
 }
 
@@ -762,6 +907,39 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function StudioModeNav({ collapsed }: { collapsed: boolean }) {
+  const pathname = usePathname();
+  const { tabs } = useStudioPaths();
+
+  return (
+    <>
+      {tabs.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(item.href, pathname);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            title={collapsed ? item.label : undefined}
+            className={cn(
+              "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+              collapsed ? "justify-center gap-0" : "gap-2",
+            )}
+          >
+            <Icon className="size-3.5 shrink-0" aria-hidden />
+            {!collapsed ? (
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            ) : null}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
 export function UserSidebar({
   teamMode = false,
   presentation = "docked",
@@ -773,9 +951,11 @@ export function UserSidebar({
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
+  const studioSignedIn = useHqStudioSignedIn();
   const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
-  const { settings: settingsHref } = useEmailPaths();
+  const { settings: emailSettingsHref } = useEmailPaths();
+  const { settings: studioSettingsHref } = useStudioPaths();
   const isTeam = teamMode || mailSession.isTeamMode;
   const { availableAddresses, enabledAccounts } = useMailAccounts();
   const enabledSet = useMemo(
@@ -792,9 +972,70 @@ export function UserSidebar({
     readSidebarCollapsed(userId),
   );
   const detectedMode = useMemo(() => modeFromPathname(pathname), [pathname]);
-  // Team mode is locked to email — never show dashboard nav even on a
-  // dashboard URL (team users can't reach those routes anyway).
-  const mode: SidebarMode = isTeam ? "email" : detectedMode;
+  // Team mode can reach Email and Studio, never Console — fall back to email
+  // even on a dashboard URL (team users can't reach those routes anyway).
+  const mode: SidebarMode = isTeam
+    ? detectedMode === "studio"
+      ? "studio"
+      : "email"
+    : detectedMode;
+
+  const [lastAppMode, setLastAppMode] = useState<"email" | "studio">(() => {
+    if (typeof window !== "undefined" && userId) {
+      try {
+        const saved = localStorage.getItem(`relaybase:sidebar:lastAppMode:${userId}`);
+        if (saved === "studio" || saved === "email") return saved;
+      } catch {}
+    }
+    return detectedMode === "studio" ? "studio" : "email";
+  });
+
+  useEffect(() => {
+    if (mode === "email" || mode === "studio") {
+      setLastAppMode(mode);
+      if (typeof window !== "undefined" && userId) {
+        try {
+          localStorage.setItem(`relaybase:sidebar:lastAppMode:${userId}`, mode);
+        } catch {}
+      }
+    }
+  }, [mode, userId]);
+
+  async function handleBackFromConsole() {
+    const targetMode = lastAppMode === "studio" ? "studio" : "email";
+    await switchMode(targetMode);
+  }
+
+  const backButtonLabel = lastAppMode === "studio" ? "Back to Studio" : "Back to Mail";
+  const signOutDialog = useMemo(() => {
+    if (mode === "studio") {
+      if (!mailSession.isDesktop && hasWebWorkerSession(isTeam)) {
+        return {
+          title: "Sign out of Relaybase Studio?",
+          description:
+            "Ends your Relaybase Studio session on this device. You’ll stay signed in to Mailbox.",
+        };
+      }
+      if (!mailSession.isDesktop) {
+        return {
+          title: "Sign out of Relaybase Studio?",
+          description:
+            "Ends your Relaybase Studio session and returns you to sign-in.",
+        };
+      }
+      return {
+        title: "Sign out of Relaybase Studio?",
+        description:
+          "Clears your credentials from this device and returns you to the welcome screen.",
+      };
+    }
+    return {
+      title: "Sign out of Relaybase?",
+      description: isTeam
+        ? "Clears your team login from this device and returns you to the sign-in page."
+        : "Clears your credentials from this device and returns you to the welcome screen.",
+    };
+  }, [isTeam, mailSession.isDesktop, mode]);
   const {
     isDesktop,
     isMacOS,
@@ -805,6 +1046,10 @@ export function UserSidebar({
   const macDesktopChrome = isDesktop && isMacOS;
   const isSheet = presentation === "sheet";
   const sidebarCollapsed = isSheet ? false : collapsed;
+  const persistedWidth = usePersistedSidebarWidth(userId);
+  const history = useSidebarHistoryNavigation();
+  useSidebarHistoryShortcuts(history.goBack, history.goForward);
+  const dockedAsideWidth = sidebarCollapsed ? 56 : persistedWidth.width;
 
   useEffect(() => {
     let cancelled = false;
@@ -830,11 +1075,7 @@ export function UserSidebar({
       if (!unlocked && !session.consoleGateOpen) return;
     }
     writeSidebarMode(userId, next);
-    const target = readLastPath(userId, next);
-    router.push(
-      target ||
-        (next === "email" ? DEFAULT_EMAIL_PATH : DEFAULT_DASHBOARD_PATH),
-    );
+    router.push(readLastPath(userId, next));
   }
 
   function toggleCollapsed() {
@@ -845,69 +1086,82 @@ export function UserSidebar({
     });
   }
 
+  function openSettings() {
+    if (mode === "studio") {
+      router.push(studioSettingsHref);
+      return;
+    }
+    const account =
+      searchParams.get("account")?.trim() ||
+      searchParams.get("from")?.trim() ||
+      null;
+    const href = account
+      ? `${emailSettingsHref}?account=${encodeURIComponent(account)}`
+      : emailSettingsHref;
+    router.push(href);
+  }
+
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      if (!mailSession.isDesktop) {
+      if (!mailSession.isDesktop && mode === "studio") {
+        await signOutHqStudio();
+        router.replace(
+          hasWebWorkerSession(isTeam)
+            ? readLastPath(userId, "email")
+            : signOutRedirectPath(isTeam, session),
+        );
+      } else if (!mailSession.isDesktop) {
         await mailSession.logout();
         await signOutRelaybase(isTeam, session);
-        router.replace("/login");
+        router.replace(signOutRedirectPath(isTeam, session));
       } else {
         await signOutRelaybase(isTeam, session);
         router.replace(signOutRedirectPath(isTeam, session));
       }
     } catch {
-      router.replace(
-        mailSession.isDesktop ? signOutRedirectPath(isTeam, session) : "/login",
-      );
+      router.replace(signOutRedirectPath(isTeam, session));
     } finally {
       setSigningOut(false);
       setSignOutOpen(false);
     }
   }
 
-  function openSettings() {
-    const account =
-      searchParams.get("account")?.trim() ||
-      searchParams.get("from")?.trim() ||
-      null;
-    const href = account
-      ? `${settingsHref}?account=${encodeURIComponent(account)}`
-      : settingsHref;
-    router.push(href);
-  }
-
   const titleLabel = sidebarTitleForMode(mode);
-  const switchModeTarget = () =>
-    switchMode(mode === "email" ? "dashboard" : "email");
 
-  return (
+  const sidebarChromeNav = (
+    <SidebarChromeNav
+      canBack={history.canGoBack}
+      canForward={history.canGoForward}
+      onBack={history.goBack}
+      onForward={history.goForward}
+      onCollapse={toggleCollapsed}
+      showCollapse={!isSheet}
+    />
+  );
+
+  const aside = (
     <aside
       className={cn(
-        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
-        isSheet
-          ? "w-full border-0"
-          : cn(
-              "border-r border-sidebar-border",
-              sidebarCollapsed ? "w-14" : "w-52",
-            ),
+        "relative flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground",
+        isSheet ? "w-full border-0" : "border-r border-sidebar-border",
       )}
+      style={isSheet ? undefined : { width: dockedAsideWidth }}
     >
       <div
         {...dragRegionProps}
         className={cn(
-          "relative flex shrink-0 flex-col border-b border-sidebar-border",
+          "relative flex shrink-0 flex-col",
           dragRegionClassName,
         )}
       >
-        {/* Keep mounted for ⌘[ / ⌘] even when compact hides the buttons. */}
-        <div className={sidebarCollapsed ? "hidden" : "contents"}>
-          <SidebarHistoryNav collapsed={sidebarCollapsed} />
-        </div>
+        {!sidebarCollapsed && macDesktopChrome && !isSheet ? (
+          <MacDesktopTitlebarSpacer />
+        ) : null}
         {sidebarCollapsed && !isSheet ? (
           <div
             className={cn(
-              "flex flex-col items-center gap-0.5 px-1 pt-8 pb-2",
+              "flex flex-col items-center gap-1 px-1 pt-8 pb-2",
               noDragClassName,
             )}
             data-tauri-drag-region="false"
@@ -916,7 +1170,7 @@ export function UserSidebar({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               className="shrink-0"
               aria-label="Expand sidebar"
               title="Expand sidebar"
@@ -924,122 +1178,116 @@ export function UserSidebar({
             >
               <PanelLeftOpen />
             </Button>
-            {isTeam ? null : (
-              <ModeSwitchButton
-                mode={mode}
-                collapsed
-                onClick={switchModeTarget}
-              />
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 focus-visible:border-transparent focus-visible:ring-0"
-                    aria-label={`${titleLabel} menu`}
-                  />
-                }
-              >
-                <TitleIcon mode={mode} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={8}>
-                <TitleMenuItems
-                  mode={mode}
-                  teamMode={isTeam}
-                  canAddAccount={canAddAccount}
-                  onAddAccount={() => setAddOpen(true)}
-                  onOpenSettings={openSettings}
-                  onSwitchMode={switchModeTarget}
-                  onSignOut={() => setSignOutOpen(true)}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : (
-          <>
-            {macDesktopChrome && !isSheet ? (
+            <div className="my-1 h-px w-6 bg-border" />
+            {mode === "dashboard" ? (
               <Button
                 type="button"
                 variant="ghost"
-                size="icon"
-                className={cn(
-                  "fixed top-1 left-[84px] z-20 shrink-0",
-                  noDragClassName,
-                )}
-                data-tauri-drag-region="false"
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                onClick={toggleCollapsed}
+                size="icon-sm"
+                className="shrink-0"
+                aria-label={backButtonLabel}
+                title={backButtonLabel}
+                onClick={() => void handleBackFromConsole()}
               >
-                <PanelLeftClose />
+                <ArrowLeft className="size-3.5" />
               </Button>
-            ) : null}
-            <div
-              className={cn("space-y-2 px-3 py-3", noDragClassName)}
-              {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
-            >
-              <OfflineSidebarBadge collapsed={false} />
-              <div className="flex items-center justify-between gap-1">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
-                        aria-label={`${titleLabel} menu`}
-                        tabIndex={-1}
-                        onMouseDown={(event) => event.preventDefault()}
-                      />
-                    }
-                  >
-                    <TitleIcon mode={mode} />
-                    <span className="truncate text-sm font-semibold tracking-tight">
-                      {titleLabel}
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" sideOffset={8}>
-                    <TitleMenuItems
-                      mode={mode}
-                      teamMode={isTeam}
-                      canAddAccount={canAddAccount}
-                      onAddAccount={() => setAddOpen(true)}
-                      onOpenSettings={openSettings}
-                      onSwitchMode={switchModeTarget}
-                      onSignOut={() => setSignOutOpen(true)}
-                    />
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <div className="flex shrink-0 items-center gap-0.5">
-                  {isTeam ? null : (
-                    <ModeSwitchButton
-                      mode={mode}
-                      collapsed={false}
-                      onClick={switchModeTarget}
-                    />
-                  )}
-                  {macDesktopChrome || isSheet ? null : (
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      className="shrink-0"
-                      aria-label="Collapse sidebar"
-                      title="Collapse sidebar"
-                      onClick={toggleCollapsed}
-                    >
-                      <PanelLeftClose />
-                    </Button>
-                  )}
-                </div>
+                      className="shrink-0 focus-visible:border-transparent focus-visible:ring-0"
+                      aria-label={`${titleLabel} menu`}
+                    />
+                  }
+                >
+                  <TitleIcon mode={mode} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" sideOffset={8}>
+                  <TitleMenuItems
+                    mode={mode}
+                    teamMode={isTeam}
+                    studioSignedIn={studioSignedIn}
+                    canAddAccount={canAddAccount}
+                    onAddAccount={() => setAddOpen(true)}
+                    onOpenSettings={openSettings}
+                    onSwitchTo={switchMode}
+                    onSignOut={() => setSignOutOpen(true)}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "space-y-2 px-3",
+              macDesktopChrome && !isSheet ? "pb-2 pt-1" : "py-2.5",
+              noDragClassName,
+            )}
+            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            <OfflineSidebarBadge collapsed={false} />
+            {mode === "dashboard" ? (
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-0 flex-1 justify-start gap-2 px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => void handleBackFromConsole()}
+                >
+                  <ArrowLeft className="size-3.5 shrink-0" />
+                  <span className="truncate">{backButtonLabel}</span>
+                </Button>
+                {sidebarChromeNav}
               </div>
-            </div>
-          </>
+            ) : (
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="min-w-0 max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
+                          aria-label={`${titleLabel} menu`}
+                          tabIndex={-1}
+                          onMouseDown={(event) => event.preventDefault()}
+                        />
+                      }
+                    >
+                      <TitleIcon mode={mode} />
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-semibold tracking-tight">
+                          {titleLabel}
+                        </span>
+                        {mode === "studio" ? <StudioProBadge /> : null}
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" sideOffset={8}>
+                      <TitleMenuItems
+                        mode={mode}
+                        teamMode={isTeam}
+                        studioSignedIn={studioSignedIn}
+                        canAddAccount={canAddAccount}
+                        onAddAccount={() => setAddOpen(true)}
+                        onOpenSettings={openSettings}
+                        onSwitchTo={switchMode}
+                        onSignOut={() => setSignOutOpen(true)}
+                      />
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                {sidebarChromeNav}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -1048,7 +1296,7 @@ export function UserSidebar({
           "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-2",
           noDragClassName,
         )}
-        aria-label={mode === "email" ? "Mailbox" : "Dashboard"}
+        aria-label={titleLabel}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         {mode === "email" ? (
@@ -1056,6 +1304,8 @@ export function UserSidebar({
             collapsed={sidebarCollapsed}
             onAddAccount={() => setAddOpen(true)}
           />
+        ) : mode === "studio" ? (
+          <StudioModeNav collapsed={sidebarCollapsed} />
         ) : (
           <DashboardModeNav collapsed={sidebarCollapsed} />
         )}
@@ -1068,18 +1318,32 @@ export function UserSidebar({
       ) : null}
 
       <div
-        className={cn("shrink-0 border-t border-sidebar-border p-2", noDragClassName)}
+        className={cn(
+          "flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2",
+          sidebarCollapsed ? "pr-2" : "pr-12",
+          noDragClassName,
+        )}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
-        <SendFeedbackButton
-          collapsed={sidebarCollapsed}
-          account={
-            searchParams.get("account")?.trim() ||
-            searchParams.get("from")?.trim() ||
-            null
-          }
-        />
+        {mode === "email" ? (
+          <MailSettingsButton collapsed={sidebarCollapsed} />
+        ) : mode === "studio" ? (
+          <StudioSettingsButton collapsed={sidebarCollapsed} />
+        ) : (
+          <ConsoleSignOutButton
+            collapsed={sidebarCollapsed}
+            onSignOut={() => setSignOutOpen(true)}
+          />
+        )}
+        {!isTeam && mode !== "dashboard" ? (
+          <GoToConsoleButton
+            collapsed={sidebarCollapsed}
+            onGoToConsole={() => void switchMode("dashboard")}
+          />
+        ) : null}
       </div>
+
+      <FeedbackFabButton collapsed={sidebarCollapsed} />
 
       {isTeam && mailSession.workerUrl ? (
         <AddTeamAccountDialog
@@ -1094,11 +1358,9 @@ export function UserSidebar({
       <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sign out of Relaybase?</AlertDialogTitle>
+            <AlertDialogTitle>{signOutDialog.title}</AlertDialogTitle>
             <AlertDialogDescription>
-              {isTeam
-                ? "Clears your team login from this device and returns you to the sign-in page."
-                : "Clears your credentials from this device and returns you to the welcome screen."}
+              {signOutDialog.description}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1113,5 +1375,24 @@ export function UserSidebar({
         </AlertDialogContent>
       </AlertDialog>
     </aside>
+  );
+
+  if (isSheet) return aside;
+
+  return (
+    <div
+      className={cn(
+        "flex h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
+      )}
+      style={{ width: dockedAsideWidth + 4 }}
+    >
+      {aside}
+      {!sidebarCollapsed ? (
+        <PanelSplitHandle
+          onResize={persistedWidth.onResize}
+          onResizeEnd={persistedWidth.persist}
+        />
+      ) : null}
+    </div>
   );
 }

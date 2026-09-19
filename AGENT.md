@@ -84,6 +84,7 @@ Full checklist and common mistakes: **[docs/release/workflow.md](docs/release/wo
 | Mail search, D1 `RELAYBASE_MAIL` / `mailbox_fts`, list header counts, Sent pagination, or list virtualization | [docs/architecture/mailbox-d1.md](docs/architecture/mailbox-d1.md) |
 | Inbox/sent sender avatars (favicon), `SenderAvatar`, `SenderIconStore`, or `/mail/favicon` proxy | [docs/desktop/sender-favicon-cache.md](docs/desktop/sender-favicon-cache.md) |
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
+| **Domain / account pickers** in Studio, email dialogs (searchable lists — not mail Cmd+K) | [docs/desktop/cmd-dropdown-ui.md](docs/desktop/cmd-dropdown-ui.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/decisions/bimi-vmc-do-not-build.md](docs/decisions/bimi-vmc-do-not-build.md) (do **not** build) |
 | Marketing site feature clips (`hq/website` homepage videos) | [hq/website/docs/feature-video-encode.md](hq/website/docs/feature-video-encode.md) — also [hq/website/AGENT.md](hq/website/AGENT.md) |
 | **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [docs/release/workflow.md](docs/release/workflow.md) — start here — then [version-sync.md](docs/release/version-sync.md), [desktop/docs/release.md](desktop/docs/release.md), [`../worker/docs/RELEASE.md`](../worker/docs/RELEASE.md). |

@@ -1,0 +1,33 @@
+id: msgtpl_automation_trial_started
+name: Trial started
+description: Full access until the trial end date — we will not charge early
+subject: Your {{trigger.planName}} trial is on
+previewText: Full access until the trial end date — we will not charge early
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  Your **{{trigger.planName}}** trial is on. You have full product access until **{{trigger.trialEndsAt}}**.
+
+  ### Make the trial count
+
+  1. Verify the sending domain you actually want to use in production.
+
+  1. Import one real audience (people who opted in), not a test dump.
+
+  1. Send a small broadcast and open **Sent statistics** — delivery, opens, and unsubscribes should match the recipient list.
+
+  [Open the workspace]({{trigger.workspaceUrl}}) · [Trial checklist](https://relaybase.com/docs/trial)
+
+  We will not charge the card on file until the trial ends. If you decide Relaybase is not a fit, cancel in billing before {{trigger.trialEndsAt}} and the trial just expires.
+
+  Need a pairing session? Reply with two times.
+
+  — Relaybase
+layoutId: tpl-card
+templateVariables: {}
+target: trigger
+category: null
+isBuiltin: true
+createdAt: 2026-09-09T09:00:00.000Z
+updatedAt: 2026-09-16T05:54:34.822Z
+

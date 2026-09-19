@@ -1,12 +1,25 @@
-export type SidebarMode = "email" | "dashboard";
+export type SidebarMode = "email" | "dashboard" | "studio";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
+export const DEFAULT_STUDIO_PATH = "/studio/dashboard";
 
-const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
+const BLOCKED_PATH_PREFIXES = [
+  "/login",
+  "/signup",
+  "/onboarding",
+  "/forgot-password",
+  "/studio/login",
+  "/studio/signup",
+  "/worker/login",
+  "/register",
+  "/setup",
+  "/api",
+] as const;
 
-export function modeFromPathname(pathname: string): SidebarMode {
-  return pathname === "/email" ||
+function isEmailPathname(pathname: string): boolean {
+  return (
+    pathname === "/email" ||
     pathname.startsWith("/email/") ||
     pathname === "/inbox" ||
     pathname.startsWith("/inbox/") ||
@@ -20,8 +33,17 @@ export function modeFromPathname(pathname: string): SidebarMode {
     pathname.startsWith("/trash/") ||
     pathname === "/mail-settings" ||
     pathname.startsWith("/mail-settings/")
-    ? "email"
-    : "dashboard";
+  );
+}
+
+function isStudioPathname(pathname: string): boolean {
+  return pathname === "/studio" || pathname.startsWith("/studio/");
+}
+
+export function modeFromPathname(pathname: string): SidebarMode {
+  if (isEmailPathname(pathname)) return "email";
+  if (isStudioPathname(pathname)) return "studio";
+  return "dashboard";
 }
 
 function pathnameOnly(path: string): string {
@@ -36,8 +58,20 @@ function pathnameOnly(path: string): string {
  */
 export function normalizeEntryPath(path: string): string {
   const [pathnamePart, query = ""] = path.split("?");
-  const pathname = pathnamePart || "/";
+  let pathname = pathnamePart || "/";
   const params = new URLSearchParams(query);
+
+  if (pathname === "/studio/layouts") {
+    const qs = params.toString();
+    return qs ? `/studio/settings/layouts?${qs}` : "/studio/settings/layouts";
+  }
+
+  if (pathname === "/studio/broadcasts" || pathname.startsWith("/studio/broadcasts/")) {
+    pathname = pathname.replace(/^\/studio\/broadcasts(?=\/|$)/, "/studio/newsletters");
+  }
+  if (pathname === "/studio/automations" || pathname.startsWith("/studio/automations/")) {
+    pathname = pathname.replace(/^\/studio\/automations(?=\/|$)/, "/studio/triggers");
+  }
 
   const emailSection = pathname.match(
     /^\/email\/(inbox|drafts|sent|compose|trash|settings)(?:\/(.*))?$/,
@@ -86,6 +120,63 @@ export function normalizeEntryPath(path: string): string {
     }
   }
 
+  const studioSubscribersNested = pathname.match(
+    /^\/studio\/subscribers\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  );
+  if (studioSubscribersNested) {
+    let groupId = studioSubscribersNested[1]!;
+    try {
+      groupId = decodeURIComponent(groupId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", groupId);
+    const tabSeg = studioSubscribersNested[2];
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
+      next.set("tab", tabSeg);
+    }
+    return `/studio/subscribers?${next.toString()}`;
+  }
+
+  const studioAudienceLegacyNested = pathname.match(
+    /^\/studio\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  );
+  if (studioAudienceLegacyNested) {
+    let groupId = studioAudienceLegacyNested[1]!;
+    try {
+      groupId = decodeURIComponent(groupId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", groupId);
+    const tabSeg = studioAudienceLegacyNested[2];
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
+      next.set("tab", tabSeg);
+    }
+    return `/studio/subscribers?${next.toString()}`;
+  }
+
+  const subscribersMatch = pathname.match(
+    /^\/subscribers\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  );
+  if (subscribersMatch) {
+    let groupId = subscribersMatch[1]!;
+    try {
+      groupId = decodeURIComponent(groupId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", groupId);
+    const tabSeg = subscribersMatch[2];
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
+      next.set("tab", tabSeg);
+    }
+    return `/studio/subscribers?${next.toString()}`;
+  }
+
   const audienceMatch = pathname.match(
     /^\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
@@ -102,33 +193,239 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/audience?${next.toString()}`;
+    return `/studio/subscribers?${next.toString()}`;
+  }
+
+  if (
+    pathname === "/subscribers" ||
+    pathname.startsWith("/subscribers/") ||
+    pathname === "/subscribers" ||
+    pathname.startsWith("/audience/")
+  ) {
+    const qs = params.toString();
+    return qs ? `/studio/subscribers?${qs}` : "/studio/subscribers";
   }
 
   if (pathname === "/broadcasts/new") {
-    return "/broadcasts?new=1";
+    return "/studio/newsletters?new=1";
+  }
+
+  if (pathname === "/studio/newsletters") {
+    const newsletterId = params.get("id")?.trim();
+    if (newsletterId) {
+      const tabRaw = params.get("tab")?.trim().toLowerCase();
+      params.delete("id");
+      params.delete("tab");
+      let tabPath = "";
+      if (tabRaw === "audience" || tabRaw === "recipients") {
+        tabPath = "/recipients";
+      } else if (
+        tabRaw &&
+        tabRaw !== "content" &&
+        (tabRaw === "publish" ||
+          tabRaw === "stats" ||
+          tabRaw === "settings")
+      ) {
+        tabPath = `/${tabRaw}`;
+      }
+      const qs = params.toString();
+      const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+      return qs ? `${base}?${qs}` : base;
+    }
+  }
+
+  const studioNewsletterSection = pathname.match(/^\/studio\/newsletters\/(sent|in-progress)\/?$/);
+  if (studioNewsletterSection) {
+    return `/studio/newsletters/${studioNewsletterSection[1]}`;
+  }
+
+  const studioNewsletterMatch = pathname.match(
+    /^\/studio\/newsletters\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  );
+  if (studioNewsletterMatch) {
+    const segment = studioNewsletterMatch[1]!;
+    if (segment !== "sent" && segment !== "in-progress" && segment !== "edit") {
+      let newsletterId = segment;
+      try {
+        newsletterId = decodeURIComponent(newsletterId);
+      } catch {
+        /* keep raw */
+      }
+      const tabSeg = studioNewsletterMatch[2];
+      let tabPath = "";
+      if (tabSeg === "audience" || tabSeg === "recipients") {
+        tabPath = "/recipients";
+      } else if (
+        tabSeg === "content" ||
+        tabSeg === "publish" ||
+        tabSeg === "stats" ||
+        tabSeg === "settings"
+      ) {
+        tabPath = `/${tabSeg}`;
+      }
+      const qs = params.toString();
+      const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+      return qs ? `${base}?${qs}` : base;
+    }
+  }
+
+  const studioTriggerEditMatch = pathname.match(/^\/studio\/triggers\/([^/]+)\/(content|edit)\/?$/);
+  if (studioTriggerEditMatch) {
+    let triggerId = studioTriggerEditMatch[1]!;
+    if (triggerId !== "edit") {
+      try {
+        triggerId = decodeURIComponent(triggerId);
+      } catch {
+        /* keep raw */
+      }
+      const next = new URLSearchParams();
+      next.set("id", triggerId);
+      return `/studio/triggers/edit?${next.toString()}`;
+    }
+  }
+
+  const studioTriggerMatch = pathname.match(
+    /^\/studio\/triggers\/([^/]+)(?:\/(config|preview|content|trigger|activity|stats|settings))?\/?$/,
+  );
+  if (studioTriggerMatch) {
+    let triggerId = studioTriggerMatch[1]!;
+    if (triggerId !== "edit") {
+      try {
+        triggerId = decodeURIComponent(triggerId);
+      } catch {
+        /* keep raw */
+      }
+      const tabSeg = studioTriggerMatch[2];
+      if (tabSeg === "content") {
+        const next = new URLSearchParams();
+        next.set("id", triggerId);
+        return `/studio/triggers/edit?${next.toString()}`;
+      }
+      const next = new URLSearchParams();
+      next.set("id", triggerId);
+      if (tabSeg === "stats") {
+        next.set("tab", "stats");
+      } else if (tabSeg === "activity") {
+        next.set("tab", "stats");
+      } else if (
+        tabSeg === "config" ||
+        tabSeg === "preview" ||
+        tabSeg === "trigger" ||
+        tabSeg === "settings"
+      ) {
+        next.set("tab", "config");
+      }
+      return `/studio/triggers?${next.toString()}`;
+    }
+  }
+
+  const studioBroadcastSection = pathname.match(/^\/studio\/broadcasts\/(sent|in-progress)\/?$/);
+  if (studioBroadcastSection) {
+    return `/studio/newsletters/${studioBroadcastSection[1]}`;
+  }
+  const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
+  if (legacyBroadcastSection) {
+    return `/studio/newsletters/${legacyBroadcastSection[1]}`;
   }
   const broadcastMatch = pathname.match(
-    /^\/broadcasts\/([^/]+)(?:\/(audience|content|progress|overview))?\/?$/,
+    /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
   );
   if (broadcastMatch) {
-    let broadcastId = broadcastMatch[1]!;
+    let newsletterId = broadcastMatch[1]!;
     try {
-      broadcastId = decodeURIComponent(broadcastId);
+      newsletterId = decodeURIComponent(newsletterId);
     } catch {
       /* keep raw */
     }
-    const next = new URLSearchParams();
-    next.set("id", broadcastId);
     const tabSeg = broadcastMatch[2];
-    if (
-      tabSeg === "audience" ||
-      tabSeg === "content" ||
-      tabSeg === "progress"
-    ) {
-      next.set("tab", tabSeg);
+    let tabPath = "";
+    if (tabSeg === "audience" || tabSeg === "recipients") {
+      tabPath = "/recipients";
+    } else if (tabSeg === "content") {
+      tabPath = "/content";
+    } else if (tabSeg === "progress") {
+      tabPath = "/stats";
     }
-    return `/broadcasts?${next.toString()}`;
+    const qs = params.toString();
+    const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+    return qs ? `${base}?${qs}` : base;
+  }
+
+  const studioBroadcastMatch = pathname.match(
+    /^\/studio\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  );
+  if (studioBroadcastMatch) {
+    let newsletterId = studioBroadcastMatch[1]!;
+    try {
+      newsletterId = decodeURIComponent(newsletterId);
+    } catch {
+      /* keep raw */
+    }
+    const tabSeg = studioBroadcastMatch[2];
+    let tabPath = "";
+    if (tabSeg === "audience" || tabSeg === "recipients") {
+      tabPath = "/recipients";
+    } else if (
+      tabSeg === "content" ||
+      tabSeg === "publish" ||
+      tabSeg === "stats" ||
+      tabSeg === "settings"
+    ) {
+      tabPath = `/${tabSeg}`;
+    }
+    const qs = params.toString();
+    const base = `/studio/newsletters/${encodeURIComponent(newsletterId)}${tabPath}`;
+    return qs ? `${base}?${qs}` : base;
+  }
+
+  const studioAutomationEditMatch = pathname.match(
+    /^\/studio\/automations\/([^/]+)\/(content|edit)\/?$/,
+  );
+  if (studioAutomationEditMatch) {
+    let triggerId = studioAutomationEditMatch[1]!;
+    if (triggerId !== "edit") {
+      try {
+        triggerId = decodeURIComponent(triggerId);
+      } catch {
+        /* keep raw */
+      }
+      const next = new URLSearchParams();
+      next.set("id", triggerId);
+      return `/studio/triggers/edit?${next.toString()}`;
+    }
+  }
+
+  const studioAutomationMatch = pathname.match(
+    /^\/studio\/automations\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
+  );
+  if (studioAutomationMatch) {
+    let triggerId = studioAutomationMatch[1]!;
+    if (triggerId !== "edit") {
+      try {
+        triggerId = decodeURIComponent(triggerId);
+      } catch {
+        /* keep raw */
+      }
+      const tabSeg = studioAutomationMatch[2];
+      if (tabSeg === "content") {
+        const next = new URLSearchParams();
+        next.set("id", triggerId);
+        return `/studio/triggers/edit?${next.toString()}`;
+      }
+      const next = new URLSearchParams();
+      next.set("id", triggerId);
+      if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
+        next.set("tab", tabSeg);
+      } else if (tabSeg === "activity") {
+        next.set("tab", "stats");
+      }
+      return `/studio/triggers?${next.toString()}`;
+    }
+  }
+
+  if (pathname === "/automations" || pathname.startsWith("/automations/")) {
+    const qs = params.toString();
+    return qs ? `/studio/triggers?${qs}` : "/studio/triggers";
   }
 
   // Settings: /settings/{tab} are real nested routes now. Collapse
@@ -190,8 +487,7 @@ export function isRestorablePath(path: string, mode: SidebarMode): boolean {
   for (const prefix of BLOCKED_PATH_PREFIXES) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false;
   }
-  if (mode === "email") {
-    return pathname === "/email" || pathname.startsWith("/email/");
-  }
-  return pathname !== "/email" && !pathname.startsWith("/email/");
+  if (mode === "email") return isEmailPathname(pathname);
+  if (mode === "studio") return isStudioPathname(pathname);
+  return !isEmailPathname(pathname) && !isStudioPathname(pathname);
 }

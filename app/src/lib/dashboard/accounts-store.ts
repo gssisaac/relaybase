@@ -3,7 +3,7 @@
 import { makeAutoObservable, runInAction } from "mobx";
 import { toast } from "sonner";
 
-import { toastEmailApiAwareError } from "@/console/components/setup/use-enable-email-api-dialog";
+import { toastEmailApiAwareError } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,

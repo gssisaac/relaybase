@@ -1,4 +1,4 @@
-import { WorkerUpdateProgressView } from "@/console/components/setup/WorkerUpdateProgressView";
+import { WorkerUpdateProgressView } from "@/console/components/setup/common/update/WorkerUpdateProgressView";
 
 export default function Page() {
   return <WorkerUpdateProgressView />;

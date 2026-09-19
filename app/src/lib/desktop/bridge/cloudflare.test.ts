@@ -76,6 +76,7 @@ describe("formatCfTokenAccessFix", () => {
       zoneRead: "ok",
       emailRoutingRead: "ok",
       emailRoutingEdit: "ok",
+      emailRoutingAddressesEdit: "ok",
       dnsEdit: "read_only",
     });
     const dns = checks.find((row) => row.id === "dnsEdit");
@@ -87,6 +88,7 @@ describe("formatCfTokenAccessFix", () => {
       zoneRead: "ok",
       emailRoutingRead: "ok",
       emailRoutingEdit: "missing",
+      emailRoutingAddressesEdit: "ok",
       dnsEdit: "ok",
     });
     const routing = checks.find((row) => row.id === "emailRoutingEdit");
@@ -101,6 +103,7 @@ describe("formatCfTokenAccessFix", () => {
       zoneRead: "missing",
       emailRoutingRead: "skipped",
       emailRoutingEdit: "skipped",
+      emailRoutingAddressesEdit: "skipped",
       dnsEdit: "skipped",
     });
     const zone = checks.find((row) => row.id === "zoneRead");
@@ -112,6 +115,7 @@ describe("formatCfTokenAccessFix", () => {
       zoneRead: "ok",
       emailRoutingRead: "missing",
       emailRoutingEdit: "ok",
+      emailRoutingAddressesEdit: "ok",
       dnsEdit: "ok",
     });
     const routing = checks.find((row) => row.id === "emailRoutingRead");

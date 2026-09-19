@@ -1,0 +1,25 @@
+id: msgtpl_automation_inbox_support
+name: Support inbox auto-reply
+description: We received your note and a person will reply on this thread
+subject: "Re: {{trigger.subject}}"
+previewText: We received your note and a person will reply on this thread
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  Thanks for emailing **support@relaybase.xyz**. We received your message and a person will reply on this thread.
+
+  **Subject we saw:** {{trigger.subject}}
+
+  Most replies land within one business day. If a send is stuck or a domain will not verify, say so in the first line and include the domain — we treat those as urgent.
+
+  This address is for account and product help. For billing receipts or invoice questions, write **billing@relaybase.xyz**. For sales / demos, use the form on the site so it is routed correctly.
+
+  — Relaybase Support
+layoutId: tpl-minimal
+templateVariables: {}
+target: trigger
+category: null
+isBuiltin: true
+createdAt: 2026-09-10T08:00:00.000Z
+updatedAt: 2026-09-15T17:03:18.377Z
+

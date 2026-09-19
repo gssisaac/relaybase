@@ -1,0 +1,296 @@
+"use client";
+
+import { Fingerprint, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
+import { WorkerUrlPicker } from "@/console/components/setup/common/dialogs/WorkerUrlPicker";
+import {
+  isMissingWorkerUnlockMessage,
+  missingWorkerHelp,
+} from "@/lib/desktop/app-session/errors";
+import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
+import { useAppSession } from "@/lib/desktop/app-session";
+import { biometryLabel } from "@/lib/desktop/biometry/label";
+import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
+import { normalizePasstokenInput } from "@/lib/desktop/worker-url/normalize-passtoken";
+import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
+import { DesktopErrorBanner, useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
+import { recoverAdminHref } from "@/lib/navigation/recover-admin";
+import { cn } from "@/lib/utils";
+
+/**
+ * Passtoken / mobile-password form for first login or mail session recovery.
+ */
+export function UnlockView({
+  role,
+}: {
+  role: "owner" | "invited";
+  mode?: "secret";
+}) {
+  const router = useRouter();
+  const store = useAppSession();
+  const { credentials, teamLogin } = useDesktop();
+  const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
+    useDesktopChrome();
+
+  const savedWorkerUrl = resolveWorkerUrl({
+    role,
+    ownerStatus: store.ownerStatus,
+    teamStatus: store.teamStatus,
+    credentials,
+    teamLogin,
+  });
+  const savedAccountEmail = teamLogin?.accountEmail ?? "";
+
+  const [workerUrl, setWorkerUrl] = useState(savedWorkerUrl ?? "");
+  const [accountEmail, setAccountEmail] = useState(savedAccountEmail);
+  const [secret, setSecret] = useState("");
+
+  const workerUrlSeeds = useMemo(
+    () =>
+      role === "invited"
+        ? [teamLogin?.workerUrl]
+        : [
+            credentials?.workerUrl,
+            store.ownerStatus?.workerUrl,
+            ...(store.ownerStatus?.knownWorkerUrls ?? []),
+          ],
+    [
+      role,
+      credentials?.workerUrl,
+      teamLogin?.workerUrl,
+      store.ownerStatus?.workerUrl,
+      store.ownerStatus?.knownWorkerUrls,
+    ],
+  );
+
+  const busy = store.busy;
+  const bioLabel = biometryLabel(0, store.ownerStatus?.platform ?? "macos");
+  const selectedUrl = normalizeWorkerUrl(workerUrl);
+  const canTryBio = role === "owner" && store.canTryOwnerBio;
+  const prefixMismatch = role === "owner" && store.ownerBioPrefixMismatch;
+  const canSubmit =
+    Boolean(selectedUrl) &&
+    Boolean(secret) &&
+    (role === "invited" ? Boolean(accountEmail.trim()) : true);
+  const missingWorkerError = isMissingWorkerUnlockMessage(store.error, role);
+
+  useEffect(() => {
+    if (role !== "owner" || !selectedUrl) return;
+    void store.refreshOwnerForWorker(selectedUrl);
+  }, [role, selectedUrl, store]);
+
+  useEffect(() => {
+    if (role !== "owner" || !canTryBio || store.bioDismissed || busy) return;
+    if (store.unlockBioPrompted) return;
+    const statusUrl = normalizeWorkerUrl(store.ownerStatus?.workerUrl);
+    if (!selectedUrl || statusUrl !== selectedUrl) return;
+    void store.loginOwnerFromKeyring(selectedUrl);
+  }, [
+    role,
+    canTryBio,
+    busy,
+    selectedUrl,
+    store,
+    store.bioDismissed,
+    store.unlockBioPrompted,
+    store.ownerStatus?.workerUrl,
+  ]);
+
+  async function submitSecret(e: React.FormEvent) {
+    e.preventDefault();
+    const url = selectedUrl;
+    const passtoken = normalizePasstokenInput(secret);
+    if (!url || !passtoken) return;
+    store.clearBioDismissed();
+    try {
+      if (role === "invited") {
+        await store.loginInvited({
+          workerUrl: url,
+          accountEmail: accountEmail.trim(),
+          mobilePassword: secret,
+        });
+      } else {
+        await store.loginWithPasstoken({
+          workerUrl: url,
+          passtoken,
+        });
+      }
+      rememberWorkerUrl(url);
+      setSecret("");
+    } catch {
+      /* error surfaced via store.error */
+    }
+  }
+
+  return (
+    <div className="flex h-svh flex-col bg-background">
+      <MacDesktopTitlebarSpacer />
+      <div
+        {...dragRegionProps}
+        className={cn(
+          "flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-10",
+          dragRegionClassName,
+        )}
+      >
+        <div
+          className={cn("flex w-full max-w-sm flex-col gap-6", noDragClassName)}
+          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          <div className="space-y-1 text-center">
+            <h1 className="text-lg font-semibold tracking-tight">
+              Unlock Relaybase
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {role === "invited"
+                ? "Sign in with your account email and the password your admin set up in Accounts → Teammate login."
+                : canTryBio
+                  ? `Use ${bioLabel} to read your stored passtoken, or type it if biometry fails or is declined.`
+                  : prefixMismatch
+                    ? "Stored passtoken doesn't match this Worker. Paste your current passtoken."
+                    : "Sign in with your passtoken. After this, Touch ID reads it from the keyring."}
+            </p>
+          </div>
+
+          {canTryBio ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              data-tauri-drag-region="false"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                store.clearBioDismissed();
+                void store.loginOwnerFromKeyring(selectedUrl || undefined);
+              }}
+              aria-label={`Sign in with ${bioLabel}`}
+              className="h-auto flex-col gap-3 self-center px-6 py-4"
+            >
+              <Fingerprint
+                className={cn(
+                  "size-12 text-foreground",
+                  busy && "animate-pulse",
+                )}
+              />
+              <span className="text-base font-medium tracking-tight">
+                {bioLabel}
+              </span>
+            </Button>
+          ) : null}
+
+          {store.bioDismissed && role === "owner" ? (
+            <p className="text-center text-[11px] text-muted-foreground">
+              {bioLabel} cancelled — try again or paste passtoken below.
+            </p>
+          ) : null}
+
+          <form
+            className="flex w-full flex-col gap-4"
+            onSubmit={submitSecret}
+            data-allow-tab-focus
+          >
+            {missingWorkerError ? (
+              <DesktopErrorBanner error={missingWorkerHelp(role)} />
+            ) : store.error ? (
+              <p className="text-center text-xs text-destructive">{store.error}</p>
+            ) : null}
+            <WorkerUrlPicker
+              value={workerUrl}
+              onChange={setWorkerUrl}
+              seedUrls={workerUrlSeeds}
+              disabled={busy}
+            />
+            {role === "invited" ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="unlock-account-email">Account email</Label>
+                <Input
+                  id="unlock-account-email"
+                  type="email"
+                  value={accountEmail}
+                  onChange={(e) => setAccountEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor="unlock-secret">
+                {role === "invited" ? "Password" : "Passtoken"}
+              </Label>
+              <Input
+                id="unlock-secret"
+                type="password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                autoComplete="off"
+                required
+                className="font-mono text-xs"
+              />
+              {role === "owner" ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Paste only the token starting with{" "}
+                  <span className="font-mono">rb_pass_</span>.
+                </p>
+              ) : null}
+              {role === "owner" ? (
+                <button
+                  type="button"
+                  className="text-left text-xs text-muted-foreground hover:underline"
+                  disabled={busy}
+                  data-tauri-drag-region="false"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    store.clearError();
+                    store.enterRecover();
+                    router.push(
+                      recoverAdminHref(normalizeWorkerUrl(workerUrl)),
+                    );
+                  }}
+                >
+                  I forgot my passtoken
+                </button>
+              ) : null}
+            </div>
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={busy || !canSubmit}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
+            </Button>
+          </form>
+
+          <button
+            type="button"
+            className="text-center text-[11px] text-muted-foreground hover:underline"
+            disabled={busy}
+            onClick={() => router.push("/setup")}
+          >
+            {role === "invited"
+              ? "Use a different account"
+              : "Sign in with another Cloudflare account"}
+          </button>
+          {role === "invited" ? (
+            <button
+              type="button"
+              className="text-center text-[11px] text-muted-foreground hover:underline"
+              disabled={busy}
+              onClick={() => {
+                store.clearError();
+                void store.switchToOwnerLogin();
+              }}
+            >
+              Log in as owner
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}

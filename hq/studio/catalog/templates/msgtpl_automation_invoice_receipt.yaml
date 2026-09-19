@@ -1,0 +1,33 @@
+id: msgtpl_automation_invoice_receipt
+name: Invoice receipt
+description: Payment received — download the PDF for your records
+subject: Receipt for invoice {{trigger.invoiceNumber}}
+previewText: Payment received — download the PDF for your records
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  Thanks — we received payment for **{{trigger.planName}}**.
+
+  **Invoice {{trigger.invoiceNumber}}**
+
+  - Amount: {{trigger.amount}}
+  - Period: {{trigger.periodLabel}}
+  - Paid: {{trigger.paidAt}}
+
+  [Download the invoice (PDF)]({{trigger.invoiceUrl}})
+
+  This receipt is for your records. The charge appears on your statement as **STRUM / RELAYBASE**. If the amount looks wrong, reply to this email before the next renewal.
+
+  Manage plan and payment method: [Billing portal](https://relaybase.com/account/billing)
+
+  — Relaybase Billing
+layoutId: tpl-receipt-invoice
+templateVariables:
+  receipt.title: Payment Receipt
+  receipt.number: INV-2026-0901
+target: trigger
+category: null
+isBuiltin: true
+createdAt: 2026-09-08T10:00:00.000Z
+updatedAt: 2026-09-08T10:00:00.000Z
+

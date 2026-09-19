@@ -6,7 +6,7 @@ The Next.js app ships **one** mail UI (`app/src/email/*`) in two runtimes:
 
 | Runtime | Route shell | Session adapter | Worker API surface |
 |---------|-------------|-----------------|-------------------|
-| **Web mail** | `app/(email-app)/*` | `WebSessionStore` | `/mobile/*` (Bearer + `X-Account-Email`) |
+| **Web mail** | `app/(email-app)/*` | Cloud account + `WebOwnerSession` (server-minted Worker owner tokens) | `/mail/*` (owner Bearer, same as desktop web console) |
 | **Desktop** | `app/(shell)/*` + `DesktopDashboardGate` | `useConsoleSession()` | `/mail/*` via Tauri `desktopAwareFetch` |
 
 Shared UI and stores should depend on **`useMailRuntime()`** and **`AuthSession`**, not on `isDesktopRuntime()` or `useDesktop()` for identity/team mode.
@@ -21,7 +21,7 @@ Shared UI and stores should depend on **`useMailRuntime()`** and **`AuthSession`
 | Web transport | `app/src/mail-platform/transport/email-transport.ts`, `map-email-mobile.ts` |
 | Desktop transport | `app/src/mail-platform/transport/console-transport.ts` |
 | Runtime hook | `app/src/mail-platform/runtime/MailRuntimeContext.tsx` |
-| Web provider tree | `app/src/mail-platform/runtime/EmailAppProviders.tsx`, `app/(email-app)/layout.tsx` |
+| Web provider tree | `app/src/mail-platform/runtime/WebConsoleAppProviders.tsx`, `app/(email-app)/layout.tsx` |
 | Desktop provider tree | `app/src/mail-platform/runtime/ConsoleAppProviders.tsx`, `app/_shell/DesktopDashboardGate.tsx` |
 | Account seeding (team) | `app/src/email/stores/mail-accounts-store.ts` |
 | Worker mobile routes | `relaybase-worker/src/routes/mobile.ts` |

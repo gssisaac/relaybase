@@ -1,0 +1,39 @@
+id: msgtpl_broadcast_sending_partner
+name: Partner note
+description: How we want feedback during the Scale send beta
+subject: A note for design partners
+previewText: How we want feedback during the Scale send beta
+bodyMarkdown: |
+  Hello {{contact.name}},
+
+  Thank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.
+
+  **We need from you**
+
+  * One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.
+
+  * Screenshots or Loom if the UI blocks you — especi{{contact.name}}ally Publish and Stats tabs.
+
+  * Honest feedback on copy, footers, and unsubscribe flow.
+
+  **We owe you**
+
+  * Same-day replies on blocking bugs during business hours (UTC+7).
+
+  * A written changelog when we flip List-Unsubscribe headers on the Worker.
+
+  No NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.
+
+  Gratefully,
+
+   
+layoutId: tpl-founder-letter
+templateVariables:
+  author.name: Isaac
+  author.title: Founder & CEO
+target: newsletter
+category: null
+isBuiltin: true
+createdAt: 2026-09-15T12:20:00.000Z
+updatedAt: 2026-09-16T16:19:33.084Z
+

@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 export function formatRelativeDate(date: Date | string): string {
   const then = typeof date === "string" ? new Date(date) : date;
   const diffMs = then.getTime() - Date.now();
-  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto", style: "short" });
 
   const units: [number, Intl.RelativeTimeFormatUnit][] = [
     [60, "second"],

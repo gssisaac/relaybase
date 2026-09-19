@@ -1,0 +1,10 @@
+/* @uiw/react-textarea-code-editor sets overflow:hidden on the root; allow outer shell to scroll. */
+.layout-html-code-editor-shell .layout-html-code-editor.w-tc-editor {
+  overflow: visible;
+  height: auto;
+  min-height: min(480px, calc(55vh - 2.5rem));
+}
+
+.layout-html-code-editor-shell .layout-html-code-editor .w-tc-editor-text {
+  overflow: hidden;
+}

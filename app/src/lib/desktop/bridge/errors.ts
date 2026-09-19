@@ -68,7 +68,12 @@ export function cfTokenPermissionErrorHelp(
   options?: { workerVersion?: string | null },
 ): DesktopErrorHelp {
   const checks = cfTokenPermissionChecks(probe);
-  const failing = checks.filter((row) => isCfTokenPermissionFailure(row.status));
+  // Zone → Zone → Read is informational only — Cloudflare's list API often
+  // false-negatives; routing/DNS probes are the real gate.
+  const failing = checks.filter(
+    (row) =>
+      row.id !== "zoneRead" && isCfTokenPermissionFailure(row.status),
+  );
 
   let title = "Cloudflare token permissions missing";
   if (failing.length === 1) {
@@ -364,7 +369,7 @@ export function explainDesktopError(
       title: "Worker ran before database setup",
       detail:
         "The uploaded Worker queried owner_config before init-db created that table. A current worker.js skips that on an empty D1.",
-      fix: "Publish a GitHub Release (`pnpm --dir ../relaybase-worker run publish:github`), then Try again. Rollback does not replace worker.js.",
+      fix: "Install the latest Relaybase Worker package from the app, then try again. Rollback does not replace worker.js.",
     };
   }
 
@@ -377,7 +382,7 @@ export function explainDesktopError(
       title: "Installer does not have a current Worker script",
       detail:
         "The hosted install ZIP is missing d1Bound (current /health). Rolling back Cloudflare resources does not replace the package on this Mac.",
-      fix: "Publish a GitHub Release (`pnpm --dir ../relaybase-worker run publish:github`), then Try again.",
+      fix: "Install the latest Relaybase Worker package from the app, then try again.",
     };
   }
 

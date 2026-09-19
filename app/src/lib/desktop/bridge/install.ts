@@ -232,10 +232,11 @@ export async function desktopCancelAutoInstall(): Promise<void> {
   await invoke("cancel_auto_install");
 }
 
-/** Delete Worker + D1 + R2. Subscribe to `install-log` for the same live log as install. */
+/** Delete Worker + D1 + R2 (or selective modules). Subscribe to `install-log` for the same live log as install. */
 export async function desktopRollbackInstall(
   accountId?: string,
   wipeConfirmation?: string | null,
+  modules?: ("worker" | "r2" | "d1")[],
 ): Promise<void> {
   if (!isDesktopRuntime()) {
     const res = await fetch("/api/install/rollback", {
@@ -244,6 +245,7 @@ export async function desktopRollbackInstall(
       body: JSON.stringify({
         accountId: accountId?.trim() || undefined,
         wipeConfirmation: wipeConfirmation?.trim() || null,
+        modules,
       }),
     });
     const data = (await res.json().catch(() => ({}))) as { error?: string };

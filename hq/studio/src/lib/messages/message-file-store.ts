@@ -1,9 +1,11 @@
-import fs from "../../cf/storage-fs";
+import fs from "node:fs";
 import path from "node:path";
 
 import { Document, isScalar, parse as parseYaml, Scalar } from "yaml";
 
 import type { Message } from "../../db/types";
+import { isPostgresStoreEnabled } from "../../db/orm/data-source";
+import { getPostgresStoreCache } from "../../db/postgres-store-runtime";
 import { ensureYamlStorageSplit } from "./ensure-yaml-storage-split";
 import { isCatalogBlueprintMessageId, isLibraryMessageId } from "./message-library";
 
@@ -87,6 +89,9 @@ export const messageFileStore = {
   },
 
   listAll(): Message[] {
+    if (isPostgresStoreEnabled()) {
+      return getPostgresStoreCache()?.messages ?? [];
+    }
     ensureYamlStorageSplit();
     const dir = resolveMessagesDir();
     fs.mkdirSync(dir, { recursive: true });
@@ -106,6 +111,9 @@ export const messageFileStore = {
   },
 
   findById(id: string): Message | undefined {
+    if (isPostgresStoreEnabled()) {
+      return getPostgresStoreCache()?.messages.find((m) => m.id === id);
+    }
     ensureYamlStorageSplit();
     const direct = readMessageFile(messageFilePath(resolveMessagesDir(), id));
     if (direct) return direct;
@@ -113,10 +121,16 @@ export const messageFileStore = {
   },
 
   save(message: Message): void {
+    if (isPostgresStoreEnabled()) {
+      return;
+    }
     writeMessageFile(resolveMessagesDir(), normalizeMessage({ ...message }));
   },
 
   delete(id: string): boolean {
+    if (isPostgresStoreEnabled()) {
+      return false;
+    }
     const filePath = messageFilePath(resolveMessagesDir(), id);
     if (!fs.existsSync(filePath)) return false;
     fs.unlinkSync(filePath);

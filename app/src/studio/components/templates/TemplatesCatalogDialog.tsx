@@ -26,6 +26,7 @@ import {
   catalogTemplateCardSubtitle,
   filterCatalogTemplatesByAudience,
 } from "@/studio/lib/templates/catalog-template-audience";
+import { isPresetCatalogTemplate } from "@/studio/lib/messages/message-library";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";
 import { useTemplatesCatalog } from "@/studio/stores/templates-catalog";
 import type { StudioTemplate } from "@/studio/api";
@@ -240,7 +241,7 @@ export function TemplatesCatalogDialog({
                               templateId={template.id}
                               template={template}
                               layout={layout}
-                              isPreset
+                              isPreset={isPresetCatalogTemplate(template.id)}
                             />
                             <div className="space-y-0.5 border-t px-3 py-2.5">
                               <p className="truncate text-sm font-medium">{template.name}</p>

@@ -1,4 +1,4 @@
-import fs from "../cf/storage-fs";
+import fs from "node:fs";
 import path from "node:path";
 
 import { Hono } from "hono";

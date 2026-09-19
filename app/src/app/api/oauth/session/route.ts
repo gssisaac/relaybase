@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.json({
       present: true,
       accountId: session.accountId || "",
+      accountName: session.accountName || "",
     });
     return applyRefreshedCookie(response, refreshedCookie);
   } catch (err) {

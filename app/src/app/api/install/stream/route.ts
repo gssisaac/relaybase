@@ -92,10 +92,18 @@ export async function GET(request: NextRequest) {
       };
       const log = (step: string, level: "info" | "stderr", line: string) => send("log", { step, level, line });
 
+      type InstallModuleId = "r2" | "d1" | "worker" | "secrets" | "schema";
+      const moduleOrder: InstallModuleId[] = ["r2", "d1", "worker", "secrets", "schema"];
+      const emitModule = (id: InstallModuleId, status: "pending" | "running" | "done" | "error") => {
+        send("module", { id, status });
+      };
+      for (const id of moduleOrder) emitModule(id, "pending");
+
       try {
         const existingD1 = await listD1Databases(client).catch(() => []);
 
         // 1. R2
+        emitModule("r2", "running");
         log("r2", "info", "Checking that R2 is enabled on this Cloudflare account…");
         await assertR2Subscription(client);
         const r2Decision = decisions.find((d) => d.kind === "r2");
@@ -113,6 +121,8 @@ export async function GET(request: NextRequest) {
         log("r2", "info", `Ensuring R2 bucket ${R2_BUCKET}…`);
         await ensureR2Bucket(client, R2_BUCKET);
         log("r2", "info", `R2 bucket ${R2_BUCKET} ready`);
+        emitModule("r2", "done");
+        emitModule("d1", "running");
 
         // 2. D1
         const d1Ids: string[] = [];
@@ -140,6 +150,8 @@ export async function GET(request: NextRequest) {
           }
           log("d1", "info", `D1 ${dbName} ready (id ${d1Ids[d1Ids.length - 1]})`);
         }
+        emitModule("d1", "done");
+        emitModule("worker", "running");
 
         const workerDecision = decisions.find((d) => d.kind === "worker");
         const skipWorkerUpload =
@@ -187,6 +199,8 @@ export async function GET(request: NextRequest) {
           workerUrl = await enableWorkersDev(client, DEFAULT_SCRIPT);
           log("deploy", "info", `Deployed at ${workerUrl}`);
         }
+        emitModule("worker", "done");
+        emitModule("secrets", "running");
 
         // 4. Secrets
         const existingSecrets = await listWorkerSecrets(client, DEFAULT_SCRIPT).catch(
@@ -206,6 +220,8 @@ export async function GET(request: NextRequest) {
           await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
           log("secret", "info", "CF_ACCOUNT_ID secret set");
         }
+        emitModule("secrets", "done");
+        emitModule("schema", "running");
 
         // 5. Warm up + schema
         await waitForWorkerReady(workerUrl, (line) => log("warmup", "info", line));
@@ -271,6 +287,7 @@ export async function GET(request: NextRequest) {
               : "Deploy complete — issuing owner passtoken in the app…",
           );
         }
+        emitModule("schema", "done");
 
         const workerVersion = (await fetchWorkerVersion(workerUrl)) ?? stagedVersion;
 

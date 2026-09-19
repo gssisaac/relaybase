@@ -62,6 +62,7 @@ export type CfOAuthSession = {
   accessToken: string;
   refreshToken: string;
   accountId: string;
+  accountName?: string;
   clientId: string;
   expiresAt: number; // unix seconds
 };

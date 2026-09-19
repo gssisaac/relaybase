@@ -1,4 +1,4 @@
-# Deploy `hq-relaybase-studio-dbver` (Railway)
+# Deploy `hq-relaybase-studio` (Railway)
 
 ## Prerequisites
 
@@ -17,19 +17,18 @@ Uses `hq/studio/Dockerfile` (see `hq/studio/railway.toml`).
 |----------|---------|
 | `DATABASE_URL` | `postgresql://postgres:***@postgres.railway.internal:5432/relaybase` |
 | `HQ_JWT_SECRET` | long random string |
-| `HQ_AUTH_APP_URL` | `https://hq-relaybase-web-app-dbver.gssisaac.workers.dev` |
-| `STUDIO_PUBLIC_BASE_URL` | same as web preview URL |
+| `HQ_AUTH_APP_URL` | `https://relaybase.email` |
+| `STUDIO_PUBLIC_BASE_URL` | `https://studio-api.relaybase.email` or your public Studio URL |
 | `NODE_ENV` | `production` |
 | `PORT` | `8080` (Railway sets `PORT`; explicit is fine) |
-| `HQ_INTERNAL_AUTH_SECRET` | same value as on **`hq-relaybase-web-app-dbver`** Worker (register-cloud / OAuth reset) |
-| `HQ_VAULT_SECRET` | optional; encrypts `passtokenEnc` (defaults to `HQ_JWT_SECRET` if unset) |
+| `HQ_INTERNAL_AUTH_SECRET` | same value as on **`hq-relaybase-web-app`** Worker |
+| `HQ_VAULT_SECRET` | optional; encrypts `passtokenEnc` |
 
-Do **not** set `TYPEORM_SYNC=1` in production. After schema changes, run `pnpm run orm:sync` once from a trusted environment against the public DB URL, or apply a migration.
+Do **not** set `TYPEORM_SYNC=1` in production.
 
-Optional: `STUDIO_API_SECRET` if you lock down `/studio/*` with API key / bearer.
+**Web Worker (`hq-relaybase-web-app`)** Wrangler vars/secrets:
 
-**Web Worker (dbver)** must also set (Wrangler secrets, not committed):
-
+- `STUDIO_UPSTREAM_URL` → Railway public URL for this service
 - `HQ_JWT_SECRET` — must match Studio
 - `HQ_INTERNAL_AUTH_SECRET` — must match Studio
 
@@ -40,24 +39,13 @@ pnpm dlx @railway/cli login
 cd /path/to/repo/root
 railway link   # project + service hq-relaybase-studio-dbver
 
-export DATABASE_URL='postgresql://postgres:PASSWORD@postgres.railway.internal:5432/relaybase'
-export HQ_JWT_SECRET='...'
-bash hq/studio/scripts/set-railway-dbver-vars.sh
-
-pnpm -C hq/studio run deploy:railway:dbver
+pnpm -C hq/studio run deploy:railway
 ```
 
-Or with token:
+## Wire Cloudflare web
 
-```bash
-export RAILWAY_TOKEN=...
-railway up --service hq-relaybase-studio-dbver
-```
+Worker **`hq-relaybase-web-app`** (`wrangler.web.jsonc`):
 
-## Wire Cloudflare web (dbver)
+`STUDIO_UPSTREAM_URL` = your Railway `hq-relaybase-studio` public URL
 
-Worker **`hq-relaybase-web-app-dbver`**:
-
-`STUDIO_UPSTREAM_URL` = `https://hq-relaybase-studio-dbver-production.up.railway.app`
-
-Then redeploy web: `pnpm -C app run deploy:web:dbver`
+Then redeploy web: `pnpm -C app run deploy:web`

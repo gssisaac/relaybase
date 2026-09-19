@@ -4,7 +4,7 @@
 // sealed HTTP-only session cookie (the web equivalent of the desktop's
 // in-memory CfOAuthSession + OS keyring refresh token).
 import { NextRequest, NextResponse } from "next/server";
-import { resolveAccountId } from "@/server/cloudflare/client";
+import { resolveAccountId, resolveAccountInfo } from "@/server/cloudflare/client";
 import { RECOVER_ADMIN_PATH } from "@/lib/navigation/recover-admin";
 import { COOKIE_NAMES, readPkceCookie, sealOAuthSession } from "@/server/cloudflare/session";
 
@@ -70,13 +70,18 @@ export async function GET(request: NextRequest) {
   const expiresIn: number = Number(tokens.expires_in ?? 3600);
 
   let accountId = String(tokens.account_id ?? "").trim();
-  if (!accountId) {
-    try {
-      accountId = await resolveAccountId(accessToken);
-    } catch {
-      // Some recover-scope tokens cannot list /accounts — proceed without;
-      // the install routes will surface a clear error if it's actually needed.
-      accountId = "";
+  let accountName = "";
+  try {
+    const info = await resolveAccountInfo(accessToken);
+    if (!accountId) accountId = info.id;
+    accountName = info.name;
+  } catch {
+    if (!accountId) {
+      try {
+        accountId = await resolveAccountId(accessToken);
+      } catch {
+        accountId = "";
+      }
     }
   }
 
@@ -93,6 +98,7 @@ export async function GET(request: NextRequest) {
       accessToken,
       refreshToken,
       accountId,
+      accountName,
       clientId: pkce.clientId,
       expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
     }),

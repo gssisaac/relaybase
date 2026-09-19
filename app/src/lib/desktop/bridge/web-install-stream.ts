@@ -4,13 +4,33 @@ import type {
   InstallLogEvent,
 } from "./install";
 
+export type InstallModuleId = "r2" | "d1" | "worker" | "secrets" | "schema";
+export type InstallModuleStatus = "pending" | "running" | "done" | "error";
+
+export type InstallModuleEvent = {
+  id: InstallModuleId;
+  status: InstallModuleStatus;
+};
+
 const logHandlers = new Set<(event: InstallLogEvent) => void>();
+const moduleHandlers = new Set<(event: InstallModuleEvent) => void>();
 let activeSource: EventSource | null = null;
 let rejectActive: ((err: Error) => void) | null = null;
 
 export function subscribeWebInstallLog(handler: (event: InstallLogEvent) => void): () => void {
   logHandlers.add(handler);
   return () => logHandlers.delete(handler);
+}
+
+export function subscribeWebInstallModule(
+  handler: (event: InstallModuleEvent) => void,
+): () => void {
+  moduleHandlers.add(handler);
+  return () => moduleHandlers.delete(handler);
+}
+
+function emitModule(event: InstallModuleEvent) {
+  for (const h of moduleHandlers) h(event);
 }
 
 function emitLog(step: string, level: "info" | "stderr", line: string) {
@@ -106,6 +126,15 @@ export function runWebInstallStream(opts: {
     const settle = () => {
       rejectActive = null;
     };
+
+    source.addEventListener("module", (e) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data) as InstallModuleEvent;
+        if (data.id && data.status) emitModule(data);
+      } catch {
+        /* ignore malformed module event */
+      }
+    });
 
     source.addEventListener("log", (e) => {
       try {

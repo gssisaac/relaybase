@@ -8,7 +8,13 @@ export function internalStudioAuthHeader(): string {
   );
 }
 
+function studioServerBase(): string {
+  const upstream = process.env.STUDIO_UPSTREAM_URL?.trim().replace(/\/$/, "");
+  if (upstream) return upstream;
+  return getStudioApiBase().replace(/\/$/, "");
+}
+
 export function studioAuthUrl(path: string): string {
-  const base = getStudioApiBase().replace(/\/$/, "");
+  const base = studioServerBase();
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }

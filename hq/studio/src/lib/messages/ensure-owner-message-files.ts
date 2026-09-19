@@ -1,4 +1,4 @@
-import fs from "../../cf/storage-fs";
+import fs from "node:fs";
 import path from "node:path";
 
 import type { Message, StudioDataStore } from "../../db/types";
@@ -31,13 +31,22 @@ function materializeOwnerMessage(
   };
 }
 
-/** Recreate YAML bodies when store.json references `msgtpl_*` ids but files were removed. */
-export function ensureOwnerMessageFiles(store: StudioDataStore): boolean {
+/** Recreate message bodies when store references `msgtpl_*` ids but rows are missing. */
+export function ensureOwnerMessageFiles(
+  store: StudioDataStore,
+  options?: { postgres?: boolean },
+): boolean {
   const now = new Date().toISOString();
   let repaired = false;
 
   const ensure = (messageId: string | undefined, name: string, accountLinkId: string, createdAt: string) => {
     if (!messageId?.startsWith("msgtpl_")) return;
+    if (options?.postgres) {
+      if (store.messages.some((m) => m.id === messageId)) return;
+      store.messages.push(materializeOwnerMessage(messageId, name, accountLinkId, createdAt, now));
+      repaired = true;
+      return;
+    }
     if (fs.existsSync(messageYamlPath(messageId))) return;
     messageFileStore.save(materializeOwnerMessage(messageId, name, accountLinkId, createdAt, now));
     repaired = true;

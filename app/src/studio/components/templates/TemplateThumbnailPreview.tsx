@@ -30,11 +30,24 @@ export function TemplateThumbnailPreview({
 
   const layoutId = template.layoutId ?? layout?.id ?? null;
   const isBuiltinLayout = Boolean(layout?.isBuiltin ?? (layoutId && layoutId.startsWith("tpl-")));
-  const staticSrc =
-    resolveMessageTemplateThumbnailPublicPath({ templateId, isPreset }) ||
-    (layoutId && isBuiltinLayout
+  const presetStaticSrc = isPreset
+    ? resolveMessageTemplateThumbnailPublicPath({ templateId, isPreset: true })
+    : null;
+  const layoutStaticSrc =
+    layoutId && isBuiltinLayout
       ? resolveLayoutThumbnailPublicPath({ layoutId, isBuiltin: true })
-      : null);
+      : null;
+  const [staticPhase, setStaticPhase] = useState<"preset" | "layout" | "none">(() => {
+    if (presetStaticSrc) return "preset";
+    if (layoutStaticSrc) return "layout";
+    return "none";
+  });
+  const staticSrc =
+    staticPhase === "preset"
+      ? presetStaticSrc
+      : staticPhase === "layout"
+        ? layoutStaticSrc
+        : null;
   const shouldCapture = staticFailed || !staticSrc;
 
   useEffect(() => {
@@ -75,7 +88,13 @@ export function TemplateThumbnailPreview({
           alt=""
           className={imageClass}
           loading="lazy"
-          onError={() => setStaticFailed(true)}
+          onError={() => {
+            if (staticPhase === "preset" && layoutStaticSrc) {
+              setStaticPhase("layout");
+              return;
+            }
+            setStaticFailed(true);
+          }}
         />
       </div>
     );

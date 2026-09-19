@@ -22,6 +22,7 @@ import { TemplateThumbnailPreview } from "@/studio/components/templates/Template
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { newsletterDetailHref } from "@/studio/lib/paths";
+import { isPresetCatalogTemplate } from "@/studio/lib/messages/message-library";
 import { filterCatalogTemplatesByAudience } from "@/studio/lib/templates/catalog-template-audience";
 import { catalogTemplateSnapshot } from "@/studio/lib/templates/catalog-template-snapshot";
 import { createNewsletterFromHubTemplate } from "@/studio/lib/templates/hub-template-launch";
@@ -310,7 +311,7 @@ export function NewNewsletterTemplateDialog({
                                 templateId={template.id}
                                 template={template}
                                 layout={layout}
-                                isPreset
+                                isPreset={isPresetCatalogTemplate(template.id)}
                               />
                               <div className="space-y-0.5 border-t px-3 py-2.5">
                                 <p className="truncate text-sm font-medium">

@@ -31,6 +31,6 @@
     }
   ],
   "vars": {
-    "STUDIO_UPSTREAM_URL": "https://hq-relaybase-studio.gssisaac.workers.dev"
+    "STUDIO_UPSTREAM_URL": "https://studio-api.relaybase.email"
   }
 }

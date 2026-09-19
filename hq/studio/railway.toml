@@ -1,4 +1,4 @@
-# Railway service: hq-relaybase-studio-dbver
+# Railway service: hq-relaybase-studio
 # Dashboard → Settings → Root Directory: repository root (not hq/studio).
 # Dockerfile path is relative to root.
 

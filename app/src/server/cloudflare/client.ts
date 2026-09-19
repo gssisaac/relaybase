@@ -90,13 +90,21 @@ function isR2SubscriptionRequired(err: unknown): boolean {
   );
 }
 
-/** Resolve the Cloudflare account id for an OAuth token via GET /accounts. */
-export async function resolveAccountId(apiToken: string): Promise<string> {
+/** Resolve the Cloudflare account id and name for an OAuth token via GET /accounts. */
+export async function resolveAccountInfo(apiToken: string): Promise<{ id: string; name: string }> {
   const client: CfClient = { accountId: "", apiToken };
   const value = await cfRequest(client, "GET", "/accounts?per_page=50");
-  const id = value?.result?.[0]?.id;
+  const first = value?.result?.[0];
+  const id = first?.id;
+  const name = first?.name ?? "";
   if (!id) throw new Error("No Cloudflare accounts accessible with this token.");
-  return id as string;
+  return { id: String(id), name: String(name) };
+}
+
+/** Resolve the Cloudflare account id for an OAuth token via GET /accounts. */
+export async function resolveAccountId(apiToken: string): Promise<string> {
+  const info = await resolveAccountInfo(apiToken);
+  return info.id;
 }
 
 /** Fail before create/delete when this account has no R2 product. */

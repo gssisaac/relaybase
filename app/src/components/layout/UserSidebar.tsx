@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
-  Check,
+  ArrowLeft,
   ChevronDown,
   Download,
   FilePen,
@@ -18,6 +18,8 @@ import {
   Pencil,
   Plus,
   Send,
+  Settings,
+  SlidersHorizontal,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -73,12 +75,6 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useStudioPaths } from "@/studio/lib/paths";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
@@ -96,7 +92,6 @@ import { useHqStudioSignedIn } from "@/lib/hq-auth/use-hq-studio-signed-in";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
-import { Settings } from "lucide-react";
 
 /** Matches the product mail mark (orange), as a Lucide stroke — Mailbox & Studio. */
 const MODE_TITLE_ICON_COLOR = "#D8663B";
@@ -132,171 +127,10 @@ function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function ModeIcon({
-  mode,
-  className,
-}: {
-  mode: SidebarMode;
-  className?: string;
-}) {
-  const accentIconProps = {
-    className: cn("size-4 shrink-0", className),
-    style: { color: MODE_TITLE_ICON_COLOR },
-    "aria-hidden": true as const,
-  };
-
-  if (mode === "email") {
-    return <Mails {...accentIconProps} />;
-  }
-  if (mode === "studio") {
-    return <Megaphone {...accentIconProps} />;
-  }
-  return (
-    <img
-      src="/icon.png"
-      alt=""
-      width={16}
-      height={16}
-      className={cn("size-4 shrink-0", className)}
-    />
-  );
-}
-
-function TitleIcon({ mode }: { mode: SidebarMode }) {
-  return <ModeIcon mode={mode} />;
-}
-
 function sidebarTitleForMode(mode: SidebarMode) {
   if (mode === "email") return "Mailbox";
   if (mode === "studio") return "Studio";
   return "Console";
-}
-
-function StudioProBadge({ className }: { className?: string }) {
-  return (
-    <Badge
-      variant="secondary"
-      className={cn(
-        "h-4 shrink-0 border-0 px-1.5 py-0 text-[10px] font-semibold tracking-wide",
-        className,
-      )}
-    >
-      Pro
-    </Badge>
-  );
-}
-
-function ModeSignedOutHint() {
-  return (
-    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-      Signed out
-    </span>
-  );
-}
-
-function ModeMenuItem({
-  label,
-  mode,
-  active,
-  proBadge,
-  signedOut,
-  onClick,
-}: {
-  label: string;
-  mode: SidebarMode;
-  active: boolean;
-  proBadge?: boolean;
-  signedOut?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <DropdownMenuItem onClick={onClick}>
-      <ModeIcon
-        mode={mode}
-        className={cn("size-3.5", signedOut && "opacity-50")}
-      />
-      <span
-        className={cn(
-          "flex min-w-0 flex-1 items-center gap-1.5",
-          signedOut && "text-muted-foreground",
-        )}
-      >
-        {label}
-        {proBadge ? <StudioProBadge /> : null}
-      </span>
-      {active ? (
-        <Check className="ml-auto size-3.5 shrink-0" aria-hidden />
-      ) : signedOut ? (
-        <ModeSignedOutHint />
-      ) : (
-        <Check className="ml-auto size-3.5 shrink-0 opacity-0" aria-hidden />
-      )}
-    </DropdownMenuItem>
-  );
-}
-
-function TitleMenuItems({
-  mode,
-  teamMode,
-  studioSignedIn,
-  canAddAccount = true,
-  onAddAccount,
-  onOpenSettings,
-  onSwitchTo,
-  onSignOut,
-}: {
-  mode: SidebarMode;
-  teamMode: boolean;
-  studioSignedIn: boolean;
-  canAddAccount?: boolean;
-  onAddAccount: () => void;
-  onOpenSettings: () => void;
-  onSwitchTo: (mode: SidebarMode) => void;
-  onSignOut: () => void;
-}) {
-  return (
-    <>
-      <ModeMenuItem
-        label="Mailbox"
-        mode="email"
-        active={mode === "email"}
-        onClick={() => onSwitchTo("email")}
-      />
-      {teamMode ? null : (
-        <ModeMenuItem
-          label="Console"
-          mode="dashboard"
-          active={mode === "dashboard"}
-          onClick={() => onSwitchTo("dashboard")}
-        />
-      )}
-      <ModeMenuItem
-        label="Studio"
-        mode="studio"
-        active={mode === "studio"}
-        proBadge
-        signedOut={!studioSignedIn}
-        onClick={() => onSwitchTo("studio")}
-      />
-      <div role="separator" className="my-1 h-px bg-border" />
-      {mode === "email" ? (
-        <DropdownMenuItem onClick={onAddAccount} disabled={!canAddAccount}>
-          <Plus className="size-3.5" />
-          Add account
-        </DropdownMenuItem>
-      ) : null}
-      {mode === "email" || mode === "studio" ? (
-        <DropdownMenuItem onClick={onOpenSettings}>
-          <Settings className="size-3.5" />
-          Settings
-        </DropdownMenuItem>
-      ) : null}
-      <DropdownMenuItem variant="destructive" onClick={onSignOut}>
-        <LogOut className="size-3.5" />
-        Sign out
-      </DropdownMenuItem>
-    </>
-  );
 }
 
 function UnreadCountBadge({ count }: { count: number }) {
@@ -693,6 +527,44 @@ function EmailModeNav({
   );
 }
 
+function MailSettingsButton({ collapsed }: { collapsed: boolean }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { settings: emailSettingsHref } = useEmailPaths();
+  const inSettings =
+    pathname === emailSettingsHref ||
+    pathname.startsWith(`${emailSettingsHref}/`) ||
+    pathname === "/mail-settings" ||
+    pathname.startsWith("/mail-settings/");
+  const account =
+    searchParams.get("account")?.trim() ||
+    searchParams.get("from")?.trim() ||
+    null;
+  const href = account
+    ? `${emailSettingsHref}?account=${encodeURIComponent(account)}`
+    : emailSettingsHref;
+
+  return (
+    <Link
+      href={href}
+      title={collapsed ? "Settings" : undefined}
+      aria-label="Settings"
+      className={cn(
+        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+        inSettings
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+        collapsed ? "justify-center gap-0" : "gap-2",
+      )}
+    >
+      <Settings className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? (
+        <span className="min-w-0 flex-1 truncate">Settings</span>
+      ) : null}
+    </Link>
+  );
+}
+
 function StudioSettingsButton({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const { settings } = useStudioPaths();
@@ -716,6 +588,62 @@ function StudioSettingsButton({ collapsed }: { collapsed: boolean }) {
         <span className="min-w-0 flex-1 truncate">Settings</span>
       ) : null}
     </Link>
+  );
+}
+
+function GoToConsoleButton({
+  collapsed,
+  onGoToConsole,
+}: {
+  collapsed: boolean;
+  onGoToConsole: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size={collapsed ? "icon-sm" : "sm"}
+      title={collapsed ? "Go to Console" : undefined}
+      aria-label="Go to Console"
+      className={cn(
+        "text-[13px] font-medium text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+        collapsed ? "mx-auto" : "w-full justify-start gap-2 px-2 py-1.5",
+      )}
+      onClick={onGoToConsole}
+    >
+      <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? (
+        <span className="min-w-0 flex-1 truncate">Go to Console</span>
+      ) : null}
+    </Button>
+  );
+}
+
+function ConsoleSignOutButton({
+  collapsed,
+  onSignOut,
+}: {
+  collapsed: boolean;
+  onSignOut: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size={collapsed ? "icon-sm" : "sm"}
+      title={collapsed ? "Sign out" : undefined}
+      aria-label="Sign out"
+      className={cn(
+        "text-[13px] font-medium text-muted-foreground hover:bg-sidebar-accent/60 hover:text-destructive",
+        collapsed ? "mx-auto" : "w-full justify-start gap-2 px-2 py-1.5",
+      )}
+      onClick={onSignOut}
+    >
+      <LogOut className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? (
+        <span className="min-w-0 flex-1 truncate">Sign out</span>
+      ) : null}
+    </Button>
   );
 }
 
@@ -887,8 +815,6 @@ export function UserSidebar({
   const studioSignedIn = useHqStudioSignedIn();
   const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
-  const { settings: emailSettingsHref } = useEmailPaths();
-  const { settings: studioSettingsHref } = useStudioPaths();
   const isTeam = teamMode || mailSession.isTeamMode;
   const { availableAddresses, enabledAccounts } = useMailAccounts();
   const enabledSet = useMemo(
@@ -912,6 +838,34 @@ export function UserSidebar({
       ? "studio"
       : "email"
     : detectedMode;
+
+  const [lastAppMode, setLastAppMode] = useState<"email" | "studio">(() => {
+    if (typeof window !== "undefined" && userId) {
+      try {
+        const saved = localStorage.getItem(`relaybase:sidebar:lastAppMode:${userId}`);
+        if (saved === "studio" || saved === "email") return saved;
+      } catch {}
+    }
+    return detectedMode === "studio" ? "studio" : "email";
+  });
+
+  useEffect(() => {
+    if (mode === "email" || mode === "studio") {
+      setLastAppMode(mode);
+      if (typeof window !== "undefined" && userId) {
+        try {
+          localStorage.setItem(`relaybase:sidebar:lastAppMode:${userId}`, mode);
+        } catch {}
+      }
+    }
+  }, [mode, userId]);
+
+  async function handleBackFromConsole() {
+    const targetMode = lastAppMode === "studio" ? "studio" : "email";
+    await switchMode(targetMode);
+  }
+
+  const backButtonLabel = lastAppMode === "studio" ? "Back to Studio" : "Back to Mail";
   const signOutDialog = useMemo(() => {
     if (mode === "studio") {
       if (!mailSession.isDesktop && hasWebWorkerSession(isTeam)) {
@@ -1017,21 +971,6 @@ export function UserSidebar({
     }
   }
 
-  function openSettings() {
-    if (mode === "studio") {
-      router.push(studioSettingsHref);
-      return;
-    }
-    const account =
-      searchParams.get("account")?.trim() ||
-      searchParams.get("from")?.trim() ||
-      null;
-    const href = account
-      ? `${emailSettingsHref}?account=${encodeURIComponent(account)}`
-      : emailSettingsHref;
-    router.push(href);
-  }
-
   const titleLabel = sidebarTitleForMode(mode);
 
   const sidebarChromeNav = (
@@ -1066,7 +1005,7 @@ export function UserSidebar({
         {sidebarCollapsed && !isSheet ? (
           <div
             className={cn(
-              "flex flex-col items-center gap-0.5 px-1 pt-8 pb-2",
+              "flex flex-col items-center gap-1 px-1 pt-8 pb-2",
               noDragClassName,
             )}
             data-tauri-drag-region="false"
@@ -1075,7 +1014,7 @@ export function UserSidebar({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               className="shrink-0"
               aria-label="Expand sidebar"
               title="Expand sidebar"
@@ -1083,87 +1022,116 @@ export function UserSidebar({
             >
               <PanelLeftOpen />
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 focus-visible:border-transparent focus-visible:ring-0"
-                    aria-label={`${titleLabel} menu`}
-                  />
-                }
+            <div className="my-1 h-px w-6 bg-border" />
+            {mode === "dashboard" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0"
+                aria-label={backButtonLabel}
+                title={backButtonLabel}
+                onClick={() => void handleBackFromConsole()}
               >
-                <TitleIcon mode={mode} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={8}>
-                <TitleMenuItems
-                  mode={mode}
-                  teamMode={isTeam}
-                  studioSignedIn={studioSignedIn}
-                  canAddAccount={canAddAccount}
-                  onAddAccount={() => setAddOpen(true)}
-                  onOpenSettings={openSettings}
-                  onSwitchTo={switchMode}
-                  onSignOut={() => setSignOutOpen(true)}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <ArrowLeft className="size-3.5" />
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant={mode === "email" ? "secondary" : "ghost"}
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label="Mail"
+                  title="Mail"
+                  onClick={() => void switchMode("email")}
+                >
+                  <Mails
+                    className="size-3.5"
+                    style={mode === "email" ? { color: MODE_TITLE_ICON_COLOR } : undefined}
+                  />
+                </Button>
+                <Button
+                  type="button"
+                  variant={mode === "studio" ? "secondary" : "ghost"}
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label="Studio"
+                  title="Studio"
+                  onClick={() => void switchMode("studio")}
+                >
+                  <Megaphone
+                    className="size-3.5"
+                    style={mode === "studio" ? { color: MODE_TITLE_ICON_COLOR } : undefined}
+                  />
+                </Button>
+              </>
+            )}
           </div>
         ) : (
-          <>
-            <div
-              className={cn(
-                "space-y-2 px-3",
-                macDesktopChrome && !isSheet ? "pb-3 pt-1" : "py-3",
-                noDragClassName,
-              )}
-              {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
-            >
-              <OfflineSidebarBadge collapsed={false} />
+          <div
+            className={cn(
+              "space-y-2 px-3",
+              macDesktopChrome && !isSheet ? "pb-2 pt-1" : "py-2.5",
+              noDragClassName,
+            )}
+            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            <OfflineSidebarBadge collapsed={false} />
+            {mode === "dashboard" ? (
               <div className="flex min-w-0 items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-w-0 max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
-                        aria-label={`${titleLabel} menu`}
-                        tabIndex={-1}
-                        onMouseDown={(event) => event.preventDefault()}
-                      />
-                    }
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-0 flex-1 justify-start gap-2 px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => void handleBackFromConsole()}
+                >
+                  <ArrowLeft className="size-3.5 shrink-0" />
+                  <span className="truncate">{backButtonLabel}</span>
+                </Button>
+                {sidebarChromeNav}
+              </div>
+            ) : (
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="grid min-w-0 flex-1 grid-cols-2 rounded-lg bg-muted/60 p-0.5 text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => void switchMode("email")}
+                    className={cn(
+                      "flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-all",
+                      mode === "email"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                   >
-                    <TitleIcon mode={mode} />
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate text-sm font-semibold tracking-tight">
-                        {titleLabel}
-                      </span>
-                      {mode === "studio" ? <StudioProBadge /> : null}
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" sideOffset={8}>
-                    <TitleMenuItems
-                      mode={mode}
-                      teamMode={isTeam}
-                      studioSignedIn={studioSignedIn}
-                      canAddAccount={canAddAccount}
-                      onAddAccount={() => setAddOpen(true)}
-                      onOpenSettings={openSettings}
-                      onSwitchTo={switchMode}
-                      onSignOut={() => setSignOutOpen(true)}
+                    <Mails
+                      className="size-3.5 shrink-0"
+                      style={mode === "email" ? { color: MODE_TITLE_ICON_COLOR } : undefined}
                     />
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    <span className="truncate">Mail</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void switchMode("studio")}
+                    className={cn(
+                      "flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-all",
+                      mode === "studio"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Megaphone
+                      className="size-3.5 shrink-0"
+                      style={mode === "studio" ? { color: MODE_TITLE_ICON_COLOR } : undefined}
+                    />
+                    <span className="truncate">Studio</span>
+                  </button>
                 </div>
                 {sidebarChromeNav}
               </div>
-            </div>
-          </>
+            )}
+          </div>
         )}
       </div>
 
@@ -1208,8 +1176,21 @@ export function UserSidebar({
             null
           }
         />
-        {mode === "studio" ? (
+        {mode === "email" ? (
+          <MailSettingsButton collapsed={sidebarCollapsed} />
+        ) : mode === "studio" ? (
           <StudioSettingsButton collapsed={sidebarCollapsed} />
+        ) : (
+          <ConsoleSignOutButton
+            collapsed={sidebarCollapsed}
+            onSignOut={() => setSignOutOpen(true)}
+          />
+        )}
+        {!isTeam && mode !== "dashboard" ? (
+          <GoToConsoleButton
+            collapsed={sidebarCollapsed}
+            onGoToConsole={() => void switchMode("dashboard")}
+          />
         ) : null}
       </div>
 

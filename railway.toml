@@ -1,4 +1,4 @@
-# Used by Railway service hq-relaybase-studio-dbver (monorepo root deploy).
+# Used by Railway service hq-relaybase-studio (monorepo root deploy).
 # Dockerfile path is relative to repository root.
 
 [build]

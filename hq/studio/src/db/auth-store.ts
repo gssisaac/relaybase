@@ -1,6 +1,13 @@
-import fs from "../cf/storage-fs";
+import fs from "node:fs";
 import path from "node:path";
 
+import { isPostgresStoreEnabled } from "./orm/data-source";
+import { loadAuthStoreFromPostgres } from "./orm/postgres-auth-persist";
+import {
+  commitPostgresAuthCache,
+  readPostgresAuthClone,
+  setPostgresAuthCache,
+} from "./postgres-auth-runtime";
 import { store } from "./store";
 import type {
   HqAuthStore,
@@ -51,35 +58,56 @@ function writeAuthStore(next: HqAuthStore): void {
   fs.writeFileSync(AUTH_FILE, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
+function readAuthImpl(): HqAuthStore {
+  if (isPostgresStoreEnabled()) {
+    return readPostgresAuthClone();
+  }
+  return readAuthStore();
+}
+
+function updateAuthImpl(mutator: (draft: HqAuthStore) => void): HqAuthStore {
+  if (isPostgresStoreEnabled()) {
+    const draft = readPostgresAuthClone();
+    mutator(draft);
+    return commitPostgresAuthCache(normalizeAuthStore(draft));
+  }
+  const draft = readAuthStore();
+  mutator(draft);
+  writeAuthStore(draft);
+  return draft;
+}
+
+export async function initPostgresAuthStore(): Promise<void> {
+  const loaded = await loadAuthStoreFromPostgres();
+  setPostgresAuthCache(normalizeAuthStore(loaded));
+}
+
 export const authStore = {
   read(): HqAuthStore {
-    return readAuthStore();
+    return readAuthImpl();
   },
 
   update(mutator: (draft: HqAuthStore) => void): HqAuthStore {
-    const draft = readAuthStore();
-    mutator(draft);
-    writeAuthStore(draft);
-    return draft;
+    return updateAuthImpl(mutator);
   },
 
   findUserByEmail(email: string): HqAuthUser | null {
     const normalized = email.trim().toLowerCase();
-    return readAuthStore().users.find((u) => u.email === normalized) ?? null;
+    return readAuthImpl().users.find((u) => u.email === normalized) ?? null;
   },
 
   findUserByUsername(username: string): HqAuthUser | null {
     const normalized = username.trim().toLowerCase();
-    return readAuthStore().users.find((u) => u.username === normalized) ?? null;
+    return readAuthImpl().users.find((u) => u.username === normalized) ?? null;
   },
 
   findUserByCfAccountId(cfAccountId: string): HqAuthUser | null {
     const normalized = cfAccountId.trim().toLowerCase();
-    return readAuthStore().users.find((u) => u.cfAccountId === normalized) ?? null;
+    return readAuthImpl().users.find((u) => u.cfAccountId === normalized) ?? null;
   },
 
   findUserById(userId: string): HqAuthUser | null {
-    return readAuthStore().users.find((u) => u.id === userId) ?? null;
+    return readAuthImpl().users.find((u) => u.id === userId) ?? null;
   },
 
   addRefreshToken(record: HqRefreshTokenRecord): void {
@@ -108,7 +136,7 @@ export const authStore = {
   },
 
   findRefreshTokenByHash(tokenHash: string): HqRefreshTokenRecord | null {
-    return readAuthStore().refreshTokens.find((t) => t.tokenHash === tokenHash) ?? null;
+    return readAuthImpl().refreshTokens.find((t) => t.tokenHash === tokenHash) ?? null;
   },
 
   addPasswordResetToken(record: HqPasswordResetTokenRecord): void {
@@ -118,9 +146,7 @@ export const authStore = {
   },
 
   findPasswordResetByHash(tokenHash: string): HqPasswordResetTokenRecord | null {
-    return (
-      readAuthStore().passwordResetTokens.find((t) => t.tokenHash === tokenHash) ?? null
-    );
+    return readAuthImpl().passwordResetTokens.find((t) => t.tokenHash === tokenHash) ?? null;
   },
 
   markPasswordResetUsed(id: string): void {

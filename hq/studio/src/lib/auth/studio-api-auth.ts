@@ -9,6 +9,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/studio/t/",
   "/studio/unsubscribe",
   "/studio/assets/",
+  /** Default footer/header logo in templates — loaded by `<img>` without auth. */
+  "/studio/brand/",
 ] as const;
 
 function isAutomationHookPath(path: string): boolean {

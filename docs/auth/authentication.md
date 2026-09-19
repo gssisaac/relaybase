@@ -129,8 +129,8 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor User as User (Browser)
+    autonumber
+    actor User as User (Browser)
   participant App as Next.js Web App
   participant CF as Cloudflare OAuth
   participant Studio as HQ Studio Worker
@@ -147,7 +147,7 @@ sequenceDiagram
     App-->>User: 9. Redirect to /studio/dashboard
   else No account linked
     Studio-->>App: 10. 404 Error ("No Relaybase account linked to this CF account")
-  end
+    end
 ```
 
 ---

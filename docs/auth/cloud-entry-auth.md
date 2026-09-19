@@ -6,7 +6,7 @@
 
 | Flow | URL | Mechanism |
 |------|-----|-----------|
-| Sign up | `/signup` | CF OAuth → web install (`cloudSignup=1`) → username + password |
+| Sign up | `/signup` → `/signup/check` → `/signup/probe` → `/signup/install` → `/signup/account` | CF OAuth → account/probe gates → modular install → username + password |
 | Sign in | `/login` | Username + password → HQ refresh cookie + Worker session exchange |
 | Forgot password | `/forgot-password` | CF OAuth account match → new password |
 
@@ -77,10 +77,23 @@ Logout (`cloudLogout`) clears HQ memory, revokes cookie, and clears Worker owner
 | Studio worker session | `hq/studio/src/lib/auth/worker-owner-session.ts` |
 | Vault | `hq/studio/src/lib/vault/passtoken-vault.ts` |
 
+## Production URLs
+
+| Service | URL |
+|---------|-----|
+| Web app | `https://relaybase.email` (`hq-relaybase-web-app`) |
+| Studio API | `https://studio-api.relaybase.email` (`hq-relaybase-studio`) |
+| Web → Studio proxy | `STUDIO_UPSTREAM_URL` on web Worker = Studio API origin |
+
+Browser clients call same-origin `/auth/*` and `/studio/*` on `relaybase.email`; middleware forwards to `studio-api.relaybase.email`. Server routes (e.g. `register-cloud`) call `STUDIO_UPSTREAM_URL` directly.
+
 ## Environment
 
-| Secret | Where |
+| Secret / var | Where |
 |--------|--------|
 | `HQ_JWT_SECRET` | Web app + HQ Studio (must match) |
 | `HQ_INTERNAL_AUTH_SECRET` | Web app register/reset + Studio internal routes |
 | `HQ_VAULT_SECRET` (optional) | Passtoken encryption; falls back to JWT secret |
+| `HQ_AUTH_APP_URL` | Studio service (Railway) → `https://relaybase.email` |
+| `STUDIO_PUBLIC_BASE_URL` | Studio service → public mail links (default web app origin) |
+| `STUDIO_UPSTREAM_URL` | Web Worker var → Studio API origin (Railway public URL or custom domain) |

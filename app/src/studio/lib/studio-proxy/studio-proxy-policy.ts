@@ -76,7 +76,10 @@ export function shouldProxyRequestToStudio(pathname: string, method: string, hea
   if (pathname === "/studio/account-link") return true;
   if (pathname.startsWith("/studio/worker-catalog")) return true;
   if (pathname.startsWith("/studio/compliance-identities")) return true;
-  if (pathname.startsWith("/studio/brand/")) return true;
+  /** Served from `app/public/studio/*` (email preview + gallery `<img>`). */
+  if (pathname.startsWith("/studio/brand/")) return false;
+  if (pathname.startsWith("/studio/layout-thumbnails/")) return false;
+  if (pathname.startsWith("/studio/message-template-thumbnails/")) return false;
   if (pathname.startsWith("/studio/assets/")) return true;
 
   if (pathname === "/studio/dashboard" || pathname === "/studio/analytics") {

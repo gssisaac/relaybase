@@ -1,7 +1,5 @@
 # hq/studio — PostgreSQL + TypeORM
 
-Branch/worktree: `feat/studio-typeorm` at `.claude/worktrees/feat+studio-typeorm`.
-
 ## Setup (Railway)
 
 Studio uses database name **`relaybase`** on your Postgres instance (default Railway DB is usually `railway`).
@@ -26,6 +24,8 @@ Studio uses database name **`relaybase`** on your Postgres instance (default Rai
 
    Or step by step: `pnpm run orm:ensure-db`, `pnpm run orm:sync`, `pnpm run orm:migrate:json`.
 
+Production requires `DATABASE_URL` (`NODE_ENV=production`). One-shot JSON import (`orm:migrate:json`) is for migrating legacy dev data; production data should already live in Postgres after migration.
+
 ## Setup (local Postgres)
 
 ```bash
@@ -43,7 +43,7 @@ TYPEORM_SYNC=1 pnpm run orm:setup
 | `src/db/orm/migrate-from-json-store.ts` | One-shot JSON → Postgres import |
 | `src/db/orm/run-sync-schema.ts` | `synchronize: true` helper (requires `TYPEORM_SYNC=1`) |
 
-API routes still use the JSON file store (`src/db/store.ts`). PostgreSQL is wired for schema + migration; the next step is a repository layer behind `store.read()` / `store.update()`.
+When `DATABASE_URL` is set, `store.read()` / `store.update()` and `authStore` use PostgreSQL (in-memory cache + snapshot persist). Local dev without `DATABASE_URL` still uses JSON/YAML under `data/`.
 
 ### Auth schema (`hq_auth_users`)
 
@@ -61,3 +61,5 @@ Imported from `data/auth.json` via `orm:migrate:json` when present.
 ## Production
 
 Do **not** use `TYPEORM_SYNC=1` in production. Add TypeORM migrations once the schema stabilizes.
+
+Deploy: [deploy-railway.md](./deploy-railway.md) (Node server on Railway, not Cloudflare Workers).

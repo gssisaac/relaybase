@@ -1,5 +1,13 @@
-import fs from "../cf/storage-fs";
+import fs from "node:fs";
 import path from "node:path";
+
+import { isPostgresStoreEnabled } from "./orm/data-source";
+import { loadStudioDataStore, persistStudioDataStore } from "./orm/postgres-persist";
+import {
+  commitPostgresStoreCache,
+  readPostgresStoreClone,
+  setPostgresStoreCache,
+} from "./postgres-store-runtime";
 
 import { emptyNewsletterStats, normalizeNewsletterStats } from "../lib/newsletters/stats";
 import { normalizeTriggerStats } from "../lib/triggers/stats";
@@ -413,22 +421,77 @@ function writeStore(store: StudioDataStore) {
   writePersistedStoreShards(DATA_DIR, persisted);
 }
 
-function hydrateTemplates(store: StudioDataStore): StudioDataStore {
+function hydrateTemplates(
+  store: StudioDataStore,
+  options?: { postgresMessages?: boolean },
+): StudioDataStore {
   store.templates = templateCatalogStore.listAll();
-  store.messages = messageFileStore.listAll();
+  if (!options?.postgresMessages) {
+    store.messages = messageFileStore.listAll();
+  }
   return store;
 }
 
-/** Synchronous JSON file store — dev environment; production D1 database to follow. */
+export function reconcileAndHydrateStore(
+  parsed: StudioDataStore,
+  options?: { postgresMessages?: boolean },
+): { store: StudioDataStore; dirty: boolean } {
+  const legacyAudienceMigrated = migrateLegacyAudienceNaming(parsed);
+  const { store: normalized, newsletterNamesStripped } = normalizeStore(parsed);
+  let dirty = legacyAudienceMigrated || newsletterNamesStripped;
+  const repairedOwnerMessages = ensureOwnerMessageFiles(normalized, {
+    postgres: options?.postgresMessages,
+  });
+  dirty = dirty || repairedOwnerMessages;
+  const store = hydrateTemplates(normalized, options);
+  if (ensureDevScheduleFixtures(store)) dirty = true;
+  return { store, dirty };
+}
+
+export async function initPostgresStudioStore(): Promise<void> {
+  let loaded = await loadStudioDataStore();
+  if (!loaded) {
+    const seeded = reconcileAndHydrateStore(defaultStore(), { postgresMessages: true });
+    setPostgresStoreCache(seeded.store);
+    await persistStudioDataStore(seeded.store);
+    return;
+  }
+
+  const { store: reconciled, dirty } = reconcileAndHydrateStore(loaded, { postgresMessages: true });
+  setPostgresStoreCache(reconciled);
+  if (dirty) {
+    await persistStudioDataStore(reconciled);
+  }
+}
+
+function readStoreImpl(): StudioDataStore {
+  if (isPostgresStoreEnabled()) {
+    return readPostgresStoreClone();
+  }
+  return readStore();
+}
+
+function updateStoreImpl(mutator: (draft: StudioDataStore) => void): StudioDataStore {
+  if (isPostgresStoreEnabled()) {
+    const draft = readPostgresStoreClone();
+    mutator(draft);
+    const { store: reconciled } = reconcileAndHydrateStore(draft, { postgresMessages: true });
+    return commitPostgresStoreCache(reconciled);
+  }
+
+  const draft = readStore();
+  mutator(draft);
+  writeStore(draft);
+  return hydrateTemplates(draft);
+}
+
+/** Dev JSON/YAML store or in-memory PostgreSQL cache (production). */
 export const store = {
   read(): StudioDataStore {
-    return readStore();
+    return readStoreImpl();
   },
   update(mutator: (draft: StudioDataStore) => void): StudioDataStore {
-    const draft = readStore();
-    mutator(draft);
-    writeStore(draft);
-    return hydrateTemplates(draft);
+    return updateStoreImpl(mutator);
   },
   dataDir: DATA_DIR,
 };

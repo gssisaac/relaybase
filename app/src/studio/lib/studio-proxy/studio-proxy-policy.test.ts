@@ -11,6 +11,28 @@ function headers(api = false): Headers {
 }
 
 describe("shouldProxyRequestToStudio", () => {
+  it("does not proxy default brand logo (static public asset)", () => {
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/brand/relaybase-icon.png", "GET", headers()),
+      false,
+    );
+  });
+
+  it("does not proxy gallery thumbnail PNGs (static public assets)", () => {
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/layout-thumbnails/tpl-minimal.png", "GET", headers()),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToStudio(
+        "/studio/message-template-thumbnails/msgtpl_preset_product_update.png",
+        "GET",
+        headers(),
+      ),
+      false,
+    );
+  });
+
   it("proxies public unsubscribe", () => {
     assert.equal(
       shouldProxyRequestToStudio("/studio/unsubscribe/newsletter_x/tok_y", "GET", headers()),

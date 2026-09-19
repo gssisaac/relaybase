@@ -20,7 +20,10 @@ import {
   updateUserProfile,
 } from "../lib/auth/hq-auth-service";
 import { verifyInternalAuthHeader } from "../lib/auth/internal-auth";
-import { suggestUsernameFromCfAccountId } from "../lib/auth/username";
+import {
+  generateAvailableUsername,
+  validateUsername,
+} from "../lib/auth/username";
 import { verifyAccessToken } from "../lib/auth/jwt";
 import { bearerToken } from "../lib/auth/bearer-token";
 import { mintWorkerOwnerSession } from "../lib/auth/worker-owner-session";
@@ -224,25 +227,47 @@ hqAuth.post("/change-password", async (c) => {
   return c.json({ ok: true });
 });
 
-hqAuth.get("/check-username", async (c) => {
-  const username = c.req.query("username") ?? "";
-  if (!username.trim()) {
-    return c.json({ available: false, error: "Username is required." }, 400);
+/** Internal — cloud signup checks whether this CF account already has a Relaybase user. */
+hqAuth.get("/cloud-account-lookup", async (c) => {
+  if (!verifyInternalAuthHeader(c.req.header("x-relaybase-internal-auth"))) {
+    return c.json({ error: "Forbidden" }, 403);
   }
-  return c.json({ available: isUsernameAvailable(username) });
-});
-
-hqAuth.get("/suggest-username", async (c) => {
   const cfAccountId = c.req.query("cfAccountId") ?? "";
   if (!cfAccountId.trim()) {
     return c.json({ error: "cfAccountId is required" }, 400);
   }
-  const base = suggestUsernameFromCfAccountId(cfAccountId);
-  let candidate = base;
-  if (!isUsernameAvailable(candidate)) {
-    candidate = `${base}-${Math.floor(Math.random() * 900 + 100)}`;
+  const user = authStore.findUserByCfAccountId(cfAccountId);
+  if (!user) {
+    return c.json({ exists: false });
   }
-  return c.json({ username: candidate });
+  return c.json({ exists: true, username: user.username ?? user.email ?? "" });
+});
+
+hqAuth.get("/check-username", async (c) => {
+  const username = c.req.query("username") ?? "";
+  if (!username.trim()) {
+    return c.json({ available: false, reason: "invalid", error: "Username is required." }, 400);
+  }
+  const validationErr = validateUsername(username);
+  if (validationErr) {
+    return c.json({ available: false, reason: "invalid", error: validationErr });
+  }
+  const available = isUsernameAvailable(username);
+  return c.json({
+    available,
+    reason: available ? undefined : "taken",
+  });
+});
+
+hqAuth.get("/suggest-username", async (c) => {
+  const cfAccountId = c.req.query("cfAccountId") ?? "";
+  const cfAccountName = c.req.query("cfAccountName") ?? "";
+  const baseInput = cfAccountName.trim() || cfAccountId.trim();
+  if (!baseInput) {
+    return c.json({ error: "cfAccountId is required" }, 400);
+  }
+  const username = generateAvailableUsername(baseInput, isUsernameAvailable);
+  return c.json({ username });
 });
 
 /** Cloud signup — passtoken is provisioned server-side only (internal auth header). */

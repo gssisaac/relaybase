@@ -1,0 +1,13 @@
+# Railway service: hq-relaybase-studio-dbver
+# Dashboard → Settings → Root Directory: repository root (not hq/studio).
+# Dockerfile path is relative to root.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "hq/studio/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

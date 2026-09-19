@@ -5,3 +5,4 @@ packages:
   - hq/scale
   - desktop
   - hq/website
+  - hq/studio

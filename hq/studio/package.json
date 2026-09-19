@@ -8,17 +8,28 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "tsx --env-file=.env dist/index.js",
+    "start:prod": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "migrate:templates-yaml": "node scripts/migrate-templates-to-yaml.mjs",
+    "orm:ensure-db": "tsx --env-file=.env src/db/orm/ensure-relaybase-database.ts",
+    "orm:sync": "tsx --env-file=.env src/db/orm/run-sync-schema.ts",
+    "orm:migrate:json": "tsx --env-file=.env src/db/orm/migrate-from-json-store.ts",
+    "orm:setup": "pnpm run orm:ensure-db && pnpm run orm:sync && pnpm run orm:migrate:json",
+    "deploy:railway": "pnpm dlx @railway/cli up --service hq-relaybase-studio-dbver",
+    "deploy:railway:dbver": "pnpm dlx @railway/cli up --service hq-relaybase-studio-dbver -y -d",
     "generate:message-template-thumbnails": "pnpm -C ../../app run generate:message-template-thumbnails"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "hono": "^4.7.11",
     "marked": "^15.0.7",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.26",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
     "@types/node": "^20",
     "tsx": "^4.19.2",
     "typescript": "^5.8.3"

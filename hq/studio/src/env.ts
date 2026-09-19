@@ -5,10 +5,12 @@
  */
 export type Env = {
   PORT: string | undefined;
+  DATABASE_URL: string | undefined;
 };
 
 export function readEnv(): Env {
   return {
     PORT: process.env.PORT,
+    DATABASE_URL: process.env.DATABASE_URL,
   };
 }

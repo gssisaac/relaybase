@@ -7,11 +7,25 @@ export {
   getHqAccessToken as getCloudAccessToken,
   getHqUser as getCloudUser,
   hasHqSession as hasCloudSession,
-  hqLogin as cloudLogin,
-  hqLogout as cloudLogout,
   hqRefreshSession as cloudRefreshSession,
   subscribeHqAuth as subscribeCloudAuth,
 } from "@/lib/hq-auth/session";
+
+import { hqLogin, hqLogout } from "@/lib/hq-auth/session";
+import { clearCloudWorkerSession, ensureCloudWorkerSession } from "@/lib/auth/cloud-worker-session";
+
+export async function cloudLogin(input: {
+  username: string;
+  password: string;
+}): Promise<void> {
+  await hqLogin({ username: input.username.trim(), password: input.password });
+  await ensureCloudWorkerSession();
+}
+
+export async function cloudLogout(): Promise<void> {
+  clearCloudWorkerSession();
+  await hqLogout();
+}
 
 export async function registerCloudAccount(input: {
   username: string;
@@ -41,6 +55,7 @@ export async function registerCloudAccount(input: {
       expiresIn: number;
       user: import("@/lib/hq-auth/session").HqUser;
     });
+    await ensureCloudWorkerSession();
   }
 }
 
@@ -70,5 +85,6 @@ export async function resetCloudPasswordOAuth(input: {
       expiresIn: body.expiresIn ?? 900,
       user: body.user,
     });
+    await ensureCloudWorkerSession();
   }
 }

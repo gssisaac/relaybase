@@ -5,17 +5,17 @@ import { useRouter } from "next/navigation";
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { RestoreLastRoute } from "@/components/RestoreLastRoute";
 import { SessionPhaseScreen } from "@/console/components/setup/common/layout/SessionPhaseScreen";
+import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
-import { getWebTeamAuth } from "@/mail-platform/session/email-session";
-import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
-import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
+import {
+  DEFAULT_DASHBOARD_PATH,
+  DEFAULT_STUDIO_PATH,
+} from "@/lib/navigation/sidebar-paths";
 
 /**
  * App entry.
  * Desktop: SessionPhaseScreen owns setup / unlock routing (welcome `/setup`).
- * Web: never render a form here — bounce to `/dashboard`, `/inbox`, or `/login`
- * immediately so the address bar is `/login`, not `/`. Session restore runs
- * on the `/login` page.
+ * Web: cloud session only — `/login` when unauthenticated.
  */
 export default function HomePage() {
   const router = useRouter();
@@ -26,25 +26,17 @@ export default function HomePage() {
 
     let active = true;
     async function routeWebHome() {
-      if (hasHqSession()) {
-        router.replace("/studio/dashboard");
-        return;
-      }
-      const hqOk = await hqRefreshSession();
+      const auth = await ensureWebCloudAuth();
       if (!active) return;
-      if (hqOk) {
-        router.replace("/studio/dashboard");
+      if (auth === "login") {
+        router.replace("/login");
         return;
       }
-      if (hasWebOwnerSession()) {
-        router.replace("/dashboard");
+      if (auth === "ready") {
+        router.replace(DEFAULT_DASHBOARD_PATH);
         return;
       }
-      if (getWebTeamAuth()) {
-        router.replace("/inbox");
-        return;
-      }
-      router.replace("/login");
+      router.replace(DEFAULT_STUDIO_PATH);
     }
 
     void routeWebHome();

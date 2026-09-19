@@ -77,14 +77,32 @@ function SetupShell({ children }: { children: ReactNode }) {
  * install flow (OAuth on /setup/install, probe + install on /setup/progress)
  * spliced into the same WorkerInstallPanel / SetupProgressPanel screens.
  */
+function WebSetupRedirect({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const { isDesktop } = useDesktopChrome();
+
+  useEffect(() => {
+    if (isDesktop) return;
+    router.replace("/signup");
+  }, [isDesktop, router]);
+
+  if (!isDesktop) {
+    return null;
+  }
+
+  return children;
+}
+
 export default function SetupLayout({ children }: { children: ReactNode }) {
   // DesktopProvider + AppSessionProvider live at the root layout now, so
   // setup and the dashboard shell share one session.
   return (
+    <WebSetupRedirect>
     <DesktopShell>
       <EnableEmailApiDialogHost>
         <SetupShell>{children}</SetupShell>
       </EnableEmailApiDialogHost>
     </DesktopShell>
+    </WebSetupRedirect>
   );
 }

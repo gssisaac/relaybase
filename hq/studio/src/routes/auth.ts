@@ -23,6 +23,7 @@ import { verifyInternalAuthHeader } from "../lib/auth/internal-auth";
 import { suggestUsernameFromCfAccountId } from "../lib/auth/username";
 import { verifyAccessToken } from "../lib/auth/jwt";
 import { bearerToken } from "../lib/auth/bearer-token";
+import { mintWorkerOwnerSession } from "../lib/auth/worker-owner-session";
 
 export const hqAuth = new Hono();
 
@@ -182,6 +183,20 @@ hqAuth.patch("/me", async (c) => {
   }
 
   return c.json({ user: serializeUser(result.user) });
+});
+
+hqAuth.post("/worker-session", async (c) => {
+  const auth = authenticatedUser(c);
+  if (!auth.user) {
+    return c.json({ error: auth.error ?? "Unauthorized" }, auth.status ?? 401);
+  }
+
+  const minted = await mintWorkerOwnerSession(auth.user);
+  if (!minted.ok) {
+    return c.json({ error: minted.error }, minted.status as 404 | 502 | 503);
+  }
+
+  return c.json(minted.session);
 });
 
 hqAuth.post("/change-password", async (c) => {

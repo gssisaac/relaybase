@@ -1,16 +1,18 @@
 # Cloud entry auth (username + OAuth)
 
-**Status:** Active (web-first). Desktop legacy passtoken flows remain until migrated.
+**Status:** Active — single web auth root for Studio, Console, and Mailbox.
 
 ## User-facing flows
 
 | Flow | URL | Mechanism |
 |------|-----|-----------|
 | Sign up | `/signup` | CF OAuth → web install (`cloudSignup=1`) → username + password |
-| Sign in | `/login` | Username + password → HQ Studio refresh cookie |
+| Sign in | `/login` | Username + password → HQ refresh cookie + Worker session exchange |
 | Forgot password | `/forgot-password` | CF OAuth account match → new password |
 
-Passtoken is issued during signup on the server (`/api/auth/register-cloud` → Worker `setup-admin`) and stored encrypted in `hq/studio/data/auth.json` (`passtokenEnc`). It is **not** shown or stored in the browser.
+Passtoken is created during signup on the server (`/api/auth/register-cloud` → Worker `setup-admin` → `POST /auth/signup/cloud`) and stored encrypted (`passtokenEnc`). It is **never** shown or stored in the browser.
+
+After HQ login (or refresh), the app calls **`POST /auth/worker-session`** so mail and console API calls use scoped Worker tokens without user-visible passtoken or team mobile passwords.
 
 ## API (hq/studio)
 
@@ -18,9 +20,25 @@ Passtoken is issued during signup on the server (`/api/auth/register-cloud` → 
 |-------|---------|
 | `GET /auth/check-username` | Username availability |
 | `GET /auth/suggest-username?cfAccountId=` | Default username suggestion |
-| `POST /auth/signup/cloud` | Internal-only cloud signup (header `X-Relaybase-Internal-Auth`) |
+| `POST /auth/signup/cloud` | Internal-only cloud signup (`X-Relaybase-Internal-Auth`) |
 | `POST /auth/reset-password/oauth` | Internal-only CF OAuth password reset |
-| `POST /auth/login` | Body `{ username, password }` (legacy `email` still works) |
+| `POST /auth/login` | `{ username, password }` (legacy `email` still accepted) |
+| `POST /auth/refresh` | Rotate refresh cookie (RTR) |
+| `POST /auth/worker-session` | Authenticated HQ JWT → Worker owner token bundle |
+
+### `POST /auth/worker-session` response
+
+```json
+{
+  "workerUrl": "https://….workers.dev",
+  "mailAccessToken": "…",
+  "mailRefreshToken": "…",
+  "consoleRefreshToken": "…",
+  "mailExpiresIn": 600
+}
+```
+
+Server decrypts `passtokenEnc`, calls Worker `POST /console/login`, returns tokens only.
 
 ## App routes
 
@@ -29,4 +47,40 @@ Passtoken is issued during signup on the server (`/api/auth/register-cloud` → 
 | `POST /api/auth/register-cloud` | CF session + install token → setup-admin → studio signup |
 | `POST /api/auth/reset-password-oauth` | CF session → studio password reset |
 
-Legacy redirects: `/studio/login`, `/studio/signup`, `/worker/login` → `/login` or `/signup`.
+## Web session layers
+
+| Layer | Storage | Used for |
+|-------|---------|----------|
+| HQ refresh | HttpOnly cookie | `/auth/refresh`, 30-day sign-in |
+| HQ access JWT | JS memory | Studio API, `/auth/worker-session` |
+| Worker owner refresh | JS memory + tab `sessionStorage` via `web-owner-persist` | `/mail/*`, `/console/*` via `owner-session` |
+
+Logout (`cloudLogout`) clears HQ memory, revokes cookie, and clears Worker owner sessions.
+
+## Legacy redirects
+
+| Old URL | Redirect |
+|---------|----------|
+| `/studio/login`, `/studio/signup` | `/login`, `/signup` |
+| `/worker/login` | `/login` |
+| `/recover-admin`, `/reset-password` | `/forgot-password` |
+| `/setup/*` (web only) | `/signup` |
+
+## File map
+
+| Area | Path |
+|------|------|
+| Auth UI | `app/src/features/auth/` |
+| Cloud session | `app/src/lib/auth/cloud-session.ts` |
+| Worker bridge | `app/src/lib/auth/cloud-worker-session.ts` |
+| Shell gate | `app/src/app/_shell/DesktopDashboardGate.tsx` |
+| Studio worker session | `hq/studio/src/lib/auth/worker-owner-session.ts` |
+| Vault | `hq/studio/src/lib/vault/passtoken-vault.ts` |
+
+## Environment
+
+| Secret | Where |
+|--------|--------|
+| `HQ_JWT_SECRET` | Web app + HQ Studio (must match) |
+| `HQ_INTERNAL_AUTH_SECRET` | Web app register/reset + Studio internal routes |
+| `HQ_VAULT_SECRET` (optional) | Passtoken encryption; falls back to JWT secret |

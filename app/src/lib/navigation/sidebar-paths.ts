@@ -10,8 +10,6 @@ const BLOCKED_PATH_PREFIXES = [
   "/forgot-password",
   "/studio/login",
   "/studio/signup",
-  "/cloud/login",
-  "/cloud/signup",
   "/worker/login",
   "/register",
   "/setup",

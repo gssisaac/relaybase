@@ -4,6 +4,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY patches patches
 COPY hq/studio/package.json hq/studio/package.json
 COPY hq/studio/.npmrc hq/studio/.npmrc
 

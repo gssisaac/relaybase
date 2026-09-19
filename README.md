@@ -164,7 +164,7 @@ productions/
     └── scripts/            # diagnose-relaybase, run-worker
 ```
 
-Clone both repos as siblings. Override the Worker path with `RELAYBASE_WORKER_DIR`. Root scripts `npm run dev` / `deploy` / `typecheck` / `pack:worker-install` delegate to the sibling repo.
+Clone both repos as siblings. Override the Worker path with `RELAYBASE_WORKER_DIR`. Root `pnpm run deploy` ships **production** (web on Cloudflare + Studio on Railway, in parallel). `pnpm run deploy:worker`, `dev`, `typecheck`, and `pack:worker-install` delegate to the sibling `relaybase-worker` repo.
 
 ---
 

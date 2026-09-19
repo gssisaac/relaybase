@@ -14,7 +14,7 @@
     "orm:sync": "tsx --env-file=.env src/db/orm/run-sync-schema.ts",
     "orm:setup": "pnpm run orm:ensure-db && pnpm run orm:sync",
     "deploy:cf": "wrangler deploy",
-    "deploy:railway": "pnpm dlx @railway/cli up --service hq-relaybase-studio -y -d",
+    "deploy:railway": "node ../../scripts/deploy-studio-railway.mjs",
     "generate:message-template-thumbnails": "pnpm -C ../../app run generate:message-template-thumbnails"
   },
   "dependencies": {

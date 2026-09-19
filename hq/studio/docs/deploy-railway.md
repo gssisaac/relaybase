@@ -18,7 +18,7 @@ Use Railway only for local/staging parity or if you run Studio outside Workers.
 ## Prerequisites
 
 - Railway project with Postgres (database **`relaybase`** on private URL).
-- Service name: **`hq-relaybase-studio`**
+- Service name: **`hq-relaybase-studio-dbver`**
 - **Root directory** in Railway: monorepo root (not `hq/studio/`).
 - Service settings → **Config file path**: `hq/studio/railway.toml` (absolute from repo root).
 
@@ -52,9 +52,14 @@ Do **not** set `TYPEORM_SYNC=1` in production.
 ```bash
 pnpm dlx @railway/cli login
 cd /path/to/repo/root
-railway link   # project + service hq-relaybase-studio
+railway link   # project + service hq-relaybase-studio-dbver
 
-pnpm -C hq/studio run deploy:railway
+# From repo root (web + studio in parallel):
+pnpm run deploy
+
+# Studio only:
+pnpm run deploy:studio
+# or: pnpm -C hq/studio run deploy:railway
 ```
 
 ## Wire Cloudflare web

@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/run-worker.mjs dev",
-    "deploy": "node scripts/run-worker.mjs deploy",
+    "deploy": "node scripts/deploy-production.mjs",
+    "deploy:prod": "node scripts/deploy-production.mjs",
+    "deploy:web": "pnpm --dir app run deploy:web",
+    "deploy:studio": "node scripts/deploy-studio-railway.mjs",
+    "deploy:worker": "node scripts/run-worker.mjs deploy",
     "typecheck": "node scripts/run-worker.mjs typecheck",
     "test:worker": "node scripts/run-worker.mjs test",
     "admin:dev": "npm run dev --prefix hq/admin",

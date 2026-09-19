@@ -4,14 +4,11 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   AlertCircle,
   Check,
-  CheckCircle2,
-  ExternalLink,
   Globe,
   Info,
   Loader2,
   Plus,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,11 +16,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDomain, type DomainAddJob, type DomainSummary } from "@/lib/dashboard/DomainContext";
 import { listCloudflareZones } from "@/lib/dashboard/list-cf-zones";
 import type { ZoneSummary } from "@/lib/desktop/bridge";
-import { GOOGLE_WORKSPACE_MIGRATION_DOC_URL, desktopOpenExternal } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
+
+type ConnectedDomainRow = {
+  domain: string;
+  summary: DomainSummary | null;
+  pendingJob: DomainAddJob | null;
+};
+
+function isJobInFlight(job: DomainAddJob): boolean {
+  return job.phase !== "done" && job.phase !== "failed";
+}
+
+function buildConnectedRows(
+  domains: DomainSummary[],
+  jobs: DomainAddJob[],
+): ConnectedDomainRow[] {
+  const byKey = new Map<string, ConnectedDomainRow>();
+  for (const summary of domains) {
+    byKey.set(summary.domain.toLowerCase(), {
+      domain: summary.domain,
+      summary,
+      pendingJob: null,
+    });
+  }
+  for (const job of jobs) {
+    if (!isJobInFlight(job)) continue;
+    const key = job.domain.toLowerCase();
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.pendingJob = job;
+    } else {
+      byKey.set(key, { domain: job.domain, summary: null, pendingJob: job });
+    }
+  }
+  return [...byKey.values()].sort((a, b) =>
+    a.domain.localeCompare(b.domain, undefined, { sensitivity: "base" }),
+  );
+}
 
 export function Step2DomainCard({
   accountId,
@@ -47,13 +80,9 @@ export function Step2DomainCard({
     [domainStore.domains],
   );
 
-  // Find in-progress domains
-  const pendingDomains = useMemo(
-    () =>
-      domainStore.domains.filter(
-        (d) => d.onboarding && (d.onboarding.status === "running" || d.onboarding.status === "waiting"),
-      ),
-    [domainStore.domains],
+  const connectedRows = useMemo(
+    () => buildConnectedRows(domainStore.domains, domainStore.addJobs),
+    [domainStore.domains, domainStore.addJobs],
   );
 
   // Active domain for next step
@@ -70,7 +99,12 @@ export function Step2DomainCard({
     setError(null);
     try {
       const list = await listCloudflareZones(accountId);
-      const existingNames = new Set(domainStore.domains.map((d) => d.domain.toLowerCase()));
+      const existingNames = new Set([
+        ...domainStore.domains.map((d) => d.domain.toLowerCase()),
+        ...domainStore.addJobs
+          .filter(isJobInFlight)
+          .map((j) => j.domain.toLowerCase()),
+      ]);
       const available = list.filter((z) => !existingNames.has(z.name.toLowerCase()));
       setZones(available);
     } catch {
@@ -79,7 +113,7 @@ export function Step2DomainCard({
     } finally {
       setLoadingZones(false);
     }
-  }, [accountId, domainStore.domains]);
+  }, [accountId, domainStore.domains, domainStore.addJobs]);
 
   useEffect(() => {
     void loadZones();
@@ -107,6 +141,7 @@ export function Step2DomainCard({
     setError(null);
     setSelectedDomain(trimmed);
     setCustomDomain("");
+    setZones((prev) => prev.filter((z) => z.name.toLowerCase() !== trimmed));
     try {
       domainStore.queueAddDomain(trimmed, false);
       toast.info(`Connecting domain ${trimmed}…`);
@@ -137,69 +172,87 @@ export function Step2DomainCard({
       </div>
 
       {/* Existing / Connected Domains List */}
-      {domainStore.domains.length > 0 && (
+      {connectedRows.length > 0 && (
         <div className="space-y-2.5">
           <Label className="text-xs font-medium text-muted-foreground">Connected Domains</Label>
           <div className="space-y-2">
-            {domainStore.domains.map((d) => {
-              const isReady = !d.onboarding || d.onboarding.status === "ready";
-              const isRunning = d.onboarding?.status === "running" || d.onboarding?.status === "waiting";
-              const isFailed = d.onboarding?.status === "failed";
-              const isSelected = (currentActiveDomain || "").toLowerCase() === d.domain.toLowerCase();
+            {connectedRows.map((row) => {
+              const d = row.summary;
+              const onboarding = d?.onboarding ?? null;
+              const hasPendingJob =
+                row.pendingJob !== null && isJobInFlight(row.pendingJob);
+              const isFailed = onboarding?.status === "failed";
+              const isConnecting =
+                hasPendingJob ||
+                onboarding?.status === "running" ||
+                onboarding?.status === "waiting";
+              const isReady =
+                !hasPendingJob &&
+                !isConnecting &&
+                Boolean(d && (!onboarding || onboarding.status === "ready"));
+              const isSelected =
+                (currentActiveDomain || "").toLowerCase() === row.domain.toLowerCase();
 
               return (
                 <div
-                  key={d.domain}
-                  onClick={() => isReady && setSelectedDomain(d.domain)}
+                  key={row.domain}
+                  onClick={() => isReady && setSelectedDomain(row.domain)}
                   className={cn(
                     "flex items-center justify-between rounded-lg border p-3 transition-all",
                     isSelected ? "border-primary/60 bg-primary/5" : "bg-card/40",
                     isReady && "cursor-pointer hover:border-border",
                   )}
                 >
-                  <div className="flex items-center gap-3">
-                    <Globe className="size-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">{d.domain}</p>
-                      {isRunning && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <Loader2 className="size-3 animate-spin text-primary" />
-                          {d.onboarding?.currentStepLabel ?? "Configuring Cloudflare DNS & Email Routing…"}
-                        </p>
-                      )}
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Globe className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{row.domain}</p>
                       {isFailed && (
-                        <p className="text-xs text-destructive flex items-center gap-1 mt-0.5">
-                          <AlertCircle className="size-3" />
-                          {d.onboarding?.lastError ?? "Onboarding failed. Check DNS records."}
+                        <p className="mt-0.5 flex items-center gap-1 text-xs text-destructive">
+                          <AlertCircle className="size-3 shrink-0" />
+                          {onboarding?.lastError ?? "Onboarding failed. Check DNS records."}
                         </p>
                       )}
+                      {isConnecting && !isFailed && onboarding?.currentStepLabel ? (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {onboarding.currentStepLabel}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
-                  <div>
-                    {isReady ? (
-                      <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 gap-1 text-xs">
+                  <div className="shrink-0 pl-2">
+                    {isReady && !isConnecting ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-600 dark:text-emerald-400"
+                      >
                         <Check className="size-3" />
                         Ready
                       </Badge>
-                    ) : isRunning ? (
-                      <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
-                        In Progress
+                    ) : isConnecting && !isFailed ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1.5 border-amber-500/40 bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300"
+                      >
+                        <Loader2 className="size-3 animate-spin" />
+                        Connecting..
                       </Badge>
-                    ) : (
+                    ) : isFailed ? (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          domainStore.queueRetryOnboarding(d.domain, false);
+                          domainStore.queueRetryOnboarding(row.domain, false);
+                          toast.info(`Retrying ${row.domain}…`);
                         }}
-                        className="text-xs h-7"
+                        className="h-7 text-xs"
                       >
                         Retry
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );

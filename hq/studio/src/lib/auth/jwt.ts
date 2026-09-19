@@ -4,6 +4,7 @@ export type HqAccessClaims = {
   sub: string;
   email: string;
   accountLinkId: string;
+  username?: string;
 };
 
 function base64url(input: Buffer | string): string {

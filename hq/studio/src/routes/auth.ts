@@ -11,13 +11,19 @@ import {
   refreshFromCookie,
   requestPasswordReset,
   resetPasswordWithToken,
+  resetPasswordForCfAccount,
   serializeUser,
   setRefreshCookie,
   signupUser,
+  signupCloudUser,
+  isUsernameAvailable,
   updateUserProfile,
 } from "../lib/auth/hq-auth-service";
+import { verifyInternalAuthHeader } from "../lib/auth/internal-auth";
+import { suggestUsernameFromCfAccountId } from "../lib/auth/username";
 import { verifyAccessToken } from "../lib/auth/jwt";
 import { bearerToken } from "../lib/auth/bearer-token";
+import { mintWorkerOwnerSession } from "../lib/auth/worker-owner-session";
 
 export const hqAuth = new Hono();
 
@@ -82,14 +88,15 @@ hqAuth.post("/login", async (c) => {
     return c.json({ error: err instanceof Error ? err.message : "Auth unavailable" }, 503);
   }
 
-  let body: { email?: string; password?: string } = {};
+  let body: { email?: string; username?: string; password?: string } = {};
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  const result = loginUser(body.email ?? "", body.password ?? "");
+  const loginId = body.username ?? body.email ?? "";
+  const result = loginUser(loginId, body.password ?? "");
   if (!result.ok) {
     return c.json({ error: result.error }, 401);
   }
@@ -178,6 +185,20 @@ hqAuth.patch("/me", async (c) => {
   return c.json({ user: serializeUser(result.user) });
 });
 
+hqAuth.post("/worker-session", async (c) => {
+  const auth = authenticatedUser(c);
+  if (!auth.user) {
+    return c.json({ error: auth.error ?? "Unauthorized" }, auth.status ?? 401);
+  }
+
+  const minted = await mintWorkerOwnerSession(auth.user);
+  if (!minted.ok) {
+    return c.json({ error: minted.error }, minted.status as 404 | 502 | 503);
+  }
+
+  return c.json(minted.session);
+});
+
 hqAuth.post("/change-password", async (c) => {
   const auth = authenticatedUser(c);
   if (!auth.user) {
@@ -201,6 +222,100 @@ hqAuth.post("/change-password", async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+hqAuth.get("/check-username", async (c) => {
+  const username = c.req.query("username") ?? "";
+  if (!username.trim()) {
+    return c.json({ available: false, error: "Username is required." }, 400);
+  }
+  return c.json({ available: isUsernameAvailable(username) });
+});
+
+hqAuth.get("/suggest-username", async (c) => {
+  const cfAccountId = c.req.query("cfAccountId") ?? "";
+  if (!cfAccountId.trim()) {
+    return c.json({ error: "cfAccountId is required" }, 400);
+  }
+  const base = suggestUsernameFromCfAccountId(cfAccountId);
+  let candidate = base;
+  if (!isUsernameAvailable(candidate)) {
+    candidate = `${base}-${Math.floor(Math.random() * 900 + 100)}`;
+  }
+  return c.json({ username: candidate });
+});
+
+/** Cloud signup — passtoken is provisioned server-side only (internal auth header). */
+hqAuth.post("/signup/cloud", async (c) => {
+  if (!verifyInternalAuthHeader(c.req.header("x-relaybase-internal-auth"))) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  try {
+    requireJwtSecret();
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Auth unavailable" }, 503);
+  }
+
+  let body: {
+    username?: string;
+    password?: string;
+    confirmPassword?: string;
+    cfAccountId?: string;
+    workerUrl?: string;
+    passtoken?: string;
+  } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const result = signupCloudUser({
+    username: body.username ?? "",
+    password: body.password ?? "",
+    confirmPassword: body.confirmPassword,
+    cfAccountId: body.cfAccountId ?? "",
+    workerUrl: body.workerUrl ?? "",
+    passtoken: body.passtoken ?? "",
+  });
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status as 400 | 409 | 503);
+  }
+
+  return c.json(issueAuthResponse(c, result.user));
+});
+
+hqAuth.post("/reset-password/oauth", async (c) => {
+  if (!verifyInternalAuthHeader(c.req.header("x-relaybase-internal-auth"))) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  try {
+    requireJwtSecret();
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Auth unavailable" }, 503);
+  }
+
+  let body: {
+    cfAccountId?: string;
+    newPassword?: string;
+    confirmPassword?: string;
+  } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const result = resetPasswordForCfAccount(
+    body.cfAccountId ?? "",
+    body.newPassword ?? "",
+    body.confirmPassword,
+  );
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status as 400 | 404);
+  }
+
+  return c.json(issueAuthResponse(c, result.user));
 });
 
 hqAuth.post("/forgot-password", async (c) => {

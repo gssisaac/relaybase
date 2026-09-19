@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "../../cf/storage-fs";
 import path from "node:path";
 
 import { Document, isScalar, parse as parseYaml, Scalar } from "yaml";

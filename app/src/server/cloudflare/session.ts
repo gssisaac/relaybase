@@ -126,7 +126,44 @@ export function readPkceCookie(sealed: string | undefined | null): PkceState | n
   return unseal<PkceState>(sealed);
 }
 
-export const COOKIE_NAMES = { oauth: OAUTH_COOKIE, pkce: PKCE_COOKIE } as const;
+const SIGNUP_STAGING_COOKIE = "rb_signup_staging";
+
+export type SignupInstallStaging = {
+  workerUrl: string;
+  accountId: string;
+  authPepper: string;
+  expiresAt: number;
+};
+
+export function sealSignupStaging(staging: Omit<SignupInstallStaging, "expiresAt">): string {
+  return seal({
+    ...staging,
+    expiresAt: Date.now() + 15 * 60 * 1000,
+  });
+}
+
+export function readSignupStagingCookie(sealed: string | undefined | null): SignupInstallStaging | null {
+  const parsed = unseal<SignupInstallStaging>(sealed);
+  if (!parsed?.workerUrl || !parsed.accountId || !parsed.authPepper) return null;
+  if (parsed.expiresAt <= Date.now()) return null;
+  return parsed;
+}
+
+export function signupStagingCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/api/auth",
+    maxAge: 900,
+  };
+}
+
+export const COOKIE_NAMES = {
+  oauth: OAUTH_COOKIE,
+  pkce: PKCE_COOKIE,
+  signupStaging: SIGNUP_STAGING_COOKIE,
+} as const;
 
 export function accessTokenIsFresh(session: CfOAuthSession): boolean {
   if (!session.accessToken.trim()) return false;

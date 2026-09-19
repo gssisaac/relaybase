@@ -133,7 +133,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.7
-        version: 16.2.7(@typescript-eslint/parser@8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       playwright:
         specifier: ^1.55.0
         version: 1.63.0
@@ -145,7 +145,7 @@ importers:
         version: 5.9.3
       wrangler:
         specifier: ^4.110.0
-        version: 4.120.0
+        version: 4.120.0(@cloudflare/workers-types@4.20260702.1)
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -218,7 +218,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.7
-        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.7(@typescript-eslint/parser@8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -227,7 +227,7 @@ importers:
         version: 5.9.3
       wrangler:
         specifier: ^4.110.0
-        version: 4.120.0
+        version: 4.120.0(@cloudflare/workers-types@4.20260702.1)
 
   hq/console:
     dependencies:
@@ -291,7 +291,7 @@ importers:
         version: 5.9.3
       wrangler:
         specifier: ^4.110.0
-        version: 4.120.0
+        version: 4.120.0(@cloudflare/workers-types@4.20260702.1)
 
   hq/studio:
     dependencies:
@@ -317,6 +317,9 @@ importers:
         specifier: ^2.9.1
         version: 2.9.1
     devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20250317.0
+        version: 4.20260702.1
       '@types/node':
         specifier: ^20
         version: 20.19.43
@@ -329,6 +332,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      wrangler:
+        specifier: ^4.120.0
+        version: 4.120.0(@cloudflare/workers-types@4.20260702.1)
 
   hq/website:
     dependencies:
@@ -855,6 +861,9 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@cloudflare/workers-types@4.20260702.1':
+    resolution: {integrity: sha512-mOhf5TUEB1m2vPrxtqoIGfz0fUC9xyxRDx5gWHy5s+OCo6dcV+g7wI1R7gYCMFohhqF/2y2xeKVwMwCJjfn/WA==}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -7760,6 +7769,8 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20260801.1':
     optional: true
 
+  '@cloudflare/workers-types@4.20260702.1': {}
+
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
@@ -8559,7 +8570,7 @@ snapshots:
       glob: 12.0.0
       next: 16.2.7(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       ts-tqdm: 0.8.6
-      wrangler: 4.120.0
+      wrangler: 4.120.0(@cloudflare/workers-types@4.20260702.1)
       yargs: 18.1.0
     transitivePeerDependencies:
       - encoding
@@ -13854,7 +13865,7 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20260801.1
       '@cloudflare/workerd-windows-64': 1.20260801.1
 
-  wrangler@4.120.0:
+  wrangler@4.120.0(@cloudflare/workers-types@4.20260702.1):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260801.1)
@@ -13865,6 +13876,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       workerd: 1.20260801.1
     optionalDependencies:
+      '@cloudflare/workers-types': 4.20260702.1
       fsevents: 2.3.3
     transitivePeerDependencies:
       - bufferutil

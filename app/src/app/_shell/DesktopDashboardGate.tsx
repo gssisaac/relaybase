@@ -18,16 +18,10 @@ import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/common/update/use-enable-email-api-dialog";
 import { ConsoleRouteGate } from "@/console/components/setup/common/layout/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
-import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
-import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
 import { isStudioSettingsPath } from "@/lib/navigation/studio-settings-path";
-import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
-import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
-
-function isStudioShellPath(pathname: string): boolean {
-  return pathname === "/studio" || pathname.startsWith("/studio/");
-}
+import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -40,6 +34,16 @@ import { SessionPhaseScreen } from "@/console/components/setup/common/layout/Ses
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
 const WEB_OWNER_USER_ID = "web-owner";
+
+function isStudioShellPath(pathname: string): boolean {
+  return pathname === "/studio" || pathname.startsWith("/studio/");
+}
+
+function webPathNeedsWorker(pathname: string): boolean {
+  if (isStudioShellPath(pathname)) return false;
+  const mode = modeFromPathname(pathname);
+  return mode === "dashboard" || mode === "email";
+}
 
 /** Console-scoped dashboard stores — mount only after the route gate passes. */
 function OwnerConsoleDashboard({ children }: { children: ReactNode }) {
@@ -140,14 +144,6 @@ function GateInner({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Web owner: no keyring / Touch ID phase machine — `hasWebOwnerSession()`
- * (in-memory access token from `webOwnerLogin()`, or re-minted from tab
- * sessionStorage by `restoreWebOwnerSession()` after a reload) is the whole
- * gate. Unauthenticated web visitors go to `/login`. Reuses the same DashboardShell as
- * desktop's owner path, just under WebConsoleAppProviders instead of
- * DesktopShell + ConsoleAppProviders.
- */
 function WebOwnerGate({ children }: { children: ReactNode }) {
   return (
     <WebConsoleAppProviders>
@@ -158,18 +154,17 @@ function WebOwnerGate({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Single dashboard chrome for every run mode. The phase switch is the only
- * gate — no scattered `hasOwnerSession()` / `ownerAccess` checks. Credentials
- * come from the root `DesktopProvider` (see `AppProviders`).
- */
-type DashboardGateMode = "loading" | "desktop" | "web-owner" | "web-redirect";
+type DashboardGateMode =
+  | "loading"
+  | "desktop"
+  | "web-owner"
+  | "web-redirect-login"
+  | "web-redirect-studio";
 
 export function DesktopDashboardGate({
   children,
 }: {
   children: ReactNode;
-  /** Ignored — kept for call-site compatibility during migration. */
   userId?: string;
 }) {
   const router = useRouter();
@@ -177,8 +172,7 @@ export function DesktopDashboardGate({
   const [gateMode, setGateMode] = useState<DashboardGateMode>("loading");
 
   useEffect(() => {
-    const desktop = isDesktopRuntime();
-    if (desktop) {
+    if (isDesktopRuntime()) {
       setGateMode("desktop");
       return;
     }
@@ -186,27 +180,25 @@ export function DesktopDashboardGate({
     let active = true;
 
     async function resolveWebGate() {
-      // Studio is session-gated; Worker passtoken is not required to enter the shell.
-      if (isStudioShellPath(pathname)) {
-        if (hasHqSession()) {
-          setGateMode("web-owner");
-          return;
-        }
-        const hqOk = await hqRefreshSession();
-        if (!active) return;
-        setGateMode(hqOk ? "web-owner" : "web-redirect");
+      const auth = await ensureWebCloudAuth();
+      if (!active) return;
+
+      if (auth === "login") {
+        setGateMode("web-redirect-login");
         return;
       }
 
-      if (hasWebOwnerSession()) {
+      if (auth === "ready") {
         setGateMode("web-owner");
         return;
       }
-      const restored = await restoreWebOwnerSession();
-      if (!active) return;
-      setGateMode(
-        restored && hasWebOwnerSession() ? "web-owner" : "web-redirect",
-      );
+
+      if (webPathNeedsWorker(pathname)) {
+        setGateMode("web-redirect-studio");
+        return;
+      }
+
+      setGateMode("web-owner");
     }
 
     void resolveWebGate();
@@ -216,35 +208,22 @@ export function DesktopDashboardGate({
   }, [pathname]);
 
   useEffect(() => {
-    if (gateMode !== "web-redirect") return;
-    const search =
-      typeof window !== "undefined" ? window.location.search : "";
-    if (pathname === "/email/inbox" || pathname === "/email") {
-      router.replace(`/inbox${search}`);
-    } else if (pathname === "/email/sent") {
-      router.replace(`/sent${search}`);
-    } else if (pathname === "/email/drafts") {
-      router.replace(`/drafts${search}`);
-    } else if (pathname === "/email/trash") {
-      router.replace(`/trash${search}`);
-    } else if (pathname === "/email/compose") {
-      router.replace(`/compose${search}`);
-    } else if (pathname === "/email/settings") {
-      router.replace(`/mail-settings${search}`);
-    } else if (isStudioShellPath(pathname)) {
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    if (gateMode === "web-redirect-login") {
       const next = `${pathname}${search}`;
-      router.replace(`/studio/login?next=${encodeURIComponent(next)}`);
-    } else {
-      const auth = getWebTeamAuth();
-      if (auth) {
-        router.replace(`/inbox${search}`);
-      } else {
-        router.replace("/login");
-      }
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
+    if (gateMode === "web-redirect-studio") {
+      router.replace("/studio/dashboard");
     }
   }, [gateMode, pathname, router]);
 
-  if (gateMode === "loading" || gateMode === "web-redirect") {
+  if (
+    gateMode === "loading" ||
+    gateMode === "web-redirect-login" ||
+    gateMode === "web-redirect-studio"
+  ) {
     return <AppLoadingScreen />;
   }
 

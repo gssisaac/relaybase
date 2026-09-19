@@ -1,9 +1,15 @@
 export type HqAuthUser = {
   id: string;
+  /** Legacy email login; cloud accounts may use username only. */
   email: string;
   passwordHash: string;
   name: string | null;
   accountLinkId: string;
+  /** Cloud login id (unique). */
+  username?: string | null;
+  cfAccountId?: string | null;
+  workerUrl?: string | null;
+  passtokenEnc?: string | null;
   createdAt: string;
   updatedAt: string;
 };

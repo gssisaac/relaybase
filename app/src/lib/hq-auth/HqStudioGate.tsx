@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
+import { ensureCloudWorkerSession } from "@/lib/auth/cloud-worker-session";
 import { hasHqSession, hqRefreshSession } from "./session";
 
 type GateState = "loading" | "allowed" | "redirect";
@@ -22,15 +23,23 @@ export function HqStudioGate({ children }: { children: ReactNode }) {
       setState("allowed");
       return;
     }
-    if (hasHqSession()) {
-      setState("allowed");
-      return;
-    }
+
     let active = true;
-    void hqRefreshSession().then((ok) => {
+
+    async function resolve() {
+      let ok = hasHqSession();
+      if (!ok) {
+        ok = await hqRefreshSession();
+      }
+      if (!active) return;
+      if (ok) {
+        await ensureCloudWorkerSession();
+      }
       if (!active) return;
       setState(ok ? "allowed" : "redirect");
-    });
+    }
+
+    void resolve();
     return () => {
       active = false;
     };
@@ -40,7 +49,7 @@ export function HqStudioGate({ children }: { children: ReactNode }) {
     if (state !== "redirect") return;
     const qs = searchParams.toString();
     const next = `${pathname}${qs ? `?${qs}` : ""}`;
-    router.replace(`/studio/login?next=${encodeURIComponent(next)}`);
+    router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [state, pathname, router, searchParams]);
 
   if (state === "loading" || state === "redirect") {

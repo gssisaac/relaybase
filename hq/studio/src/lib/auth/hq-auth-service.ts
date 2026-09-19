@@ -13,12 +13,17 @@ import { hqAuthConfig, requireJwtSecret } from "./hq-auth-config";
 import { signAccessToken } from "./jwt";
 import { hashPassword, validatePasswordPolicy, verifyPassword } from "./password";
 import { hashOpaqueToken, newOpaqueToken } from "./token-hash";
+import { encryptPasstoken } from "../vault/passtoken-vault";
+import { normalizeUsername, validateUsername } from "./username";
 
 export type PublicHqUser = {
   id: string;
   email: string;
   name: string | null;
   accountLinkId: string;
+  username: string | null;
+  cfAccountId: string | null;
+  workerUrl: string | null;
 };
 
 function serializeUser(user: HqAuthUser): PublicHqUser {
@@ -27,6 +32,9 @@ function serializeUser(user: HqAuthUser): PublicHqUser {
     email: user.email,
     name: user.name,
     accountLinkId: user.accountLinkId,
+    username: user.username ?? null,
+    cfAccountId: user.cfAccountId ?? null,
+    workerUrl: user.workerUrl ?? null,
   };
 }
 
@@ -71,6 +79,7 @@ export function issueAccessToken(user: HqAuthUser): { accessToken: string; expir
       sub: user.id,
       email: user.email,
       accountLinkId: user.accountLinkId,
+      ...(user.username ? { username: user.username } : {}),
     },
     secret,
     accessTtlSec,
@@ -171,14 +180,133 @@ export async function signupUser(input: {
 }
 
 export function loginUser(
-  email: string,
+  loginId: string,
   password: string,
 ): { ok: true; user: HqAuthUser } | { ok: false; error: string; status: number } {
-  const user = authStore.findUserByEmail(email);
+  const trimmed = loginId.trim();
+  const user =
+    authStore.findUserByUsername(trimmed) ??
+    authStore.findUserByEmail(trimmed.toLowerCase());
   if (!user || !verifyPassword(password, user.passwordHash)) {
-    return { ok: false, error: "Invalid email or password.", status: 401 };
+    return { ok: false, error: "Invalid username or password.", status: 401 };
   }
   return { ok: true, user };
+}
+
+export function isUsernameAvailable(username: string): boolean {
+  const err = validateUsername(username);
+  if (err) return false;
+  return !authStore.findUserByUsername(normalizeUsername(username));
+}
+
+export function signupCloudUser(input: {
+  username: string;
+  password: string;
+  confirmPassword?: string;
+  cfAccountId: string;
+  workerUrl: string;
+  passtoken: string;
+}): { ok: true; user: HqAuthUser } | { ok: false; error: string; status: number } {
+  const usernameErr = validateUsername(input.username);
+  if (usernameErr) return { ok: false, error: usernameErr, status: 400 };
+
+  const username = normalizeUsername(input.username);
+  if (authStore.findUserByUsername(username)) {
+    return { ok: false, error: "That username is already taken.", status: 409 };
+  }
+
+  const cfAccountId = input.cfAccountId.trim().toLowerCase();
+  if (!cfAccountId) {
+    return { ok: false, error: "Cloudflare account id is required.", status: 400 };
+  }
+  if (authStore.findUserByCfAccountId(cfAccountId)) {
+    return { ok: false, error: "This Cloudflare account is already registered.", status: 409 };
+  }
+
+  const workerUrl = input.workerUrl.trim().replace(/\/$/, "");
+  if (!workerUrl || !/^https?:\/\//i.test(workerUrl)) {
+    return { ok: false, error: "Enter a valid Worker URL.", status: 400 };
+  }
+
+  const policy = validatePasswordPolicy(input.password);
+  if (policy) return { ok: false, error: policy, status: 400 };
+
+  if (input.confirmPassword !== undefined && input.password !== input.confirmPassword) {
+    return { ok: false, error: "Passwords do not match.", status: 400 };
+  }
+
+  const passtoken = input.passtoken.trim();
+  if (!passtoken) {
+    return { ok: false, error: "Passtoken provisioning failed.", status: 400 };
+  }
+
+  let passtokenEnc: string;
+  try {
+    passtokenEnc = encryptPasstoken(passtoken);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not store credentials.",
+      status: 503,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const user: HqAuthUser = {
+    id: newId("usr"),
+    email: `${username}@users.relaybase`,
+    passwordHash: hashPassword(input.password),
+    name: username,
+    accountLinkId: DEV_ACCOUNT_LINK_ID,
+    username,
+    cfAccountId,
+    workerUrl,
+    passtokenEnc,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  authStore.update((draft) => {
+    draft.users.push(user);
+  });
+
+  linkWorkerUrlForNewAccount(workerUrl);
+
+  return { ok: true, user };
+}
+
+export function resetPasswordForCfAccount(
+  cfAccountId: string,
+  newPassword: string,
+  confirmPassword?: string,
+): { ok: true; user: HqAuthUser } | { ok: false; error: string; status: number } {
+  const policy = validatePasswordPolicy(newPassword);
+  if (policy) return { ok: false, error: policy, status: 400 };
+  if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+    return { ok: false, error: "Passwords do not match.", status: 400 };
+  }
+
+  const user = authStore.findUserByCfAccountId(cfAccountId.trim());
+  if (!user) {
+    return { ok: false, error: "No Relaybase account is linked to this Cloudflare account.", status: 404 };
+  }
+
+  const passwordHash = hashPassword(newPassword);
+  const updatedAt = new Date().toISOString();
+
+  authStore.update((draft) => {
+    const row = draft.users.find((u) => u.id === user.id);
+    if (row) {
+      row.passwordHash = passwordHash;
+      row.updatedAt = updatedAt;
+    }
+    draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== user.id);
+  });
+
+  return {
+    ok: true,
+    user: { ...user, passwordHash, updatedAt },
+  };
 }
 
 export function refreshFromCookie(

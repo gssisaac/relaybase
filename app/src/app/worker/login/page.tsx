@@ -1,60 +1,25 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { AccountLoginView } from "@/console/components/setup/common/auth/AccountLoginView";
-import { restoreWebOwnerSession } from "@/lib/desktop/auth";
-import { EmailAppProviders } from "@/mail-platform/runtime";
-import { getWebTeamAuth } from "@/mail-platform/session/email-session";
-import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
-
-function WorkerLoginInner() {
+/** Legacy worker passtoken login → cloud username login. */
+function WorkerLoginRedirectInner() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    let active = true;
+    const qs = searchParams.toString();
+    router.replace(qs ? `/login?${qs}` : "/login");
+  }, [router, searchParams]);
 
-    async function boot() {
-      if (hasWebOwnerSession()) {
-        router.replace("/dashboard");
-        return;
-      }
-      if (getWebTeamAuth()) {
-        router.replace("/inbox");
-        return;
-      }
-      const restored = await restoreWebOwnerSession();
-      if (!active) return;
-      if (restored && hasWebOwnerSession()) {
-        router.replace("/dashboard");
-        return;
-      }
-      setReady(true);
-    }
-
-    void boot();
-    return () => {
-      active = false;
-    };
-  }, [router]);
-
-  if (!ready) return <AppLoadingScreen />;
-
-  return (
-    <EmailAppProviders>
-      <AccountLoginView defaultRole="owner" />
-    </EmailAppProviders>
-  );
+  return null;
 }
 
-/** Worker passtoken / teammate login — separate URL from `/studio/login`. */
-export default function WorkerLoginPage() {
+export default function WorkerLoginRedirectPage() {
   return (
-    <Suspense fallback={<AppLoadingScreen />}>
-      <WorkerLoginInner />
+    <Suspense fallback={null}>
+      <WorkerLoginRedirectInner />
     </Suspense>
   );
 }

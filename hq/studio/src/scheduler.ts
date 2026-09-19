@@ -152,6 +152,14 @@ async function pollSubscriberCron(): Promise<void> {
   }
 }
 
+/** Cloudflare Cron — one tick (no setInterval). */
+export async function runSchedulerCron(): Promise<void> {
+  await claimDueNewsletters();
+  await processSendingBroadcastQueues();
+  await rollupStats();
+  await pollSubscriberCron();
+}
+
 export function startScheduler(): void {
   setInterval(() => {
     void claimDueNewsletters().catch((err) => console.error("[studio-scheduler] poll failed", err));

@@ -47,6 +47,14 @@ type StreamDone = {
   dbApplied?: string[];
   workerVersion?: string;
   ownerAlreadyConfigured?: boolean;
+  cloudSignupReady?: boolean;
+  installToken?: string;
+  accountId?: string;
+};
+
+export type CloudInstallSignupResult = AutoInstallResult & {
+  installToken: string;
+  cfAccountId: string;
 };
 
 function toAutoInstallResult(payload: StreamDone): AutoInstallResult {
@@ -71,7 +79,8 @@ export function runWebInstallStream(opts: {
   decisions?: InstallDecision[];
   wipeConfirmation?: string | null;
   mode?: "install" | "update";
-}): Promise<AutoInstallResult> {
+  cloudSignup?: boolean;
+}): Promise<AutoInstallResult | CloudInstallSignupResult> {
   closeActiveStream();
 
   const params = new URLSearchParams();
@@ -82,6 +91,9 @@ export function runWebInstallStream(opts: {
   }
   if (opts.wipeConfirmation?.trim()) {
     params.set("wipeConfirmation", opts.wipeConfirmation.trim());
+  }
+  if (opts.cloudSignup) {
+    params.set("cloudSignup", "1");
   }
 
   const qs = params.toString();
@@ -113,7 +125,16 @@ export function runWebInstallStream(opts: {
       settle();
       try {
         const payload = JSON.parse((e as MessageEvent).data) as StreamDone;
-        resolve(toAutoInstallResult(payload));
+        const base = toAutoInstallResult(payload);
+        if (opts.cloudSignup && payload.installToken) {
+          resolve({
+            ...base,
+            installToken: payload.installToken,
+            cfAccountId: payload.accountId ?? opts.accountId ?? "",
+          });
+          return;
+        }
+        resolve(base);
       } catch (err) {
         reject(err instanceof Error ? err : new Error("Invalid install done payload"));
       }

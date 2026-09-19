@@ -1,20 +1,38 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Check, ChevronDown, ChevronUp, ExternalLink, Key, Loader2, ShieldCheck } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { ChevronDown, ChevronUp, ExternalLink, Key, Loader2, LogIn, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { CfApiTokenDetailsSheet } from "@/console/pages/settings/cloudflare/CfApiTokenDetailsSheet";
+import { validateCfApiTokenInput } from "@/lib/cloudflare/validate-cf-api-token";
 import {
   CF_API_TOKENS_URL,
   desktopPushServerToken,
   desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
   desktopOpenExternal,
+  desktopStartCfOAuth,
+  explainCfOAuthError,
+  isCloudflareAuthExpired,
+  listenCfOAuthResult,
 } from "@/lib/desktop/bridge";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import { openWebCfOAuthPopup } from "@/lib/desktop/bridge/web-oauth-authorize";
+import {
+  PENDING_SERVER_TOKEN_PUSH_KEY,
+} from "@/lib/desktop/bridge/web-oauth-complete";
+import { useWebCfOAuthComplete } from "@/lib/desktop/bridge/use-web-cf-oauth-complete";
+
+function needsCloudflareAuthorization(message: string | null): boolean {
+  if (!message) return false;
+  if (isCloudflareAuthExpired(message)) return true;
+  return message.toLowerCase().includes("authorize with cloudflare");
+}
 
 export function Step1EmailApiCard({
   workerUrl,
@@ -31,75 +49,202 @@ export function Step1EmailApiCard({
   const [isVerified, setIsVerified] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const tokenRef = useRef("");
 
-  const checkStatus = useCallback(async () => {
-    if (!workerUrl) {
-      setChecking(false);
-      return;
-    }
-    setChecking(true);
-    setError(null);
-    try {
-      const res = await desktopVerifyWorkerConnection(workerUrl);
-      if (res.cfApiTokenSet && res.cfApiTokenValid !== false) {
-        setIsVerified(true);
-      } else {
-        setIsVerified(false);
-      }
-    } catch {
-      setIsVerified(false);
-    } finally {
-      setChecking(false);
-    }
-  }, [workerUrl]);
+  const showAuthAction = needsCloudflareAuthorization(error);
+  const busy = submitting || oauthBusy;
 
   useEffect(() => {
+    tokenRef.current = tokenInput;
+  }, [tokenInput]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkStatus() {
+      if (!workerUrl) {
+        if (active) setChecking(false);
+        return;
+      }
+      try {
+        const res = await desktopVerifyWorkerConnection(workerUrl);
+        if (!active) return;
+        if (res.cfApiTokenSet && res.cfApiTokenValid !== false) {
+          setIsVerified(true);
+        } else {
+          setIsVerified(false);
+        }
+      } catch {
+        if (active) setIsVerified(false);
+      } finally {
+        if (active) setChecking(false);
+      }
+    }
+
     void checkStatus();
-  }, [checkStatus]);
+    return () => {
+      active = false;
+    };
+  }, [workerUrl]);
+
+  const pushTokenToWorker = useCallback(
+    async (token: string) => {
+      const trimmed = token.trim();
+      if (!trimmed) {
+        setError("Please enter a Cloudflare API token.");
+        return;
+      }
+
+      setSubmitting(true);
+      setError(null);
+
+      try {
+        const acctId = accountId.trim();
+        if (acctId) {
+          const verifyRes = await desktopVerifyCfToken(acctId, trimmed, "server").catch(() => null);
+          if (verifyRes && !verifyRes.ok) {
+            setError(
+              verifyRes.message || "Cloudflare rejected the API token. Please verify permissions.",
+            );
+            return;
+          }
+        }
+
+        await desktopPushServerToken(trimmed, {
+          accountId: acctId || undefined,
+          workerScriptName,
+        });
+
+        if (workerUrl) {
+          const check = await desktopVerifyWorkerConnection(workerUrl);
+          if (!check.cfApiTokenSet) {
+            throw new Error(
+              "Token was saved, but Worker has not loaded the secret yet. Please try again.",
+            );
+          }
+        }
+
+        try {
+          sessionStorage.removeItem(PENDING_SERVER_TOKEN_PUSH_KEY);
+        } catch {
+          /* ignore */
+        }
+
+        setIsVerified(true);
+        toast.success("Cloudflare Email API configured and verified!");
+        onComplete();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to push API token to Worker.");
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [accountId, onComplete, workerScriptName, workerUrl],
+  );
+
+  const retryPushAfterAuth = useCallback(() => {
+    let pending = tokenRef.current.trim();
+    if (!pending && typeof window !== "undefined") {
+      try {
+        pending = sessionStorage.getItem(PENDING_SERVER_TOKEN_PUSH_KEY)?.trim() ?? "";
+      } catch {
+        pending = "";
+      }
+    }
+    if (pending) {
+      setTokenInput(pending);
+      void pushTokenToWorker(pending);
+    }
+  }, [pushTokenToWorker]);
+
+  const authorizeThenPush = useCallback(async () => {
+    const token = tokenRef.current.trim();
+    if (token) {
+      try {
+        sessionStorage.setItem(PENDING_SERVER_TOKEN_PUSH_KEY, token);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    setOauthBusy(true);
+    setError(null);
+
+    try {
+      const returnTo =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : "/onboarding";
+      const start = await desktopStartCfOAuth("install", returnTo);
+
+      if (!isDesktopRuntime() && start.authorizeUrl.startsWith("/")) {
+        openWebCfOAuthPopup(start.authorizeUrl, {
+          onComplete: () => {
+            setOauthBusy(false);
+            toast.success("Cloudflare connected. Pushing API token to your Worker…");
+            retryPushAfterAuth();
+          },
+          onError: (message) => {
+            setOauthBusy(false);
+            setError(explainCfOAuthError(message).detail || message);
+          },
+        });
+        return;
+      }
+
+      await desktopOpenExternal(start.authorizeUrl);
+    } catch (err) {
+      setOauthBusy(false);
+      setError(explainCfOAuthError(err).detail || "Could not start Cloudflare authorization.");
+    }
+  }, [retryPushAfterAuth]);
+
+  useWebCfOAuthComplete(() => {
+    setOauthBusy(false);
+    toast.success("Cloudflare connected. Pushing API token to your Worker…");
+    retryPushAfterAuth();
+  });
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    let unlisten: (() => void) | null = null;
+    let active = true;
+
+    listenCfOAuthResult({
+      onComplete: () => {
+        if (!active) return;
+        setOauthBusy(false);
+        toast.success("Cloudflare connected. Pushing API token to your Worker…");
+        retryPushAfterAuth();
+      },
+      onError: (message) => {
+        if (!active) return;
+        setOauthBusy(false);
+        setError(explainCfOAuthError(message).detail || message);
+      },
+    }).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [retryPushAfterAuth]);
 
   async function handleSaveToken(e: React.FormEvent) {
     e.preventDefault();
-    const token = tokenInput.trim();
-    if (!token) {
-      setError("Please enter a Cloudflare API token.");
+    const parsed = validateCfApiTokenInput(tokenInput);
+    if (!parsed.ok) {
+      setError(parsed.message);
       return;
     }
-
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      if (accountId) {
-        const verifyRes = await desktopVerifyCfToken(accountId, token, "server").catch(() => null);
-        if (verifyRes && !verifyRes.ok) {
-          setError(verifyRes.message || "Cloudflare rejected the API token. Please verify permissions.");
-          setSubmitting(false);
-          return;
-        }
-      }
-
-      await desktopPushServerToken(token, {
-        accountId: accountId || undefined,
-        workerScriptName,
-      });
-
-      if (workerUrl) {
-        const check = await desktopVerifyWorkerConnection(workerUrl);
-        if (!check.cfApiTokenSet) {
-          throw new Error("Token was saved, but Worker has not loaded the secret yet. Please try again.");
-        }
-      }
-
-      setIsVerified(true);
-      toast.success("Cloudflare Email API configured and verified!");
-      onComplete();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to push API token to Worker.");
-    } finally {
-      setSubmitting(false);
-    }
+    await pushTokenToWorker(parsed.token);
   }
 
   if (checking) {
@@ -149,7 +294,18 @@ export function Step1EmailApiCard({
           Step 1: Enable Cloudflare Email API
         </h2>
         <p className="text-xs text-muted-foreground sm:text-sm">
-          Relaybase needs a Cloudflare API token (<span className="font-mono text-foreground font-medium">CF_API_TOKEN</span>) to configure Email Routing and DNS records automatically.
+          Relaybase needs a Cloudflare API token (
+          <span className="font-mono text-foreground font-medium">CF_API_TOKEN</span>) to configure
+          Email Routing and DNS records automatically.{" "}
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-xs sm:text-sm"
+            onClick={() => setDetailsOpen(true)}
+          >
+            Why is this needed?
+          </Button>
         </p>
       </div>
 
@@ -164,23 +320,68 @@ export function Step1EmailApiCard({
             </div>
             <Input
               id="cf-token-input"
-              type="password"
+              name="cloudflare-api-token"
+              type="text"
               placeholder="Paste your Cloudflare API token here"
               value={tokenInput}
               onChange={(e) => {
                 setTokenInput(e.target.value);
                 setError(null);
               }}
-              className="pl-9 font-mono text-xs sm:text-sm"
+              className="pl-9 font-mono text-xs sm:text-sm [-webkit-text-security:disc]"
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
               spellCheck={false}
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
               autoFocus
             />
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error ? (
+            <div
+              className={
+                showAuthAction
+                  ? "space-y-2.5 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs sm:text-sm"
+                  : "text-xs text-destructive"
+              }
+            >
+              {showAuthAction ? (
+                <>
+                  <p className="font-medium text-destructive">
+                    {isCloudflareAuthExpired(error)
+                      ? "Cloudflare authorization expired"
+                      : "Cloudflare authorization required"}
+                  </p>
+                  <p className="text-sm leading-relaxed text-foreground/90">
+                    {isCloudflareAuthExpired(error)
+                      ? "Relaybase is no longer connected to your Cloudflare account. Sign in again so we can push the API token to your Worker as CF_API_TOKEN."
+                      : error}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={busy}
+                    onClick={() => void authorizeThenPush()}
+                  >
+                    {oauthBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <LogIn className="size-3.5" />
+                    )}
+                    Authorize with Cloudflare
+                  </Button>
+                </>
+              ) : (
+                error
+              )}
+            </div>
+          ) : null}
         </div>
 
-        <Button type="submit" disabled={submitting || !tokenInput.trim()} className="w-full">
+        <Button type="submit" disabled={busy || !tokenInput.trim()} className="w-full">
           {submitting ? (
             <>
               <Loader2 className="mr-2 size-4 animate-spin" />
@@ -220,7 +421,8 @@ export function Step1EmailApiCard({
                 <li><span className="text-foreground">Account</span> → <span className="text-foreground">Email Sending</span> → <strong>Edit</strong></li>
               </ul>
               <div className="pt-2">
-                <span className="font-semibold text-foreground">Zone Resources:</span> <span className="text-muted-foreground">Include — All zones</span>
+                <span className="font-semibold text-foreground">Zone Resources:</span>{" "}
+                <span className="text-muted-foreground">Include — All zones</span>
               </div>
             </div>
 
@@ -237,6 +439,8 @@ export function Step1EmailApiCard({
           </div>
         )}
       </div>
+
+      <CfApiTokenDetailsSheet open={detailsOpen} onOpenChange={setDetailsOpen} />
     </div>
   );
 }

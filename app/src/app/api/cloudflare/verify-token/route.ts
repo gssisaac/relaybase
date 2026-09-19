@@ -1,37 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  cfVerifyTokenErrorMessage,
+  validateCfApiTokenInput,
+} from "@/lib/cloudflare/validate-cf-api-token";
+
 const CF_API = "https://api.cloudflare.com/client/v4";
 
 /** Minimal server-token verification (Zone Read probe). */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const accountId = String(body.accountId ?? "").trim();
-  const apiToken = String(body.apiToken ?? "").trim();
-  if (!accountId || !apiToken) {
+  const tokenCheck = validateCfApiTokenInput(String(body.apiToken ?? ""));
+  if (!accountId) {
     return NextResponse.json(
-      { ok: false, accountId: "", message: "Account id and API token are required." },
+      { ok: false, accountId: "", message: "Account id is required." },
       { status: 400 },
     );
   }
+  if (!tokenCheck.ok) {
+    return NextResponse.json({ ok: false, accountId, message: tokenCheck.message }, { status: 400 });
+  }
+  const apiToken = tokenCheck.token;
   try {
-    const res = await fetch(`${CF_API}/accounts/${accountId}/tokens/verify`, {
-      method: "POST",
+    const res = await fetch(`${CF_API}/user/tokens/verify`, {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
       },
-      body: "{}",
     });
     const value = await res.json().catch(() => ({}));
     if (!res.ok || value?.success === false) {
       const msg =
+        cfVerifyTokenErrorMessage(value) ??
         value?.errors?.[0]?.message ??
         `Token verification failed (HTTP ${res.status})`;
       return NextResponse.json({ ok: false, accountId, message: msg });
     }
-    const zones = await fetch(`${CF_API}/zones?per_page=1`, {
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
+    const zones = await fetch(
+      `${CF_API}/zones?account.id=${encodeURIComponent(accountId)}&per_page=1`,
+      {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      },
+    );
     if (!zones.ok) {
       return NextResponse.json({
         ok: false,

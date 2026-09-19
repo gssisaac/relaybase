@@ -16,8 +16,11 @@ export function AccountsSyncBridge() {
   const mailAccounts = useMailAccountsStore();
 
   useEffect(() => {
-    return subscribeAddressesChanged(() => {
+    return subscribeAddressesChanged((event) => {
       clearEmailCache(productId, "addresses:all");
+      for (const email of event.emails ?? []) {
+        mailAccounts.addEnabledAccount(email);
+      }
       void mailAccounts.refreshAddresses();
     });
   }, [mailAccounts, productId]);

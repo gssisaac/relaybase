@@ -70,6 +70,31 @@ export async function hydrateEnabledAccounts(userId: string): Promise<string[]> 
   return local;
 }
 
+/** Merge new sender addresses into the mailbox sidebar enable-list (disk + localStorage). */
+export function mergeEnabledMailAccounts(
+  existing: string[],
+  incoming: string[],
+): string[] {
+  return [
+    ...new Set(
+      [...existing, ...incoming]
+        .map((email) => email.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+export async function appendEnabledMailAccounts(
+  userId: string,
+  emails: string[],
+): Promise<void> {
+  if (!userId) return;
+  const incoming = emails.map((email) => email.trim()).filter(Boolean);
+  if (!incoming.length) return;
+  const existing = await hydrateEnabledAccounts(userId);
+  writeEnabledAccounts(userId, mergeEnabledMailAccounts(existing, incoming));
+}
+
 export function localPart(email: string) {
   const at = email.indexOf("@");
   return at > 0 ? email.slice(0, at) : email;

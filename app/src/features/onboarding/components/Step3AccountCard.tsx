@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { appendEnabledMailAccounts } from "@/email/lib/accounts/enabled-accounts";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { suggestedDisplayNameForLocalPart } from "@/lib/dashboard/default-addresses";
+import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { getHqUser } from "@/lib/hq-auth/session";
 
 const POPULAR_LOCAL_PARTS = ["team", "hello", "support", "contact", "billing"];
@@ -27,6 +29,7 @@ export function Step3AccountCard({
 }) {
   const accountsStore = useAccounts();
   const domainStore = useDomain();
+  const productId = useProductId();
   const user = getHqUser();
 
   const readyDomains = useMemo(
@@ -89,7 +92,8 @@ export function Step3AccountCard({
         inboundEnabled,
       });
 
-      const fullEmail = `${cleanLocalPart}@${cleanDomain}`;
+      const fullEmail = `${cleanLocalPart}@${cleanDomain}`.toLowerCase();
+      await appendEnabledMailAccounts(productId, [fullEmail]);
       toast.success(`Account ${fullEmail} created successfully!`);
       onComplete(fullEmail);
     } catch (err) {

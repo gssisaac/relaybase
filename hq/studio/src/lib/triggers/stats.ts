@@ -2,7 +2,7 @@ import type {
   TriggerSend,
   TriggerStats,
   TriggerTrackingEvent,
-} from "../../db/types";
+} from "@db/types";
 
 export function emptyTriggerStats(): TriggerStats {
   return {

@@ -1,4 +1,4 @@
-import type { SubscriberMember } from "../../db/types";
+import type { SubscriberMember } from "@db/types";
 
 export function serializeNewsletterSubscriberContact(
   broadcastId: string,

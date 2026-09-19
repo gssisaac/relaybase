@@ -1,5 +1,5 @@
-import type { Template } from "../../db/types";
-import { applyCatalogTemplateMeta } from "../templates/catalog-template-meta";
+import type { Template } from "@db/types";
+import { applyCatalogTemplateMeta } from "@lib/templates/catalog-template-meta";
 
 /** Catalog blueprint (read-only gallery). */
 export function serializeTemplate(row: Template) {

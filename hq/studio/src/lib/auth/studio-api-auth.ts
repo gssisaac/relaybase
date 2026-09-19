@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 
-import { requireJwtSecret } from "./hq-auth-config";
-import { verifyAccessToken } from "./jwt";
+import { requireJwtSecret } from "@lib/auth/hq-auth-config";
+import { verifyAccessToken } from "@lib/auth/jwt";
 
 const PUBLIC_PATH_PREFIXES = [
   "/health",

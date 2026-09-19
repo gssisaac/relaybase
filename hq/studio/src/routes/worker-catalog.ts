@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import { fetchWorkerCatalogDomainNames } from "../lib/worker/fetch-console-domains";
+import { fetchWorkerCatalogDomainNames } from "@lib/worker/fetch-console-domains";
 
 export const studioWorkerCatalog = new Hono();
 

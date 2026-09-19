@@ -1,4 +1,4 @@
-import type { SubscriberDataSource, SubscriberGroup, SubscriberMember } from "../../db/types";
+import type { SubscriberDataSource, SubscriberGroup, SubscriberMember } from "@db/types";
 
 function maskDataSource(ds: SubscriberDataSource | null) {
   if (!ds) return undefined;

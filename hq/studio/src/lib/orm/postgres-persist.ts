@@ -1,7 +1,7 @@
 import type { EntityTarget, ObjectLiteral, QueryRunner, Repository } from "typeorm";
 
-import type { StudioDataStore } from "../types";
-import { getStudioDataSource } from "./data-source";
+import type { StudioDataStore } from "@db/types";
+import { getStudioDataSource } from "@lib/orm/data-source";
 import {
   AccountLinkEntity,
   AccountSuppressionEntity,
@@ -25,8 +25,8 @@ import {
   TriggerEventEntity,
   TriggerSendEntity,
   TriggerTrackingEventEntity,
-} from "./entities/index";
-import { mapEntitiesToStore, mapStoreToEntities } from "./store-entity-map";
+} from "@db/entities";
+import { mapEntitiesToStore, mapStoreToEntities } from "@lib/orm/store-entity-map";
 
 const CHUNK = 400;
 

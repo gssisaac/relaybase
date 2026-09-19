@@ -1,35 +1,35 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import { newsletterAssetKey } from "../lib/assets/key";
-import { resolveWorkerSendCredentials } from "../lib/mail/credentials";
-import { sendMail } from "../lib/mail/sender";
-import { createMessage, patchMessage } from "../lib/messages/message";
-import { requireMessage } from "../lib/messages/resolve";
-import { serializeMessage } from "../lib/messages/serialize-message";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import { newsletterAssetKey } from "@lib/assets/key";
+import { resolveWorkerSendCredentials } from "@lib/mail/credentials";
+import { sendMail } from "@lib/mail/sender";
+import { createMessage, patchMessage } from "@lib/messages/message";
+import { requireMessage } from "@lib/messages/resolve";
+import { serializeMessage } from "@lib/messages/serialize-message";
 import {
   getNewsletterLayoutHtml,
   getNewsletterLayoutSchema,
-} from "../lib/newsletters/serialize";
+} from "@lib/newsletters/serialize";
 import {
   accountDefaultComplianceIdentityId,
   complianceSettingsFromIdentity,
   findComplianceIdentity,
-} from "../lib/compliance/identity";
+} from "@lib/compliance/identity";
 import {
   buildListUnsubscribeUrl,
   renderNewsletterForRecipient,
   resolveBroadcastSubject,
-} from "../lib/render/render";
+} from "@lib/render/render";
 import {
   resolveTemplateVariableDefaults,
   sanitizeTemplateVariables,
-} from "../lib/templates/variable-schema";
-import { applyMergeTagValues, recipientDisplayName } from "../lib/messages/merge-tags";
-import { isValidEmail } from "../lib/shared/email";
-import { newId, newToken } from "../lib/shared/ids";
-import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
-import { messageFileStore } from "../lib/messages/message-file-store";
+} from "@lib/templates/variable-schema";
+import { applyMergeTagValues, recipientDisplayName } from "@lib/messages/merge-tags";
+import { isValidEmail } from "@lib/shared/email";
+import { newId, newToken } from "@lib/shared/ids";
+import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
+import { messageFileStore } from "@lib/messages/message-file-store";
 
 export const studioMessages = new Hono();
 
@@ -66,7 +66,7 @@ studioMessages.post("/", async (c) => {
   if (!name) return c.json({ error: "name is required" }, 400);
 
   const now = new Date().toISOString();
-  const created = store.update((draft) =>
+  const created = studioService.update((draft) =>
     createMessage(
       draft,
       {
@@ -107,7 +107,7 @@ studioMessages.post("/:id/assets", async (c) => {
 
   const key = newsletterAssetKey(messageId, filename);
   const storedFilename = key.slice(messageId.length + 1);
-  store.update((draft) => {
+  studioService.update((draft) => {
     if (!draft.messageAssets) draft.messageAssets = [];
     draft.messageAssets = draft.messageAssets.filter((a) => a.key !== key);
     draft.messageAssets.push({
@@ -156,7 +156,7 @@ studioMessages.post("/:id/test-send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const message = requireMessage(store.read(), id);
+  const message = requireMessage(studioService.read(), id);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
   const mergeTags: Record<string, string> = {
@@ -165,7 +165,7 @@ studioMessages.post("/:id/test-send", async (c) => {
   };
   const recipientName = recipientDisplayName(mergeTags, to);
 
-  const data = store.read();
+  const data = studioService.read();
   const defaultComplianceId = accountDefaultComplianceIdentityId(data);
   const orgName = defaultComplianceId
     ? complianceSettingsFromIdentity(findComplianceIdentity(defaultComplianceId)).organizationName
@@ -235,7 +235,7 @@ studioMessages.patch("/:id", async (c) => {
   }
 
   const now = new Date().toISOString();
-  store.update((draft) => {
+  studioService.update((draft) => {
     patchMessage(
       draft,
       id,
@@ -263,7 +263,7 @@ studioMessages.delete("/:id", (c) => {
   if (!messageFileStore.findById(id)) return c.json({ error: "not found" }, 404);
 
   messageFileStore.delete(id);
-  store.update((draft) => {
+  studioService.update((draft) => {
     draft.messageAssets = (draft.messageAssets ?? []).filter((a) => a.messageId !== id);
     draft.messages = draft.messages.filter((m) => m.id !== id);
   });

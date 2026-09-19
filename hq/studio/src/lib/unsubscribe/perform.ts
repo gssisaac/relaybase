@@ -1,10 +1,10 @@
-import { store } from "../../db/store";
-import { requireMessage } from "../messages/resolve";
-import { findSubscriberContactByUnsubscribeToken } from "../subscriber-groups/resolver";
-import { setSubscriberContactSendStatus } from "../subscriber-groups/send-status";
+import { studioService } from "@services/studio-service";
+import { requireMessage } from "@lib/messages/resolve";
+import { findSubscriberContactByUnsubscribeToken } from "@lib/subscriber-groups/resolver";
+import { setSubscriberContactSendStatus } from "@lib/subscriber-groups/send-status";
 
 function findContactForBroadcast(newsletterId: string, token: string) {
-  const data = store.read();
+  const data = studioService.read();
   const broadcast = data.newsletters.find((b) => b.id === newsletterId);
   if (!broadcast?.subscriberGroupId) return { broadcast, contact: undefined };
   const contact = findSubscriberContactByUnsubscribeToken(broadcast.subscriberGroupId, token);
@@ -12,7 +12,7 @@ function findContactForBroadcast(newsletterId: string, token: string) {
 }
 
 function recordUnsubscribeOnRecipients(newsletterId: string, email: string, now: string) {
-  store.update((draft) => {
+  studioService.update((draft) => {
     let newlyMarked = false;
     for (let i = 0; i < draft.recipients.length; i += 1) {
       const r = draft.recipients[i]!;
@@ -52,7 +52,7 @@ export function performBroadcastUnsubscribe(
   return {
     ok: true,
     email: contact.email,
-    listName: requireMessage(store.read(), broadcast.messageId).subject.trim() || "this list",
+    listName: requireMessage(studioService.read(), broadcast.messageId).subject.trim() || "this list",
   };
 }
 

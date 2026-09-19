@@ -1,6 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { TriggerStats, Trigger, TriggerEvent } from "../../db/types";
-import { normalizeTriggerStats } from "./stats";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { TriggerStats, Trigger, TriggerEvent } from "@db/types";
+import { normalizeTriggerStats } from "@lib/triggers/stats";
 
 function rate(part: number, total: number): number {
   if (!total) return 0;
@@ -74,7 +74,7 @@ export type TriggerStatsOverview = {
 };
 
 export function buildTriggerStatsOverview(): TriggerStatsOverview {
-  const data = store.read();
+  const data = studioService.read();
   const accountId = DEV_ACCOUNT_LINK_ID;
   const now = Date.now();
   const dayMs = 86_400_000;

@@ -1,4 +1,4 @@
-import type { Layout } from "../../db/types";
+import type { Layout } from "@db/types";
 
 /** JSON shape for GET /studio/templates (layouts — HTML frames). */
 export function serializeLayout(row: Layout) {

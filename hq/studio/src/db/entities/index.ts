@@ -2,7 +2,7 @@ import {
   HqAuthUserEntity,
   HqPasswordResetTokenEntity,
   HqRefreshTokenEntity,
-} from "./auth.entities";
+} from "@db/entities/auth.entities";
 import {
   LayoutEntity,
   MessageAssetEntity,
@@ -10,26 +10,26 @@ import {
   NewsletterAssetEntity,
   TemplateEntity,
   TriggerAssetEntity,
-} from "./content.entities";
-import { NewsletterEntity, RecipientEntity, TrackingEventEntity } from "./newsletter.entities";
+} from "@db/entities/content.entities";
+import { NewsletterEntity, RecipientEntity, TrackingEventEntity } from "@db/entities/newsletter.entities";
 import {
   AccountSuppressionEntity,
   ActivityEntity,
   PipelineCardEntity,
   ScheduledJobEntity,
-} from "./ops.entities";
+} from "@db/entities/ops.entities";
 import {
   SubscriberGroupEntity,
   SubscriberMemberEntity,
   SubscriberSyncRunEntity,
-} from "./subscriber.entities";
-import { AccountLinkEntity, ComplianceIdentityEntity } from "./tenant.entities";
+} from "@db/entities/subscriber.entities";
+import { AccountLinkEntity, ComplianceIdentityEntity } from "@db/entities/tenant.entities";
 import {
   TriggerEntity,
   TriggerEventEntity,
   TriggerSendEntity,
   TriggerTrackingEventEntity,
-} from "./trigger.entities";
+} from "@db/entities/trigger.entities";
 
 export const studioOrmEntities = [
   AccountLinkEntity,

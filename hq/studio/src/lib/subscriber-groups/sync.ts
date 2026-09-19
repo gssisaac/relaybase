@@ -1,10 +1,10 @@
-import { store } from "../../db/store";
-import type { SubscriberMember } from "../../db/types";
-import { isEmailSuppressedForGroup } from "../account/suppression";
-import { syncAllNewslettersForSubscriberGroup } from "../newsletters/subscriber-sync";
-import { newId, newToken } from "../shared/ids";
-import { fetchDataSourceContacts } from "./data-source-sync";
-import { findSubscriberGroup } from "./group";
+import { studioService } from "@services/studio-service";
+import type { SubscriberMember } from "@db/types";
+import { isEmailSuppressedForGroup } from "@lib/account/suppression";
+import { syncAllNewslettersForSubscriberGroup } from "@lib/newsletters/subscriber-sync";
+import { newId, newToken } from "@lib/shared/ids";
+import { fetchDataSourceContacts } from "@lib/subscriber-groups/data-source-sync";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
 
 export async function syncSubscriberGroupAsync(
   groupId: string,
@@ -18,7 +18,7 @@ export async function syncSubscriberGroupAsync(
 
   const runId = newId("sync");
   const startedAt = new Date().toISOString();
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.subscriberGroups.findIndex((g) => g.id === groupId);
     if (idx < 0) return;
     draft.subscriberGroups[idx]!.syncHistory.unshift({
@@ -33,7 +33,7 @@ export async function syncSubscriberGroupAsync(
   try {
     const { contacts, skipped } = await fetchDataSourceContacts(group.dataSource);
     const now = new Date().toISOString();
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.subscriberGroups.findIndex((g) => g.id === groupId);
       if (idx < 0) return;
       const g = draft.subscriberGroups[idx]!;
@@ -86,7 +86,7 @@ export async function syncSubscriberGroupAsync(
   } catch (err) {
     const message = err instanceof Error ? err.message : "sync failed";
     const now = new Date().toISOString();
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.subscriberGroups.findIndex((g) => g.id === groupId);
       if (idx < 0) return;
       const g = draft.subscriberGroups[idx]!;

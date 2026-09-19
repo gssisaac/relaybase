@@ -1,5 +1,5 @@
-import type { HqAuthStore } from "./auth-types";
-import { persistAuthStoreToPostgres } from "./orm/postgres-auth-persist";
+import type { HqAuthStore } from "@db/auth-types";
+import { persistAuthStoreToPostgres } from "@lib/orm/postgres-auth-persist";
 
 let cache: HqAuthStore | null = null;
 let persistChain: Promise<void> = Promise.resolve();

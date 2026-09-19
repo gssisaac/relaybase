@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { resolveSafeRedirectTarget } from "../lib/tracking/redirect";
-import { recordTrackingClick, recordTrackingOpen, TRACKING_PIXEL_GIF } from "../lib/tracking/record";
+import { resolveSafeRedirectTarget } from "@lib/tracking/redirect";
+import { recordTrackingClick, recordTrackingOpen, TRACKING_PIXEL_GIF } from "@lib/tracking/record";
 
 export const studioTracking = new Hono();
 

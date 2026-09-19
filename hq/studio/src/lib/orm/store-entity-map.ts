@@ -1,4 +1,4 @@
-import type { StudioDataStore } from "../types";
+import type { StudioDataStore } from "@db/types";
 import {
   AccountLinkEntity,
   AccountSuppressionEntity,
@@ -22,8 +22,8 @@ import {
   TriggerEventEntity,
   TriggerSendEntity,
   TriggerTrackingEventEntity,
-} from "./entities/index";
-import { parseDate, parseDateRequired } from "./parse-date";
+} from "@db/entities";
+import { parseDate, parseDateRequired } from "@lib/db/parse-date";
 
 function iso(value: Date | null | undefined): string | null {
   if (!value) return null;

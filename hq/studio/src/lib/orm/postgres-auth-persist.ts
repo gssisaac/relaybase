@@ -1,13 +1,13 @@
 import type { EntityTarget, ObjectLiteral, Repository } from "typeorm";
 
-import type { HqAuthStore } from "../auth-types";
-import { getStudioDataSource } from "./data-source";
+import type { HqAuthStore } from "@db/auth-types";
+import { getStudioDataSource } from "@lib/orm/data-source";
 import {
   HqAuthUserEntity,
   HqPasswordResetTokenEntity,
   HqRefreshTokenEntity,
-} from "./entities/auth.entities";
-import { parseDate, parseDateRequired } from "./parse-date";
+} from "@db/entities/auth.entities";
+import { parseDate, parseDateRequired } from "@lib/db/parse-date";
 
 const CHUNK = 400;
 

@@ -1,5 +1,5 @@
-import type { Message, StudioDataStore } from "../../db/types";
-import { requireMessage } from "./resolve";
+import type { Message, StudioDataStore } from "@db/types";
+import { requireMessage } from "@lib/messages/resolve";
 
 function materializeOwnerMessage(
   messageId: string,

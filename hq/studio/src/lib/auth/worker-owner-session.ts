@@ -1,5 +1,5 @@
-import type { HqAuthUser } from "../../db/auth-types";
-import { decryptPasstoken } from "../vault/passtoken-vault";
+import type { HqAuthUser } from "@db/auth-types";
+import { decryptPasstoken } from "@lib/vault/passtoken-vault";
 
 export type WorkerOwnerSessionPayload = {
   workerUrl: string;

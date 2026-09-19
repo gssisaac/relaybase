@@ -8,7 +8,7 @@ import {
   PrimaryColumn,
 } from "typeorm";
 
-import { AccountLinkEntity } from "./tenant.entities";
+import { AccountLinkEntity } from "@db/entities/tenant.entities";
 
 @Entity({ name: "hq_auth_users" })
 export class HqAuthUserEntity {

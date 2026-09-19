@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 
-import { store } from "../db/store";
-import { newsletterAssetKey } from "../lib/assets/key";
-import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
-import { newId } from "../lib/shared/ids";
-import { readDefaultBrandLogoPng } from "../lib/templates/read-brand-logo-png";
+import { studioService } from "@services/studio-service";
+import { newsletterAssetKey } from "@lib/assets/key";
+import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
+import { newId } from "@lib/shared/ids";
+import { readDefaultBrandLogoPng } from "@lib/templates/read-brand-logo-png";
 
 export const studioAssets = new Hono();
 
@@ -23,7 +23,7 @@ studioAssets.get("/brand/relaybase-icon.png", (c) => {
 // POST /studio/newsletters/:id/assets { filename, mimeType, contentBase64 }
 studioAssets.post("/newsletters/:id/assets", async (c) => {
   const newsletterId = c.req.param("id");
-  const broadcast = store.read().newsletters.find((row) => row.id === newsletterId);
+  const broadcast = studioService.read().newsletters.find((row) => row.id === newsletterId);
   if (!broadcast) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -42,7 +42,7 @@ studioAssets.post("/newsletters/:id/assets", async (c) => {
 
   const key = newsletterAssetKey(newsletterId, filename);
   const storedFilename = key.slice(newsletterId.length + 1);
-  store.update((draft) => {
+  studioService.update((draft) => {
     draft.newsletterAssets = draft.newsletterAssets.filter((a) => a.key !== key);
     draft.newsletterAssets.push({
       id: newId("asset"),
@@ -62,7 +62,7 @@ studioAssets.post("/newsletters/:id/assets", async (c) => {
 // POST /studio/triggers/:id/assets { filename, mimeType, contentBase64 }
 studioAssets.post("/triggers/:id/assets", async (c) => {
   const triggerId = c.req.param("id");
-  const automation = store.read().triggers.find((row) => row.id === triggerId);
+  const automation = studioService.read().triggers.find((row) => row.id === triggerId);
   if (!automation) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -81,7 +81,7 @@ studioAssets.post("/triggers/:id/assets", async (c) => {
 
   const key = newsletterAssetKey(triggerId, filename);
   const storedFilename = key.slice(triggerId.length + 1);
-  store.update((draft) => {
+  studioService.update((draft) => {
     draft.triggerAssets = draft.triggerAssets.filter((a) => a.key !== key);
     draft.triggerAssets.push({
       id: newId("asset"),
@@ -101,7 +101,7 @@ studioAssets.post("/triggers/:id/assets", async (c) => {
 // GET /studio/assets/trigger/:triggerId/:filename (legacy /assets/automation/* still served)
 studioAssets.get("/assets/automation/:triggerId/:filename", (c) => {
   const key = `${c.req.param("triggerId")}/${c.req.param("filename")}`;
-  const asset = store.read().triggerAssets.find((a) => a.key === key);
+  const asset = studioService.read().triggerAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {
@@ -115,7 +115,7 @@ studioAssets.get("/assets/automation/:triggerId/:filename", (c) => {
 
 studioAssets.get("/assets/trigger/:triggerId/:filename", (c) => {
   const key = `${c.req.param("triggerId")}/${c.req.param("filename")}`;
-  const asset = store.read().triggerAssets.find((a) => a.key === key);
+  const asset = studioService.read().triggerAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {
@@ -130,7 +130,7 @@ studioAssets.get("/assets/trigger/:triggerId/:filename", (c) => {
 // GET /studio/assets/message/:messageId/:filename
 studioAssets.get("/assets/message/:messageId/:filename", (c) => {
   const key = `${c.req.param("messageId")}/${c.req.param("filename")}`;
-  const asset = store.read().messageAssets.find((a) => a.key === key);
+  const asset = studioService.read().messageAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {
@@ -149,7 +149,7 @@ studioAssets.get("/assets/:newsletterId/:filename", (c) => {
     return c.text("not found", 404);
   }
   const key = `${newsletterId}/${c.req.param("filename")}`;
-  const asset = store.read().newsletterAssets.find((a) => a.key === key);
+  const asset = studioService.read().newsletterAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { listSubscriberContactsForBroadcast } from "../lib/subscriber-groups/resolver";
-import { refreshNewsletterSubscriberLink } from "../lib/newsletters/subscriber-sync";
-import { serializeNewsletterSubscriberContact } from "../lib/newsletters/subscriber-api-serialize";
-import { findNewsletter } from "../lib/newsletters/serialize";
+import { listSubscriberContactsForBroadcast } from "@lib/subscriber-groups/resolver";
+import { refreshNewsletterSubscriberLink } from "@lib/newsletters/subscriber-sync";
+import { serializeNewsletterSubscriberContact } from "@lib/newsletters/subscriber-api-serialize";
+import { findNewsletter } from "@lib/newsletters/serialize";
 
 export const studioNewsletterSubscribers = new Hono();
 

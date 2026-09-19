@@ -1,5 +1,5 @@
-import { newToken } from "../shared/ids";
-import type { TriggerPurpose, TriggerSource } from "../../db/types";
+import { newToken } from "@lib/shared/ids";
+import type { TriggerPurpose, TriggerSource } from "@db/types";
 
 export function defaultTriggerForPurpose(purpose?: TriggerPurpose): TriggerSource {
   if (purpose === "conversational") {

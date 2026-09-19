@@ -1,5 +1,5 @@
-import { resolveWorkerSendCredentials } from "./credentials";
-import { htmlToPlainText } from "./html-to-text";
+import { resolveWorkerSendCredentials } from "@lib/mail/credentials";
+import { htmlToPlainText } from "@lib/mail/html-to-text";
 
 /**
  * Delivery goes through the customer Worker `POST /v1/send` (studio-mode-v0.2.md §1.2).

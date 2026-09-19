@@ -1,8 +1,8 @@
-import { resolveStudioAssetUrl } from "../assets/resolve-url";
+import { resolveStudioAssetUrl } from "@lib/assets/resolve-url";
 import {
   defaultBrandLogoUrl,
   footerBrandLogoImageHtml,
-} from "./brand-logo";
+} from "@lib/templates/brand-logo";
 
 /**
  * Per-template variable definitions (authoring format may be YAML on import;

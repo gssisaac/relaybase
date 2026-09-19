@@ -1,14 +1,14 @@
 import { Hono } from "hono";
 
-import { verifyCrmWebhookSecret } from "../lib/webhooks/verify-secret";
-import { fireTrigger, recordUnmatchedTriggerEvent } from "../lib/triggers/fire";
+import { verifyCrmWebhookSecret } from "@lib/webhooks/verify-secret";
+import { fireTrigger, recordUnmatchedTriggerEvent } from "@lib/triggers/fire";
 import {
   findTriggerById,
   findTriggerForInbound,
-} from "../lib/triggers/matcher";
-import { verifyTriggerWebhookSecret } from "../lib/triggers/trigger-auth";
-import { triggerSource } from "../lib/messages/resolve";
-import { parseJsonBody } from "../lib/shared/parse-json-body";
+} from "@lib/triggers/matcher";
+import { verifyTriggerWebhookSecret } from "@lib/triggers/trigger-auth";
+import { triggerSource } from "@lib/messages/resolve";
+import { parseJsonBody } from "@lib/shared/parse-json-body";
 
 export const studioTriggerHooks = new Hono();
 

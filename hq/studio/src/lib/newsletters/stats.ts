@@ -1,4 +1,4 @@
-import type { NewsletterStats, Recipient, TrackingEvent } from "../../db/types";
+import type { NewsletterStats, Recipient, TrackingEvent } from "@db/types";
 
 export function emptyNewsletterStats(): NewsletterStats {
   return {

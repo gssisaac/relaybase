@@ -1,20 +1,20 @@
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
-import { authStore } from "../../db/auth-store";
-import type { HqAuthUser } from "../../db/auth-types";
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
+import { authService } from "@services/auth-service";
+import type { HqAuthUser } from "@db/auth-types";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import {
   verifyWorkerSignupProof,
   type WorkerSignupProof,
-} from "./verify-worker-proof";
-import { newId } from "../shared/ids";
-import { hqAuthConfig, requireJwtSecret } from "./hq-auth-config";
-import { signAccessToken } from "./jwt";
-import { hashPassword, validatePasswordPolicy, verifyPassword } from "./password";
-import { hashOpaqueToken, newOpaqueToken } from "./token-hash";
-import { encryptPasstoken } from "../vault/passtoken-vault";
-import { normalizeUsername, validateUsername } from "./username";
+} from "@lib/auth/verify-worker-proof";
+import { newId } from "@lib/shared/ids";
+import { hqAuthConfig, requireJwtSecret } from "@lib/auth/hq-auth-config";
+import { signAccessToken } from "@lib/auth/jwt";
+import { hashPassword, validatePasswordPolicy, verifyPassword } from "@lib/auth/password";
+import { hashOpaqueToken, newOpaqueToken } from "@lib/auth/token-hash";
+import { encryptPasstoken } from "@lib/vault/passtoken-vault";
+import { normalizeUsername, validateUsername } from "@lib/auth/username";
 
 export type PublicHqUser = {
   id: string;
@@ -92,7 +92,7 @@ function persistRefreshToken(c: Context, userId: string): string {
   const refreshToken = newOpaqueToken();
   const now = new Date();
   const meta = clientMeta(c);
-  authStore.addRefreshToken({
+  authService.addRefreshToken({
     id: newId("rft"),
     tokenHash: hashOpaqueToken(refreshToken),
     userId,
@@ -119,7 +119,7 @@ export function issueAuthResponse(c: Context, user: HqAuthUser) {
 function linkWorkerUrlForNewAccount(workerUrl: string): void {
   const normalized = workerUrl.trim().replace(/\/$/, "");
   if (!normalized) return;
-  store.update((draft) => {
+  studioService.update((draft) => {
     if (draft.account.id !== DEV_ACCOUNT_LINK_ID) return;
     draft.account.workerUrl = normalized;
   });
@@ -150,7 +150,7 @@ export async function signupUser(input: {
     return { ok: false, error: "Passwords do not match.", status: 400 };
   }
 
-  if (authStore.findUserByEmail(email)) {
+  if (authService.findUserByEmail(email)) {
     return { ok: false, error: "An account with this email already exists.", status: 409 };
   }
 
@@ -170,7 +170,7 @@ export async function signupUser(input: {
     updatedAt: now,
   };
 
-  authStore.update((draft) => {
+  authService.update((draft) => {
     draft.users.push(user);
   });
 
@@ -185,8 +185,8 @@ export function loginUser(
 ): { ok: true; user: HqAuthUser } | { ok: false; error: string; status: number } {
   const trimmed = loginId.trim();
   const user =
-    authStore.findUserByUsername(trimmed) ??
-    authStore.findUserByEmail(trimmed.toLowerCase());
+    authService.findUserByUsername(trimmed) ??
+    authService.findUserByEmail(trimmed.toLowerCase());
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return { ok: false, error: "Invalid username or password.", status: 401 };
   }
@@ -196,7 +196,7 @@ export function loginUser(
 export function isUsernameAvailable(username: string): boolean {
   const err = validateUsername(username);
   if (err) return false;
-  return !authStore.findUserByUsername(normalizeUsername(username));
+  return !authService.findUserByUsername(normalizeUsername(username));
 }
 
 export function signupCloudUser(input: {
@@ -211,7 +211,7 @@ export function signupCloudUser(input: {
   if (usernameErr) return { ok: false, error: usernameErr, status: 400 };
 
   const username = normalizeUsername(input.username);
-  if (authStore.findUserByUsername(username)) {
+  if (authService.findUserByUsername(username)) {
     return { ok: false, error: "That username is already taken.", status: 409 };
   }
 
@@ -219,7 +219,7 @@ export function signupCloudUser(input: {
   if (!cfAccountId) {
     return { ok: false, error: "Cloudflare account id is required.", status: 400 };
   }
-  if (authStore.findUserByCfAccountId(cfAccountId)) {
+  if (authService.findUserByCfAccountId(cfAccountId)) {
     return { ok: false, error: "This Cloudflare account is already registered.", status: 409 };
   }
 
@@ -266,7 +266,7 @@ export function signupCloudUser(input: {
     updatedAt: now,
   };
 
-  authStore.update((draft) => {
+  authService.update((draft) => {
     draft.users.push(user);
   });
 
@@ -286,7 +286,7 @@ export function resetPasswordForCfAccount(
     return { ok: false, error: "Passwords do not match.", status: 400 };
   }
 
-  const user = authStore.findUserByCfAccountId(cfAccountId.trim());
+  const user = authService.findUserByCfAccountId(cfAccountId.trim());
   if (!user) {
     return { ok: false, error: "No Relaybase account is linked to this Cloudflare account.", status: 404 };
   }
@@ -294,7 +294,7 @@ export function resetPasswordForCfAccount(
   const passwordHash = hashPassword(newPassword);
   const updatedAt = new Date().toISOString();
 
-  authStore.update((draft) => {
+  authService.update((draft) => {
     const row = draft.users.find((u) => u.id === user.id);
     if (row) {
       row.passwordHash = passwordHash;
@@ -317,20 +317,20 @@ export function refreshFromCookie(
   const raw = readRefreshTokenFromCookie(c);
   if (!raw) return { ok: false, status: 401 };
 
-  const record = authStore.findRefreshTokenByHash(hashOpaqueToken(raw));
+  const record = authService.findRefreshTokenByHash(hashOpaqueToken(raw));
   if (!record) return { ok: false, status: 401 };
   if (new Date(record.expiresAt).getTime() <= Date.now()) {
-    authStore.revokeRefreshTokenById(record.id);
+    authService.revokeRefreshTokenById(record.id);
     return { ok: false, status: 401 };
   }
 
-  const user = authStore.findUserById(record.userId);
+  const user = authService.findUserById(record.userId);
   if (!user) {
-    authStore.revokeRefreshTokenById(record.id);
+    authService.revokeRefreshTokenById(record.id);
     return { ok: false, status: 401 };
   }
 
-  authStore.revokeRefreshTokenById(record.id);
+  authService.revokeRefreshTokenById(record.id);
   const newRefreshToken = persistRefreshToken(c, user.id);
   return { ok: true, user, revokeRecordId: record.id, newRefreshToken };
 }
@@ -338,21 +338,21 @@ export function refreshFromCookie(
 export function logoutFromCookie(c: Context): void {
   const raw = readRefreshTokenFromCookie(c);
   if (raw) {
-    const record = authStore.findRefreshTokenByHash(hashOpaqueToken(raw));
-    if (record) authStore.revokeRefreshTokenById(record.id);
+    const record = authService.findRefreshTokenByHash(hashOpaqueToken(raw));
+    if (record) authService.revokeRefreshTokenById(record.id);
   }
   clearRefreshCookie(c);
 }
 
 export function requestPasswordReset(email: string): void {
-  const user = authStore.findUserByEmail(email);
+  const user = authService.findUserByEmail(email);
   if (!user) return;
 
   const token = newOpaqueToken();
   const now = new Date();
   const { resetTtlSec, appBaseUrl } = hqAuthConfig();
 
-  authStore.addPasswordResetToken({
+  authService.addPasswordResetToken({
     id: newId("prt"),
     tokenHash: hashOpaqueToken(token),
     userId: user.id,
@@ -376,13 +376,13 @@ export function updateUserProfile(
     return { ok: false, error: "Name is required.", status: 400 };
   }
 
-  const existing = authStore.findUserById(userId);
+  const existing = authService.findUserById(userId);
   if (!existing) {
     return { ok: false, error: "Unauthorized", status: 401 };
   }
 
   const updatedAt = new Date().toISOString();
-  authStore.update((draft) => {
+  authService.update((draft) => {
     const row = draft.users.find((u) => u.id === userId);
     if (row) {
       row.name = trimmed;
@@ -404,7 +404,7 @@ export function changeUserPassword(
   const policy = validatePasswordPolicy(newPassword);
   if (policy) return { ok: false, error: policy, status: 400 };
 
-  const user = authStore.findUserById(userId);
+  const user = authService.findUserById(userId);
   if (!user || !verifyPassword(currentPassword, user.passwordHash)) {
     return { ok: false, error: "Current password is incorrect.", status: 401 };
   }
@@ -412,7 +412,7 @@ export function changeUserPassword(
   const passwordHash = hashPassword(newPassword);
   const updatedAt = new Date().toISOString();
 
-  authStore.update((draft) => {
+  authService.update((draft) => {
     const row = draft.users.find((u) => u.id === userId);
     if (row) {
       row.passwordHash = passwordHash;
@@ -435,12 +435,12 @@ export function resetPasswordWithToken(
   if (policy) return { ok: false, error: policy, status: 400 };
 
   const tokenHash = hashOpaqueToken(token.trim());
-  const record = authStore.findPasswordResetByHash(tokenHash);
+  const record = authService.findPasswordResetByHash(tokenHash);
   if (!record || record.used || new Date(record.expiresAt).getTime() <= Date.now()) {
     return { ok: false, error: "Invalid or expired reset link.", status: 400 };
   }
 
-  const user = authStore.findUserById(record.userId);
+  const user = authService.findUserById(record.userId);
   if (!user) {
     return { ok: false, error: "Invalid or expired reset link.", status: 400 };
   }
@@ -448,7 +448,7 @@ export function resetPasswordWithToken(
   const passwordHash = hashPassword(newPassword);
   const updatedAt = new Date().toISOString();
 
-  authStore.update((draft) => {
+  authService.update((draft) => {
     const u = draft.users.find((row) => row.id === user.id);
     if (u) {
       u.passwordHash = passwordHash;

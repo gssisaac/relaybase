@@ -1,4 +1,4 @@
-import { readPayloadPath } from "./payload-path";
+import { readPayloadPath } from "@lib/triggers/payload-path";
 
 function stringifyTriggerValue(value: unknown): string {
   if (value === null || value === undefined) return "";

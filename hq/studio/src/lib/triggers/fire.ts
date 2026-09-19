@@ -1,18 +1,18 @@
 import { createHash } from "node:crypto";
 
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type {
   Trigger,
   TriggerSource,
   TriggerEvent,
   TriggerEventSkipReason,
-} from "../../db/types";
-import { newId } from "../shared/ids";
-import { triggerSource } from "../messages/resolve";
-import { isWithinTriggerCooldown } from "./cooldown";
-import { dispatchTriggerSend } from "./dispatch";
-import { payloadHasRequiredFields, readPayloadString } from "./payload-path";
-import { isEmailSuppressedForTrigger } from "./suppression";
+} from "@db/types";
+import { newId } from "@lib/shared/ids";
+import { triggerSource } from "@lib/messages/resolve";
+import { isWithinTriggerCooldown } from "@lib/triggers/cooldown";
+import { dispatchTriggerSend } from "@lib/triggers/dispatch";
+import { payloadHasRequiredFields, readPayloadString } from "@lib/triggers/payload-path";
+import { isEmailSuppressedForTrigger } from "@lib/triggers/suppression";
 
 export type FireAutomationInput = {
   automation: Trigger;
@@ -91,13 +91,13 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
     input.idempotencyKey?.trim() ||
     defaultIdempotencyKey(automation.id, input.payload);
 
-  const existing = store
+  const existing = studioService
     .read()
     .triggerEvents.find(
       (e) => e.accountLinkId === DEV_ACCOUNT_LINK_ID && e.idempotencyKey === idempotencyKey,
     );
   if (existing) {
-    const send = store
+    const send = studioService
       .read()
       .triggerSends.find((s) => s.triggerEventId === existing.id);
     return {
@@ -140,7 +140,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
   let triggerSendId: string | null = null;
   let sendError: string | undefined;
 
-  store.update((draft) => {
+  studioService.update((draft) => {
     const aIdx = draft.triggers.findIndex((a) => a.id === automation.id);
     if (aIdx >= 0) {
       const stats = draft.triggers[aIdx]!.stats;
@@ -178,7 +178,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
   }
 
   triggerSendId = newId("autosend");
-  store.update((draft) => {
+  studioService.update((draft) => {
     draft.triggerSends.push({
       id: triggerSendId!,
       triggerId: automation.id,
@@ -208,13 +208,13 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
     }
   });
 
-  const freshAutomation = store.read().triggers.find((a) => a.id === automation.id)!;
-  const sendRow = store.read().triggerSends.find((s) => s.id === triggerSendId)!;
+  const freshAutomation = studioService.read().triggers.find((a) => a.id === automation.id)!;
+  const sendRow = studioService.read().triggerSends.find((s) => s.id === triggerSendId)!;
   const dispatchResult = await dispatchTriggerSend(freshAutomation, sendRow, input.payload);
 
   if (!dispatchResult.ok) {
     sendError = dispatchResult.error;
-    store.update((draft) => {
+    studioService.update((draft) => {
       const teIdx = draft.triggerEvents.findIndex((e) => e.id === triggerEventId);
       if (teIdx >= 0) {
         draft.triggerEvents[teIdx] = {
@@ -233,7 +233,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
     };
   }
 
-  store.update((draft) => {
+  studioService.update((draft) => {
     const teIdx = draft.triggerEvents.findIndex((e) => e.id === triggerEventId);
     if (teIdx >= 0) {
       draft.triggerEvents[teIdx] = {
@@ -260,7 +260,7 @@ export function recordUnmatchedTriggerEvent(input: {
 }): string {
   const id = newId("triggerevent");
   const now = new Date().toISOString();
-  store.update((draft) => {
+  studioService.update((draft) => {
     draft.triggerEvents.push({
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,

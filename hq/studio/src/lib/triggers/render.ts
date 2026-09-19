@@ -1,22 +1,22 @@
 import { marked } from "marked";
 
-import { isPlainTextTemplate } from "../templates/builtin-templates";
-import { prepareBroadcastTemplateHtml } from "../templates/standard-footer";
+import { isPlainTextTemplate } from "@lib/templates/builtin-templates";
+import { prepareBroadcastTemplateHtml } from "@lib/templates/standard-footer";
 import {
   applyTemplateVariablesToHtml,
   applyTemplateVariablesToPlainText,
   type TemplateVariablesSchema,
-} from "../templates/variable-schema";
-import { applyGmailContentLinkStyles } from "../render/gmail-link-style";
+} from "@lib/templates/variable-schema";
+import { applyGmailContentLinkStyles } from "@lib/render/gmail-link-style";
 import { transformEmailButtonMarkersToBulletproof } from "../render/email-button-html.js";
 import { transformYouTubeEmbedsToHtml } from "../render/youtube.js";
-import { wrapLayoutBodyHtml } from "../render/layout-content-theme";
-import { markdownToPlainEmailText } from "../render/markdown-to-plain-email-text";
-import { applyTriggerComplianceMergeTags, shouldIncludeListUnsubscribe } from "./compliance";
-import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "./merge-tags";
-import { store } from "../../db/store";
-import type { Trigger } from "../../db/types";
-import { requireMessage } from "../messages/resolve";
+import { wrapLayoutBodyHtml } from "@lib/render/layout-content-theme";
+import { markdownToPlainEmailText } from "@lib/render/markdown-to-plain-email-text";
+import { applyTriggerComplianceMergeTags, shouldIncludeListUnsubscribe } from "@lib/triggers/compliance";
+import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "@lib/triggers/merge-tags";
+import { studioService } from "@services/studio-service";
+import type { Trigger } from "@db/types";
+import { requireMessage } from "@lib/messages/resolve";
 
 function triggerAssetStem(triggerId: string): string {
   return triggerId.replace(/^automation_/, "").slice(0, 32) || "automation";
@@ -117,7 +117,7 @@ export type RenderAutomationInput = {
 export function renderTriggerForSend(input: RenderAutomationInput): string {
   const { automation, triggerSendId, templateHtml, studioBaseUrl } = input;
   const triggerId = automation.id;
-  const data = store.read();
+  const data = studioService.read();
   const message = requireMessage(data, automation.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
 

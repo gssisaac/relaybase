@@ -1,7 +1,7 @@
-import { store } from "../../db/store";
-import type { Newsletter } from "../../db/types";
-import { findSubscriberGroup } from "../subscriber-groups/group";
-import { newToken } from "../shared/ids";
+import { studioService } from "@services/studio-service";
+import type { Newsletter } from "@db/types";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
+import { newToken } from "@lib/shared/ids";
 
 export function resolveTestSendUnsubscribeToken(broadcast: Newsletter, toEmail: string): string {
   if (!broadcast.subscriberGroupId) return newToken();
@@ -14,7 +14,7 @@ export function resolveTestSendUnsubscribeToken(broadcast: Newsletter, toEmail: 
 /** Atomically move draft → sending so duplicate POST /send cannot double-dispatch. */
 export function claimNewsletterForSend(id: string): Newsletter | null {
   let claimed: Newsletter | null = null;
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.newsletters.findIndex((r) => r.id === id);
     if (idx < 0) return;
     const row = draft.newsletters[idx]!;

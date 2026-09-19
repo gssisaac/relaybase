@@ -1,7 +1,7 @@
 import nodeFs from "node:fs";
 import path from "node:path";
 
-import { parseTemplateMetaYaml, type ParsedTemplateMeta } from "./parse-template-meta";
+import { parseTemplateMetaYaml, type ParsedTemplateMeta } from "@lib/templates/parse-template-meta";
 
 export type BuiltinTemplate = {
   id: string;

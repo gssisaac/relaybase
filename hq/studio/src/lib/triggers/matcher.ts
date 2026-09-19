@@ -1,13 +1,13 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { Trigger, TriggerSource } from "../../db/types";
-import { triggerSource } from "../messages/resolve";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { Trigger, TriggerSource } from "@db/types";
+import { triggerSource } from "@lib/messages/resolve";
 
 function isActiveTrigger(row: Trigger): boolean {
   return row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.listStatus === "active" && row.status === "active";
 }
 
 export function findTriggerById(id: string): Trigger | undefined {
-  return store.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
+  return studioService.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
 }
 
 export function findTriggerForInbound(input: {
@@ -21,7 +21,7 @@ export function findTriggerForInbound(input: {
   const subject = input.subject?.trim().toLowerCase() ?? "";
   const fromDomain = input.fromEmail?.split("@")[1]?.trim().toLowerCase() ?? "";
 
-  const candidates = store
+  const candidates = studioService
     .read()
     .triggers.filter((a): a is Trigger => {
       if (!isActiveTrigger(a)) return false;

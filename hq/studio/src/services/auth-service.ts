@@ -1,15 +1,15 @@
-import { loadAuthStoreFromPostgres } from "./orm/postgres-auth-persist";
+import { loadAuthStoreFromPostgres } from "@lib/orm/postgres-auth-persist";
 import {
   commitPostgresAuthCache,
   readPostgresAuthClone,
   setPostgresAuthCache,
-} from "./postgres-auth-runtime";
+} from "@lib/db/postgres-auth-runtime";
 import type {
   HqAuthStore,
   HqAuthUser,
   HqPasswordResetTokenRecord,
   HqRefreshTokenRecord,
-} from "./auth-types";
+} from "@db/auth-types";
 
 function normalizeAuthStore(raw: HqAuthStore): HqAuthStore {
   return {
@@ -30,12 +30,12 @@ function updateAuthImpl(mutator: (draft: HqAuthStore) => void): HqAuthStore {
   return commitPostgresAuthCache(normalizeAuthStore(draft));
 }
 
-export async function initPostgresAuthStore(): Promise<void> {
+export async function initPostgresAuthService(): Promise<void> {
   const loaded = await loadAuthStoreFromPostgres();
   setPostgresAuthCache(normalizeAuthStore(loaded));
 }
 
-export const authStore = {
+export const authService = {
   read(): HqAuthStore {
     return readAuthImpl();
   },
@@ -64,26 +64,26 @@ export const authStore = {
   },
 
   addRefreshToken(record: HqRefreshTokenRecord): void {
-    authStore.update((draft) => {
+    authService.update((draft) => {
       draft.refreshTokens.push(record);
     });
   },
 
   replaceRefreshToken(oldId: string, next: HqRefreshTokenRecord): void {
-    authStore.update((draft) => {
+    authService.update((draft) => {
       draft.refreshTokens = draft.refreshTokens.filter((t) => t.id !== oldId);
       draft.refreshTokens.push(next);
     });
   },
 
   revokeRefreshTokenById(id: string): void {
-    authStore.update((draft) => {
+    authService.update((draft) => {
       draft.refreshTokens = draft.refreshTokens.filter((t) => t.id !== id);
     });
   },
 
   revokeAllRefreshTokensForUser(userId: string): void {
-    authStore.update((draft) => {
+    authService.update((draft) => {
       draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== userId);
     });
   },
@@ -93,7 +93,7 @@ export const authStore = {
   },
 
   addPasswordResetToken(record: HqPasswordResetTokenRecord): void {
-    authStore.update((draft) => {
+    authService.update((draft) => {
       draft.passwordResetTokens.push(record);
     });
   },
@@ -103,7 +103,7 @@ export const authStore = {
   },
 
   markPasswordResetUsed(id: string): void {
-    authStore.update((draft) => {
+    authService.update((draft) => {
       const row = draft.passwordResetTokens.find((t) => t.id === id);
       if (row) row.used = true;
     });

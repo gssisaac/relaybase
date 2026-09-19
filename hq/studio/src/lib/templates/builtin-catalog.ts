@@ -1,8 +1,8 @@
 import nodeFs from "node:fs";
 import path from "node:path";
 
-import type { Template } from "../../db/types";
-import { parseCatalogYaml } from "./parse-catalog-yaml";
+import type { Template } from "@db/types";
+import { parseCatalogYaml } from "@lib/templates/parse-catalog-yaml";
 
 export function resolveCommittedCatalogDir(): string {
   if (process.env.STUDIO_BUILTIN_CATALOG_DIR) {

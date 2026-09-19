@@ -1,17 +1,17 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import { buildNewsletterInProgressOverview } from "../newsletters/overview";
-import { serializeNewsletter } from "../newsletters/serialize";
-import { serializeTemplate } from "../messages/serialize-template";
-import { serializeLayout } from "../templates/layout-serialize";
-import { subscriberGroupToSummary } from "../subscriber-groups/api-serialize";
-import { templateCatalogStore } from "../templates/template-catalog-store";
-import { catalogTemplateMatchesTarget } from "../templates/catalog-template-meta";
-import { buildDashboardSendingAggregate } from "./sending-aggregate";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import { buildNewsletterInProgressOverview } from "@lib/newsletters/overview";
+import { serializeNewsletter } from "@lib/newsletters/serialize";
+import { serializeTemplate } from "@lib/messages/serialize-template";
+import { serializeLayout } from "@lib/templates/layout-serialize";
+import { subscriberGroupToSummary } from "@lib/subscriber-groups/api-serialize";
+import { templateCatalogStore } from "@lib/templates/template-catalog-store";
+import { catalogTemplateMatchesTarget } from "@lib/templates/catalog-template-meta";
+import { buildDashboardSendingAggregate } from "@lib/dashboard/sending-aggregate";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
 
 export function buildStudioDashboard() {
-  const data = store.read();
+  const data = studioService.read();
   const accountId = DEV_ACCOUNT_LINK_ID;
   const now = Date.now();
   const dayMs = 86_400_000;

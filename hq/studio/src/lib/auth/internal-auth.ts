@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { requireJwtSecret } from "./hq-auth-config";
+import { requireJwtSecret } from "@lib/auth/hq-auth-config";
 
 /** Server-to-server calls from the web app (register-cloud), not browsers. */
 export function verifyInternalAuthHeader(header: string | undefined): boolean {

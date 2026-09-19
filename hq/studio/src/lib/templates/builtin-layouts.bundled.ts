@@ -1,6 +1,6 @@
-import type { BuiltinTemplate } from "./load-builtin-templates";
-import { BUILTIN_LAYOUT_META_YAML } from "./builtin-layout-meta.imports";
-import { parseTemplateMetaYaml } from "./parse-template-meta";
+import type { BuiltinTemplate } from "@lib/templates/load-builtin-templates";
+import { BUILTIN_LAYOUT_META_YAML } from "@lib/templates/builtin-layout-meta.imports";
+import { parseTemplateMetaYaml } from "@lib/templates/parse-template-meta";
 
 /** Loaded only in the Worker bundle (Wrangler Text rules on *.yaml). */
 export function loadBundledBuiltinLayouts(): BuiltinTemplate[] {

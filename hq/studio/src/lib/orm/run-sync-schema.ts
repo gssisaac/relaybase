@@ -5,7 +5,7 @@
  */
 import "reflect-metadata";
 
-import { createStudioDataSource, destroyStudioDataSource } from "./data-source";
+import { createStudioDataSource, destroyStudioDataSource } from "@lib/orm/data-source";
 
 async function main() {
   if (process.env.TYPEORM_SYNC !== "1") {

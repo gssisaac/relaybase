@@ -9,7 +9,7 @@ import "reflect-metadata";
 
 import pg from "pg";
 
-import { postgresClientConfigFromUrl } from "./postgres-client-config";
+import { postgresClientConfigFromUrl } from "@lib/db/postgres-client-config";
 
 const TARGET_DB = "relaybase";
 

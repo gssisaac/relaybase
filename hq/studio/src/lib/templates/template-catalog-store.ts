@@ -1,8 +1,8 @@
 import { Document, isScalar, Scalar } from "yaml";
 
-import type { Template } from "../../db/types";
-import { loadBuiltinCatalogTemplates } from "./builtin-catalog";
-import { normalizeCatalogTemplate } from "./parse-catalog-yaml";
+import type { Template } from "@db/types";
+import { loadBuiltinCatalogTemplates } from "@lib/templates/builtin-catalog";
+import { normalizeCatalogTemplate } from "@lib/templates/parse-catalog-yaml";
 
 function stringifyTemplate(template: Template): string {
   const doc = new Document(template);

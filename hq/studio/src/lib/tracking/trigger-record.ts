@@ -1,8 +1,8 @@
-import { store } from "../../db/store";
-import { newId } from "../shared/ids";
-import { rollupTriggerStatsFromSends } from "../triggers/stats";
+import { studioService } from "@services/studio-service";
+import { newId } from "@lib/shared/ids";
+import { rollupTriggerStatsFromSends } from "@lib/triggers/stats";
 
-function refreshTriggerStats(draft: import("../../db/types").StudioDataStore, triggerId: string) {
+function refreshTriggerStats(draft: import("@db/types").StudioDataStore, triggerId: string) {
   const aIdx = draft.triggers.findIndex((a) => a.id === triggerId);
   if (aIdx < 0) return;
   const automation = draft.triggers[aIdx]!;
@@ -20,12 +20,12 @@ function refreshTriggerStats(draft: import("../../db/types").StudioDataStore, tr
 
 export function recordAutomationTrackingOpen(triggerId: string, triggerSendId: string) {
   try {
-    const send = store
+    const send = studioService
       .read()
       .triggerSends.find((s) => s.id === triggerSendId && s.triggerId === triggerId);
     if (!send) return;
     const now = new Date().toISOString();
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.triggerSends.findIndex((s) => s.id === triggerSendId);
       if (idx < 0) return;
       draft.triggerSends[idx] = {
@@ -56,12 +56,12 @@ export function recordAutomationTrackingClick(
   url: string,
 ) {
   try {
-    const send = store
+    const send = studioService
       .read()
       .triggerSends.find((s) => s.id === triggerSendId && s.triggerId === triggerId);
     if (!send) return;
     const now = new Date().toISOString();
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.triggerSends.findIndex((s) => s.id === triggerSendId);
       if (idx < 0) return;
       draft.triggerSends[idx] = {

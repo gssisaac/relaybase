@@ -1,20 +1,20 @@
 import { Hono } from "hono";
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { Layout } from "../db/types";
-import { newId } from "../lib/shared/ids";
-import { serializeLayout } from "../lib/templates/layout-serialize";
-import { prepareTemplateImport } from "../lib/templates/prepare-import";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { Layout } from "@db/types";
+import { newId } from "@lib/shared/ids";
+import { serializeLayout } from "@lib/templates/layout-serialize";
+import { prepareTemplateImport } from "@lib/templates/prepare-import";
 import {
   canAccessCustomLayout,
   layoutReferencedByMessages,
   nextCustomForkName,
-} from "../lib/templates/layout-access";
+} from "@lib/templates/layout-access";
 
 export const studioTemplates = new Hono();
 
 // GET /studio/templates — built-in (shared) + this account's custom HTML layouts
 studioTemplates.get("/", async (c) => {
-  const data = store.read();
+  const data = studioService.read();
   const rows = data.layouts.filter(
     (t) => t.isBuiltin || t.accountLinkId === DEV_ACCOUNT_LINK_ID || t.accountLinkId === null,
   );
@@ -24,7 +24,7 @@ studioTemplates.get("/", async (c) => {
 // GET /studio/layouts/:id
 studioTemplates.get("/:id", (c) => {
   const id = c.req.param("id");
-  const data = store.read();
+  const data = studioService.read();
   const row = data.layouts.find((t) => t.id === id);
   if (!row) return c.json({ error: "template not found" }, 404);
   if (!row.isBuiltin && !canAccessCustomLayout(row)) {
@@ -59,7 +59,7 @@ studioTemplates.post("/", async (c) => {
   const id = newId("template");
   const now = new Date().toISOString();
   let created: Layout | null = null;
-  store.update((draft) => {
+  studioService.update((draft) => {
     created = {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -95,7 +95,7 @@ studioTemplates.patch("/:id/source", async (c) => {
   }
   const nameFromBody = body.name?.trim();
 
-  const data = store.read();
+  const data = studioService.read();
   const existing = data.layouts.find((t) => t.id === id);
   if (!existing) {
     return c.json({ error: "template not found" }, 404);
@@ -109,7 +109,7 @@ studioTemplates.patch("/:id/source", async (c) => {
   if (existing.isBuiltin) {
     const now = new Date().toISOString();
     let created: Layout | null = null;
-    store.update((draft) => {
+    studioService.update((draft) => {
       const source = draft.layouts.find((t) => t.id === id);
       if (!source?.isBuiltin) return;
       const forkName = nextCustomForkName(draft.layouts, source.name);
@@ -149,7 +149,7 @@ studioTemplates.patch("/:id/source", async (c) => {
   }
 
   let updated: Layout | null = null;
-  store.update((draft) => {
+  studioService.update((draft) => {
     const row = draft.layouts.find((t) => t.id === id);
     if (!row || row.isBuiltin || !canAccessCustomLayout(row)) return;
     row.htmlSource = prepared.htmlSource;
@@ -171,7 +171,7 @@ studioTemplates.patch("/:id/source", async (c) => {
 // DELETE /studio/layouts/:id — custom layouts only
 studioTemplates.delete("/:id", (c) => {
   const id = c.req.param("id");
-  const data = store.read();
+  const data = studioService.read();
   const existing = data.layouts.find((t) => t.id === id);
   if (!existing) return c.json({ error: "template not found" }, 404);
   if (existing.isBuiltin) {
@@ -185,7 +185,7 @@ studioTemplates.delete("/:id", (c) => {
   }
 
   let removed = false;
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.layouts.findIndex((t) => t.id === id);
     if (idx < 0) return;
     const row = draft.layouts[idx]!;

@@ -1,9 +1,9 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
-import { syncSubscriberGroupAsync } from "./lib/subscriber-groups/sync";
-import { resolveActiveSubscriberContacts } from "./lib/subscriber-groups/resolver";
-import { dispatchNewsletterToSubscribers, processNewsletterDispatchBatch } from "./lib/newsletters/dispatch";
-import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "./lib/newsletters/dispatch-progress";
-import { rollupNewsletterStatsFromRecipients } from "./lib/newsletters/stats";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import { syncSubscriberGroupAsync } from "@lib/subscriber-groups/sync";
+import { resolveActiveSubscriberContacts } from "@lib/subscriber-groups/resolver";
+import { dispatchNewsletterToSubscribers, processNewsletterDispatchBatch } from "@lib/newsletters/dispatch";
+import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "@lib/newsletters/dispatch-progress";
+import { rollupNewsletterStatsFromRecipients } from "@lib/newsletters/stats";
 
 /**
  * Stand-ins for Cloudflare Cron Trigger + Queue — in-process intervals for
@@ -17,7 +17,7 @@ const SUBSCRIBER_CRON_MS = 60_000;
 /** §5.1 — synchronous atomic claim on the document store guards against duplicate sends. */
 async function claimDueNewsletters(): Promise<void> {
   const now = new Date().toISOString();
-  const due = store
+  const due = studioService
     .read()
     .scheduledJobs.filter(
       (j) => (j.kind === "newsletter" || j.kind === "broadcast") && j.status === "pending" && j.runAt <= now,
@@ -25,7 +25,7 @@ async function claimDueNewsletters(): Promise<void> {
 
   for (const job of due) {
     let claimedBroadcastId: string | null = null;
-    store.update((draft) => {
+    studioService.update((draft) => {
       const jobIdx = draft.scheduledJobs.findIndex((j) => j.id === job.id && j.status === "pending");
       if (jobIdx < 0) return;
       const bIdx = draft.newsletters.findIndex(
@@ -52,12 +52,12 @@ async function claimDueNewsletters(): Promise<void> {
     try {
       // Late-binding resolution (§1.3): subscribers are resolved *now*, at
       // the exact dispatch moment — not frozen when the broadcast was scheduled.
-      const broadcast = store.read().newsletters.find((b) => b.id === claimedBroadcastId)!;
+      const broadcast = studioService.read().newsletters.find((b) => b.id === claimedBroadcastId)!;
       const members = resolveActiveSubscriberContacts(broadcast);
       await dispatchNewsletterToSubscribers(broadcast, members);
     } catch (err) {
       console.error(`[studio-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
-      store.update((draft) => {
+      studioService.update((draft) => {
         const idx = draft.newsletters.findIndex((b) => b.id === claimedBroadcastId);
         if (idx >= 0) {
           const failedAt = new Date().toISOString();
@@ -75,14 +75,14 @@ async function claimDueNewsletters(): Promise<void> {
 
 /** Drain queued recipients for broadcasts still in `sending` (large scheduled sends). */
 async function processSendingBroadcastQueues(): Promise<void> {
-  const sending = store
+  const sending = studioService
     .read()
     .newsletters.filter(
       (b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID && b.status === "sending",
     );
 
   for (const broadcast of sending) {
-    const pending = store
+    const pending = studioService
       .read()
       .recipients.filter(
         (r) =>
@@ -101,7 +101,7 @@ async function processSendingBroadcastQueues(): Promise<void> {
 
 /** Reconciles stored `stats` from the recipient ledger for in-flight/recently sent broadcasts. */
 async function rollupStats(): Promise<void> {
-  const data = store.read();
+  const data = studioService.read();
   const active = data.newsletters.filter((b) => b.status === "sent" || b.status === "sending");
 
   for (const broadcast of active) {
@@ -125,7 +125,7 @@ async function rollupStats(): Promise<void> {
       continue;
     }
 
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.newsletters.findIndex((b) => b.id === broadcast.id);
       if (idx < 0) return;
       draft.newsletters[idx] = { ...draft.newsletters[idx]!, stats: next };
@@ -135,7 +135,7 @@ async function rollupStats(): Promise<void> {
 
 async function pollSubscriberCron(): Promise<void> {
   const now = Date.now();
-  const groups = store
+  const groups = studioService
     .read()
     .subscriberGroups.filter(
       (g) =>

@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 
-import { AccountLinkEntity } from "./tenant.entities";
+import { AccountLinkEntity } from "@db/entities/tenant.entities";
 
 @Entity({ name: "account_suppressions" })
 @Index(["accountLinkId", "email"])

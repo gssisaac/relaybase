@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 
-import { authStore } from "../db/auth-store";
-import { requireJwtSecret } from "../lib/auth/hq-auth-config";
+import { authService } from "@services/auth-service";
+import { requireJwtSecret } from "@lib/auth/hq-auth-config";
 import {
   changeUserPassword,
   issueAccessToken,
@@ -18,15 +18,15 @@ import {
   signupCloudUser,
   isUsernameAvailable,
   updateUserProfile,
-} from "../lib/auth/hq-auth-service";
-import { verifyInternalAuthHeader } from "../lib/auth/internal-auth";
+} from "@lib/auth/hq-auth-service";
+import { verifyInternalAuthHeader } from "@lib/auth/internal-auth";
 import {
   generateAvailableUsername,
   validateUsername,
-} from "../lib/auth/username";
-import { verifyAccessToken } from "../lib/auth/jwt";
-import { bearerToken } from "../lib/auth/bearer-token";
-import { mintWorkerOwnerSession } from "../lib/auth/worker-owner-session";
+} from "@lib/auth/username";
+import { verifyAccessToken } from "@lib/auth/jwt";
+import { bearerToken } from "@lib/auth/bearer-token";
+import { mintWorkerOwnerSession } from "@lib/auth/worker-owner-session";
 
 export const hqAuth = new Hono();
 
@@ -152,7 +152,7 @@ function authenticatedUser(c: { req: { header: (name: string) => string | undefi
   const claims = verifyAccessToken(token, secret);
   if (!claims) return { error: "Unauthorized", status: 401 as const, user: null };
 
-  const user = authStore.findUserById(claims.sub);
+  const user = authService.findUserById(claims.sub);
   if (!user) return { error: "Unauthorized", status: 401 as const, user: null };
 
   return { error: null, status: null, user };
@@ -236,7 +236,7 @@ hqAuth.get("/cloud-account-lookup", async (c) => {
   if (!cfAccountId.trim()) {
     return c.json({ error: "cfAccountId is required" }, 400);
   }
-  const user = authStore.findUserByCfAccountId(cfAccountId);
+  const user = authService.findUserByCfAccountId(cfAccountId);
   if (!user) {
     return c.json({ exists: false });
   }

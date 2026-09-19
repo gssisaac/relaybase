@@ -1,7 +1,7 @@
-import { store } from "../../db/store";
+import { studioService } from "@services/studio-service";
 
 export function aggregateNewsletterLinkClicks(newsletterId: string) {
-  const events = store
+  const events = studioService
     .read()
     .trackingEvents.filter((e) => e.newsletterId === newsletterId && e.type === "click" && e.url);
   const byUrl = new Map<string, { url: string; clicks: number; uniqueRecipients: Set<string> }>();

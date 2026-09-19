@@ -1,18 +1,18 @@
-import { store } from "../../db/store";
-import type { SubscriberMember, Newsletter } from "../../db/types";
-import { sendMail } from "../mail/sender";
-import { resolveWorkerSendCredentials } from "../mail/credentials";
+import { studioService } from "@services/studio-service";
+import type { SubscriberMember, Newsletter } from "@db/types";
+import { sendMail } from "@lib/mail/sender";
+import { resolveWorkerSendCredentials } from "@lib/mail/credentials";
 import {
   buildListUnsubscribeUrl,
   renderNewsletterForRecipient,
   resolveBroadcastSubject,
-} from "../render/render";
-import { STUDIO_PUBLIC_BASE_URL } from "../shared/studio-url";
-import { newId } from "../shared/ids";
-import { DISPATCH_BATCH_SIZE } from "./dispatch-progress";
-import { requireMessage } from "../messages/resolve";
-import { getNewsletterLayoutHtml, getNewsletterLayoutSchema } from "./serialize";
-import { rollupNewsletterStatsFromRecipients } from "./stats";
+} from "@lib/render/render";
+import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
+import { newId } from "@lib/shared/ids";
+import { DISPATCH_BATCH_SIZE } from "@lib/newsletters/dispatch-progress";
+import { requireMessage } from "@lib/messages/resolve";
+import { getNewsletterLayoutHtml, getNewsletterLayoutSchema } from "@lib/newsletters/serialize";
+import { rollupNewsletterStatsFromRecipients } from "@lib/newsletters/stats";
 
 export { DISPATCH_BATCH_SIZE };
 
@@ -24,7 +24,7 @@ function enqueueNewsletterRecipients(
   members: SubscriberMember[],
   now: string,
 ): void {
-  store.update((draft) => {
+  studioService.update((draft) => {
     const existing = new Set(
       draft.recipients
         .filter((r) => r.newsletterId === broadcast.id)
@@ -56,7 +56,7 @@ function enqueueNewsletterRecipients(
 }
 
 function rollupStatsForBroadcast(newsletterId: string) {
-  const data = store.read();
+  const data = studioService.read();
   return rollupNewsletterStatsFromRecipients(
     data.recipients.filter((r) => r.newsletterId === newsletterId),
     data.trackingEvents.filter((e) => e.newsletterId === newsletterId),
@@ -64,7 +64,7 @@ function rollupStatsForBroadcast(newsletterId: string) {
 }
 
 function finalizeNewsletterDispatchIfIdle(newsletterId: string): boolean {
-  const data = store.read();
+  const data = studioService.read();
   const idx = data.newsletters.findIndex((b) => b.id === newsletterId);
   if (idx < 0) return true;
   const broadcast = data.newsletters[idx]!;
@@ -79,7 +79,7 @@ function finalizeNewsletterDispatchIfIdle(newsletterId: string): boolean {
 
   const now = new Date().toISOString();
   const stats = rollupStatsForBroadcast(newsletterId);
-  store.update((draft) => {
+  studioService.update((draft) => {
     const rowIdx = draft.newsletters.findIndex((b) => b.id === newsletterId);
     if (rowIdx < 0) return;
     draft.newsletters[rowIdx] = {
@@ -100,7 +100,7 @@ export async function processNewsletterDispatchBatch(
   newsletterId: string,
   limit: number,
 ): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
-  const broadcast = store.read().newsletters.find((b) => b.id === newsletterId);
+  const broadcast = studioService.read().newsletters.find((b) => b.id === newsletterId);
   if (!broadcast || broadcast.status !== "sending") {
     return { sent: 0, failed: 0, skipped: 0, completed: true };
   }
@@ -120,12 +120,12 @@ async function runBroadcastDispatchBatch(
   newsletterId: string,
   limit: number,
 ): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
-  const broadcast = store.read().newsletters.find((b) => b.id === newsletterId);
+  const broadcast = studioService.read().newsletters.find((b) => b.id === newsletterId);
   if (!broadcast || broadcast.status !== "sending") {
     return { sent: 0, failed: 0, skipped: 0, completed: true };
   }
 
-  const message = requireMessage(store.read(), broadcast.messageId);
+  const message = requireMessage(studioService.read(), broadcast.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
 
@@ -133,7 +133,7 @@ async function runBroadcastDispatchBatch(
   let failed = 0;
   let skipped = 0;
 
-  const queued = store
+  const queued = studioService
     .read()
     .recipients.filter((r) => r.newsletterId === newsletterId && r.status === "queued")
     .slice(0, limit);
@@ -143,7 +143,7 @@ async function runBroadcastDispatchBatch(
     const now = new Date().toISOString();
     for (const recipient of queued) {
       failed += 1;
-      store.update((draft) => {
+      studioService.update((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
         if (idx < 0) return;
         draft.recipients[idx] = {
@@ -162,7 +162,7 @@ async function runBroadcastDispatchBatch(
     const now = new Date().toISOString();
     for (const recipient of queued) {
       failed += 1;
-      store.update((draft) => {
+      studioService.update((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
         if (idx < 0) return;
         draft.recipients[idx] = {
@@ -177,7 +177,7 @@ async function runBroadcastDispatchBatch(
   }
 
   for (const recipient of queued) {
-    const live = store.read().recipients.find((r) => r.id === recipient.id);
+    const live = studioService.read().recipients.find((r) => r.id === recipient.id);
     if (
       live &&
       (live.status === "delivered" ||
@@ -189,20 +189,20 @@ async function runBroadcastDispatchBatch(
       continue;
     }
 
-    const member = store
+    const member = studioService
       .read()
       .subscriberGroups.flatMap((g) => g.contacts)
       .find((m) => m.id === recipient.subscriberMemberId);
     if (!member || member.sendStatus !== "active") {
       skipped += 1;
-      store.update((draft) => {
+      studioService.update((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
         if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "skipped" };
       });
       continue;
     }
 
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
       if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "sending" };
     });
@@ -243,7 +243,7 @@ async function runBroadcastDispatchBatch(
       listUnsubscribeUrl,
     });
     const sentAt = new Date().toISOString();
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
       if (idx < 0) return;
       draft.recipients[idx] = {
@@ -258,7 +258,7 @@ async function runBroadcastDispatchBatch(
     else failed += 1;
   }
 
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.newsletters.findIndex((b) => b.id === newsletterId);
     if (idx < 0) return;
     draft.newsletters[idx] = {

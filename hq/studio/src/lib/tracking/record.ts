@@ -1,13 +1,13 @@
-import { store } from "../../db/store";
-import { newId } from "../shared/ids";
+import { studioService } from "@services/studio-service";
+import { newId } from "@lib/shared/ids";
 
 export function recordTrackingOpen(newsletterId: string, recipientId: string) {
   try {
-    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.newsletterId === newsletterId);
+    const recipient = studioService.read().recipients.find((r) => r.id === recipientId && r.newsletterId === newsletterId);
     if (!recipient) return;
     const now = new Date().toISOString();
     const firstOpen = !recipient.openedAt;
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipientId);
       if (idx < 0) return;
       draft.recipients[idx] = {
@@ -45,11 +45,11 @@ export function recordTrackingOpen(newsletterId: string, recipientId: string) {
 
 export function recordTrackingClick(newsletterId: string, recipientId: string, url: string) {
   try {
-    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.newsletterId === newsletterId);
+    const recipient = studioService.read().recipients.find((r) => r.id === recipientId && r.newsletterId === newsletterId);
     if (!recipient) return;
     const now = new Date().toISOString();
     const firstClick = !recipient.clickedAt;
-    store.update((draft) => {
+    studioService.update((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipientId);
       if (idx < 0) return;
       draft.recipients[idx] = {

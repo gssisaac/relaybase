@@ -1,6 +1,6 @@
-import type { Template } from "../../db/types";
-import { BUILTIN_CATALOG_YAML } from "./builtin-catalog.imports";
-import { parseCatalogYaml } from "./parse-catalog-yaml";
+import type { Template } from "@db/types";
+import { BUILTIN_CATALOG_YAML } from "@lib/templates/builtin-catalog.imports";
+import { parseCatalogYaml } from "@lib/templates/parse-catalog-yaml";
 
 /** Loaded only in the Worker bundle (Wrangler Text rules on *.yaml). */
 export function loadBundledCatalogTemplates(): Template[] {

@@ -1,6 +1,6 @@
-import { initPostgresAuthStore } from "./db/auth-store";
-import { assertPostgresStoreConfigured, initStudioDataSource } from "./db/orm/data-source";
-import { initPostgresStudioStore } from "./db/store";
+import { initPostgresAuthService } from "@services/auth-service";
+import { assertPostgresStoreConfigured, initStudioDataSource } from "@lib/orm/data-source";
+import { initPostgresStudioService } from "@services/studio-service";
 
 let postgresReady: Promise<void> | null = null;
 
@@ -10,8 +10,8 @@ export function ensurePostgresBootstrap(): Promise<void> {
   if (!postgresReady) {
     postgresReady = (async () => {
       await initStudioDataSource();
-      await initPostgresStudioStore();
-      await initPostgresAuthStore();
+      await initPostgresStudioService();
+      await initPostgresAuthService();
     })();
   }
   return postgresReady;

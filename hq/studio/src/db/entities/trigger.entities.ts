@@ -9,13 +9,12 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-import { AccountLinkEntity } from "./tenant.entities";
-import { MessageEntity } from "./content.entities";
-import { SubscriberGroupEntity } from "./subscriber.entities";
+import { AccountLinkEntity } from "@db/entities/tenant.entities";
+import { MessageEntity } from "@db/entities/content.entities";
 
-@Entity({ name: "newsletters" })
+@Entity({ name: "triggers" })
 @Index(["accountLinkId", "status"])
-export class NewsletterEntity {
+export class TriggerEntity {
   @PrimaryColumn({ type: "varchar", length: 64 })
   id!: string;
 
@@ -26,13 +25,6 @@ export class NewsletterEntity {
   @JoinColumn({ name: "account_link_id" })
   accountLink!: AccountLinkEntity;
 
-  @Column({ name: "subscriber_group_id", type: "varchar", length: 64 })
-  subscriberGroupId!: string;
-
-  @ManyToOne(() => SubscriberGroupEntity, { onDelete: "RESTRICT" })
-  @JoinColumn({ name: "subscriber_group_id" })
-  subscriberGroup!: SubscriberGroupEntity;
-
   @Column({ name: "message_id", type: "varchar", length: 64 })
   messageId!: string;
 
@@ -40,8 +32,14 @@ export class NewsletterEntity {
   @JoinColumn({ name: "message_id" })
   message!: MessageEntity;
 
+  @Column({ name: "subscriber_group_id", type: "varchar", length: 64, nullable: true })
+  subscriberGroupId!: string | null;
+
   @Column({ name: "compliance_identity_id", type: "varchar", length: 64, nullable: true })
   complianceIdentityId!: string | null;
+
+  @Column({ type: "varchar", length: 255 })
+  name!: string;
 
   @Column({ type: "varchar", length: 255 })
   slug!: string;
@@ -61,30 +59,32 @@ export class NewsletterEntity {
   @Column({ name: "reply_to", type: "varchar", length: 255, nullable: true })
   replyTo!: string | null;
 
+  @Column({ type: "varchar", length: 32 })
+  purpose!: string;
+
   @Column({ name: "list_status", type: "varchar", length: 32, default: "active" })
   listStatus!: string;
 
   @Column({ type: "varchar", length: 32, default: "draft" })
   status!: string;
 
-  @Index()
-  @Column({ name: "scheduled_at", type: "timestamptz", nullable: true })
-  scheduledAt!: Date | null;
+  @Column({ type: "jsonb" })
+  source!: Record<string, unknown>;
 
-  @Column({ name: "started_at", type: "timestamptz", nullable: true })
-  startedAt!: Date | null;
+  @Column({ name: "cooldown_seconds", type: "integer", default: 86400 })
+  cooldownSeconds!: number;
 
-  @Column({ name: "sent_at", type: "timestamptz", nullable: true })
-  sentAt!: Date | null;
-
-  @Column({ name: "finished_at", type: "timestamptz", nullable: true })
-  finishedAt!: Date | null;
-
-  @Column({ name: "target_filter", type: "jsonb", nullable: true })
-  targetFilter!: Record<string, unknown> | null;
+  @Column({ name: "apply_marketing_suppression", type: "boolean", default: true })
+  applyMarketingSuppression!: boolean;
 
   @Column({ type: "jsonb", default: {} })
   stats!: Record<string, number>;
+
+  @Column({ name: "last_triggered_at", type: "timestamptz", nullable: true })
+  lastTriggeredAt!: Date | null;
+
+  @Column({ name: "last_sent_at", type: "timestamptz", nullable: true })
+  lastSentAt!: Date | null;
 
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
@@ -93,23 +93,59 @@ export class NewsletterEntity {
   updatedAt!: Date;
 }
 
-@Entity({ name: "recipients" })
-@Index(["newsletterId", "status"])
-export class RecipientEntity {
+@Entity({ name: "trigger_events" })
+@Index(["accountLinkId"])
+@Index(["triggerId"])
+export class TriggerEventEntity {
   @PrimaryColumn({ type: "varchar", length: 64 })
   id!: string;
 
-  @Column({ name: "newsletter_id", type: "varchar", length: 64 })
-  newsletterId!: string;
+  @Column({ name: "account_link_id", type: "varchar", length: 64 })
+  accountLinkId!: string;
 
-  @ManyToOne(() => NewsletterEntity, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "newsletter_id" })
-  newsletter!: NewsletterEntity;
+  @Column({ name: "trigger_id", type: "varchar", length: 64, nullable: true })
+  triggerId!: string | null;
+
+  @Column({ name: "trigger_type", type: "varchar", length: 64 })
+  triggerType!: string;
+
+  @Column({ name: "idempotency_key", type: "varchar", length: 255 })
+  idempotencyKey!: string;
+
+  @Column({ name: "recipient_email", type: "varchar", length: 255 })
+  recipientEmail!: string;
+
+  @Column({ name: "recipient_name", type: "varchar", length: 255, nullable: true })
+  recipientName!: string | null;
+
+  @Column({ type: "jsonb", default: {} })
+  payload!: Record<string, unknown>;
+
+  @Column({ type: "varchar", length: 32 })
+  status!: string;
+
+  @Column({ name: "skip_reason", type: "varchar", length: 64, nullable: true })
+  skipReason!: string | null;
+
+  @Column({ name: "occurred_at", type: "timestamptz" })
+  occurredAt!: Date;
+}
+
+@Entity({ name: "trigger_sends" })
+@Index(["triggerId", "status"])
+export class TriggerSendEntity {
+  @PrimaryColumn({ type: "varchar", length: 64 })
+  id!: string;
+
+  @Column({ name: "trigger_id", type: "varchar", length: 64 })
+  triggerId!: string;
+
+  @Column({ name: "trigger_event_id", type: "varchar", length: 64 })
+  triggerEventId!: string;
 
   @Column({ name: "subscriber_member_id", type: "varchar", length: 64, nullable: true })
   subscriberMemberId!: string | null;
 
-  @Index()
   @Column({ type: "varchar", length: 255 })
   email!: string;
 
@@ -150,20 +186,18 @@ export class RecipientEntity {
   createdAt!: Date;
 }
 
-@Entity({ name: "tracking_events" })
-@Index(["newsletterId"])
-@Index(["occurredAt"])
-export class TrackingEventEntity {
+@Entity({ name: "trigger_tracking_events" })
+@Index(["triggerId"])
+export class TriggerTrackingEventEntity {
   @PrimaryColumn({ type: "varchar", length: 64 })
   id!: string;
 
-  @Column({ name: "newsletter_id", type: "varchar", length: 64 })
-  newsletterId!: string;
+  @Column({ name: "trigger_id", type: "varchar", length: 64 })
+  triggerId!: string;
 
-  @Column({ name: "recipient_id", type: "varchar", length: 64 })
-  recipientId!: string;
+  @Column({ name: "trigger_send_id", type: "varchar", length: 64 })
+  triggerSendId!: string;
 
-  @Index()
   @Column({ name: "member_email", type: "varchar", length: 255 })
   memberEmail!: string;
 

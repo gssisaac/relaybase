@@ -1,7 +1,7 @@
-import type { Newsletter, StudioDataStore } from "../../db/types";
+import type { Newsletter, StudioDataStore } from "@db/types";
 
 const DEV_ACCOUNT_LINK_ID = "dev";
-import { newId } from "../shared/ids";
+import { newId } from "@lib/shared/ids";
 
 /** Demo newsletters in the PostgreSQL store — runAt is refreshed on each hq/studio load in dev. */
 const DEMO_SCHEDULE_SPECS = [

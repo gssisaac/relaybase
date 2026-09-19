@@ -1,4 +1,4 @@
-import { findSubscriberGroup } from "../subscriber-groups/group";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
 
 export { findSubscriberGroup };
 

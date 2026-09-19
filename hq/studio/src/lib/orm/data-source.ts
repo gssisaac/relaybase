@@ -1,8 +1,8 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 
-import { studioOrmEntities } from "./entities/index";
-import { postgresSslForUrl } from "./postgres-client-config";
+import { studioOrmEntities } from "@db/entities";
+import { postgresSslForUrl } from "@lib/db/postgres-client-config";
 
 export function readDatabaseUrl(): string | undefined {
   const url = process.env.DATABASE_URL?.trim();

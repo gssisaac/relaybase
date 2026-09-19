@@ -1,4 +1,4 @@
-import { store } from "../../db/store";
+import { studioService } from "@services/studio-service";
 
 export type WorkerSendCredentials =
   | { ok: true; workerUrl: string; apiKey: string }
@@ -6,7 +6,7 @@ export type WorkerSendCredentials =
 
 /** Resolve Worker origin + domain-scoped send key for broadcast dispatch. */
 export function resolveWorkerSendCredentials(): WorkerSendCredentials {
-  const account = store.read().account;
+  const account = studioService.read().account;
   const workerUrl = account.workerUrl?.trim().replace(/\/$/, "") ?? "";
   const envKey = process.env.STUDIO_WORKER_SEND_API_KEY?.trim();
   const apiKey = envKey || account.sendApiKey?.trim() || "";

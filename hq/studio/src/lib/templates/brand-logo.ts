@@ -1,8 +1,8 @@
-import { STUDIO_PUBLIC_BASE_URL } from "../shared/studio-url";
+import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
 import {
   DEFAULT_BRAND_LOGO_FILENAME,
   DEFAULT_BRAND_LOGO_PATH,
-} from "./brand-logo-path";
+} from "@lib/templates/brand-logo-path";
 
 export { DEFAULT_BRAND_LOGO_FILENAME, DEFAULT_BRAND_LOGO_PATH };
 

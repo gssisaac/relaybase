@@ -1,7 +1,7 @@
-import { store } from "../../db/store";
-import type { Trigger, TriggerSource } from "../../db/types";
-import { requireMessage, triggerSource } from "../messages/resolve";
-import { EMAIL_RE } from "../shared/email";
+import { studioService } from "@services/studio-service";
+import type { Trigger, TriggerSource } from "@db/types";
+import { requireMessage, triggerSource } from "@lib/messages/resolve";
+import { EMAIL_RE } from "@lib/shared/email";
 
 export type TriggerActivationIssue = { field: string; message: string };
 
@@ -32,7 +32,7 @@ export function validateTriggerSource(trigger: TriggerSource): TriggerActivation
 
 export function validateTriggerForActivation(automation: Trigger): TriggerActivationIssue[] {
   const issues: TriggerActivationIssue[] = [];
-  const message = requireMessage(store.read(), automation.messageId);
+  const message = requireMessage(studioService.read(), automation.messageId);
   if (!message.subject.trim()) {
     issues.push({ field: "subject", message: "Subject is required" });
   }

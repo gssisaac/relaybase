@@ -1,8 +1,8 @@
-import type { Message, StudioDataStore } from "../../db/types";
-import { newId } from "../shared/ids";
-import { templateCatalogStore } from "../templates/template-catalog-store";
-import { messageFileStore } from "./message-file-store";
-import { messageIdForOwner } from "./resolve";
+import type { Message, StudioDataStore } from "@db/types";
+import { newId } from "@lib/shared/ids";
+import { templateCatalogStore } from "@lib/templates/template-catalog-store";
+import { messageFileStore } from "@lib/messages/message-file-store";
+import { messageIdForOwner } from "@lib/messages/resolve";
 
 function syncMessageToDraft(draft: StudioDataStore, row: Message) {
   const idx = draft.messages.findIndex((m) => m.id === row.id);

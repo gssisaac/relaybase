@@ -1,19 +1,19 @@
 import { Hono } from "hono";
-import { store } from "../db/store";
-import { newsletterSubject } from "../lib/newsletters/subject";
-import { unsubscribeHtmlPage, unsubscribePath } from "../lib/unsubscribe/html-page";
+import { studioService } from "@services/studio-service";
+import { newsletterSubject } from "@lib/newsletters/subject";
+import { unsubscribeHtmlPage, unsubscribePath } from "@lib/unsubscribe/html-page";
 import {
   lookupUnsubscribeContact,
   performBroadcastUnsubscribe,
   resubscribeBroadcastContact,
-} from "../lib/unsubscribe/perform";
+} from "@lib/unsubscribe/perform";
 
 export const studioUnsubscribe = new Hono();
 
 function newsletterListLabel(broadcastId: string): string {
-  const broadcast = store.read().newsletters.find((row) => row.id === broadcastId);
+  const broadcast = studioService.read().newsletters.find((row) => row.id === broadcastId);
   if (!broadcast) return "this list";
-  const subject = newsletterSubject(store.read(), broadcast).trim();
+  const subject = newsletterSubject(studioService.read(), broadcast).trim();
   return subject || "this list";
 }
 

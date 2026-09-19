@@ -34,15 +34,22 @@ createdb relaybase
 TYPEORM_SYNC=1 pnpm run orm:setup
 ```
 
+## Imports
+
+`tsconfig.json` path aliases: `@db/*`, `@lib/*`, `@services/*`, `@/*` (under `src/`). Production build runs `tsc-alias` so `dist/` keeps resolvable relative paths.
+
 ## Layout
 
 | Path | Role |
 |------|------|
-| `src/db/orm/entities/` | TypeORM entity definitions |
-| `src/db/orm/data-source.ts` | DataSource factory + singleton init |
-| `src/db/orm/run-sync-schema.ts` | `synchronize: true` helper (requires `TYPEORM_SYNC=1`) |
+| `src/db/types.ts`, `src/db/auth-types.ts` | Store document + auth record types |
+| `src/db/entities/` | TypeORM entity definitions |
+| `src/lib/db/` | PostgreSQL helpers (persist, runtime cache, parse-date, client config) |
+| `src/lib/orm/data-source.ts` | DataSource factory + singleton init |
+| `src/lib/orm/run-sync-schema.ts` | `synchronize: true` helper (requires `TYPEORM_SYNC=1`) |
+| `src/services/studio-service.ts`, `auth-service.ts` | `studioService` / `authService` read/update API |
 
-`store.read()` / `store.update()` and `authStore` use PostgreSQL (in-memory cache + snapshot persist).
+`studioService.read()` / `studioService.update()` and `authService` use PostgreSQL (in-memory cache + snapshot persist).
 
 ### Auth schema (`hq_auth_users`)
 

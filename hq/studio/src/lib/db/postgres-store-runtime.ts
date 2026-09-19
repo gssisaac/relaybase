@@ -1,5 +1,5 @@
-import type { StudioDataStore } from "./types";
-import { persistStudioDataStore } from "./orm/postgres-persist";
+import type { StudioDataStore } from "@db/types";
+import { persistStudioDataStore } from "@lib/orm/postgres-persist";
 
 let cache: StudioDataStore | null = null;
 let persistChain: Promise<void> = Promise.resolve();

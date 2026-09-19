@@ -1,9 +1,9 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { AccountComplianceSettings, ComplianceIdentity, StudioDataStore } from "../../db/types";
-import { newId } from "../shared/ids";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { AccountComplianceSettings, ComplianceIdentity, StudioDataStore } from "@db/types";
+import { newId } from "@lib/shared/ids";
 
 export function listComplianceIdentities(accountLinkId = DEV_ACCOUNT_LINK_ID): ComplianceIdentity[] {
-  return store
+  return studioService
     .read()
     .complianceIdentities.filter((row) => row.accountLinkId === accountLinkId)
     .sort((a, b) => a.name.localeCompare(b.name) || a.createdAt.localeCompare(b.createdAt));
@@ -11,7 +11,7 @@ export function listComplianceIdentities(accountLinkId = DEV_ACCOUNT_LINK_ID): C
 
 export function findComplianceIdentity(id: string | null | undefined): ComplianceIdentity | undefined {
   if (!id) return undefined;
-  return store.read().complianceIdentities.find((row) => row.id === id);
+  return studioService.read().complianceIdentities.find((row) => row.id === id);
 }
 
 export function accountDefaultComplianceIdentityId(data: StudioDataStore): string | null {
@@ -23,7 +23,7 @@ export function accountDefaultComplianceIdentityId(data: StudioDataStore): strin
 export function resolveComplianceIdentityForBroadcast(
   newsletterId: string,
 ): ComplianceIdentity | undefined {
-  const data = store.read();
+  const data = studioService.read();
   const broadcast = data.newsletters.find((b) => b.id === newsletterId);
   if (!broadcast) return undefined;
 

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import { buildStudioAnalytics } from "../lib/analytics/build-studio-analytics";
+import { buildStudioAnalytics } from "@lib/analytics/build-studio-analytics";
 
 export const studioAnalytics = new Hono();
 

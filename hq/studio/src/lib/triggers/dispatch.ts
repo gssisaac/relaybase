@@ -1,24 +1,24 @@
-import { store } from "../../db/store";
-import type { Trigger, TriggerSend } from "../../db/types";
-import { requireMessage } from "../messages/resolve";
-import { sendMail } from "../mail/sender";
-import { STUDIO_PUBLIC_BASE_URL } from "../shared/studio-url";
-import { newId, newToken } from "../shared/ids";
+import { studioService } from "@services/studio-service";
+import type { Trigger, TriggerSend } from "@db/types";
+import { requireMessage } from "@lib/messages/resolve";
+import { sendMail } from "@lib/mail/sender";
+import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
+import { newId, newToken } from "@lib/shared/ids";
 import {
   applyTemplateVariablesToPlainText,
   resolveTemplateVariableDefaults,
-} from "../templates/variable-schema";
-import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "./merge-tags";
-import { triggerSendMailOptions, buildTriggerListUnsubscribeUrl, renderTriggerForSend } from "./render";
-import { getTriggerLayoutHtml, getTriggerLayoutSchema } from "./serialize";
-import { rollupTriggerStatsFromSends } from "./stats";
+} from "@lib/templates/variable-schema";
+import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "@lib/triggers/merge-tags";
+import { triggerSendMailOptions, buildTriggerListUnsubscribeUrl, renderTriggerForSend } from "@lib/triggers/render";
+import { getTriggerLayoutHtml, getTriggerLayoutSchema } from "@lib/triggers/serialize";
+import { rollupTriggerStatsFromSends } from "@lib/triggers/stats";
 
 export async function dispatchTriggerSend(
   automation: Trigger,
   send: TriggerSend,
   payload: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const message = requireMessage(store.read(), automation.messageId);
+  const message = requireMessage(studioService.read(), automation.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml =
     getTriggerLayoutHtml(layoutId) ?? getTriggerLayoutHtml("tpl-minimal") ?? "{{content}}";
@@ -69,7 +69,7 @@ export async function dispatchTriggerSend(
 
   const now = new Date().toISOString();
   if (!result.ok) {
-    store.update((draft) => {
+    studioService.update((draft) => {
       const sIdx = draft.triggerSends.findIndex((s) => s.id === send.id);
       if (sIdx >= 0) {
         draft.triggerSends[sIdx] = {
@@ -91,7 +91,7 @@ export async function dispatchTriggerSend(
     return result;
   }
 
-  store.update((draft) => {
+  studioService.update((draft) => {
     const sIdx = draft.triggerSends.findIndex((s) => s.id === send.id);
     if (sIdx >= 0) {
       draft.triggerSends[sIdx] = {

@@ -1,24 +1,24 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { Trigger, TriggerSource } from "../../db/types";
-import { findSubscriberGroup } from "../subscriber-groups/group";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { Trigger, TriggerSource } from "@db/types";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
 import {
   getLayoutHtml,
   getLayoutSchema,
   resolveMessage,
   rowMessageId,
   triggerSource,
-} from "../messages/resolve";
+} from "@lib/messages/resolve";
 
 export function findTrigger(id: string): Trigger | undefined {
-  return store.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
+  return studioService.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
 }
 
 export function getTriggerLayoutHtml(layoutId: string | null | undefined): string | null {
-  return getLayoutHtml(store.read(), layoutId);
+  return getLayoutHtml(studioService.read(), layoutId);
 }
 
 export function getTriggerLayoutSchema(layoutId: string | null | undefined) {
-  return getLayoutSchema(store.read(), layoutId);
+  return getLayoutSchema(studioService.read(), layoutId);
 }
 
 function maskTriggerSecret(source: TriggerSource): TriggerSource {
@@ -30,7 +30,7 @@ function maskTriggerSecret(source: TriggerSource): TriggerSource {
 }
 
 export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?: boolean }) {
-  const data = store.read();
+  const data = studioService.read();
   const group = row.subscriberGroupId ? findSubscriberGroup(row.subscriberGroupId) : undefined;
   const source = triggerSource(row);
   const sourceOut =
@@ -71,7 +71,7 @@ export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?:
   };
 }
 
-export function serializeTriggerEvent(row: import("../../db/types").TriggerEvent) {
+export function serializeTriggerEvent(row: import("@db/types").TriggerEvent) {
   return {
     id: row.id,
     triggerId: row.triggerId,
@@ -86,7 +86,7 @@ export function serializeTriggerEvent(row: import("../../db/types").TriggerEvent
   };
 }
 
-export function serializeTriggerSend(row: import("../../db/types").TriggerSend) {
+export function serializeTriggerSend(row: import("@db/types").TriggerSend) {
   return {
     id: row.id,
     triggerId: row.triggerId,

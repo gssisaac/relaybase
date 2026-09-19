@@ -1,40 +1,40 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { TriggerPurpose, Trigger, TriggerSource } from "../db/types";
-import { createMessageForOwner, patchMessage } from "../lib/messages/message";
-import { triggerSource } from "../lib/messages/resolve";
-import { findSubscriberGroup } from "../lib/subscriber-groups/group";
-import { dispatchTriggerSend } from "../lib/triggers/dispatch";
-import { fireTrigger } from "../lib/triggers/fire";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { TriggerPurpose, Trigger, TriggerSource } from "@db/types";
+import { createMessageForOwner, patchMessage } from "@lib/messages/message";
+import { triggerSource } from "@lib/messages/resolve";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
+import { dispatchTriggerSend } from "@lib/triggers/dispatch";
+import { fireTrigger } from "@lib/triggers/fire";
 import {
   findTrigger,
   serializeTrigger,
   serializeTriggerSend,
   serializeTriggerEvent,
-} from "../lib/triggers/serialize";
-import { slugifyTrigger } from "../lib/triggers/slug";
-import { emptyTriggerStats, normalizeTriggerStats } from "../lib/triggers/stats";
+} from "@lib/triggers/serialize";
+import { slugifyTrigger } from "@lib/triggers/slug";
+import { emptyTriggerStats, normalizeTriggerStats } from "@lib/triggers/stats";
 import {
   defaultHttpWebhookTrigger,
   defaultMailboxInboundTrigger,
   defaultTriggerForPurpose,
-} from "../lib/triggers/trigger-defaults";
-import { buildTriggerStatsOverview } from "../lib/triggers/trigger-stats-overview";
-import { validateTriggerForActivation } from "../lib/triggers/validate";
+} from "@lib/triggers/trigger-defaults";
+import { buildTriggerStatsOverview } from "@lib/triggers/trigger-stats-overview";
+import { validateTriggerForActivation } from "@lib/triggers/validate";
 import {
   defaultFromForDomain,
   mergeTriggerPatch,
   purposeFromInput,
-} from "../lib/triggers/patch";
-import { sanitizeTemplateVariables } from "../lib/templates/variable-schema";
-import { isValidEmail } from "../lib/shared/email";
-import { newId, newToken } from "../lib/shared/ids";
+} from "@lib/triggers/patch";
+import { sanitizeTemplateVariables } from "@lib/templates/variable-schema";
+import { isValidEmail } from "@lib/shared/email";
+import { newId, newToken } from "@lib/shared/ids";
 
 export const studioTriggers = new Hono();
 
 studioTriggers.get("/", (c) => {
-  const rows = store
+  const rows = studioService
     .read()
     .triggers.filter((a) => a.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -61,7 +61,7 @@ studioTriggers.post("/", async (c) => {
 
   const name = body.name?.trim();
   if (!name) return c.json({ error: "Trigger name is required" }, 400);
-  const domain = body.domain?.trim().toLowerCase() || store.read().account.domain?.trim().toLowerCase();
+  const domain = body.domain?.trim().toLowerCase() || studioService.read().account.domain?.trim().toLowerCase();
   if (!domain) return c.json({ error: "Select a sending domain for this automation" }, 400);
 
   const purpose = purposeFromInput(body.purpose);
@@ -73,7 +73,7 @@ studioTriggers.post("/", async (c) => {
     source = defaultHttpWebhookTrigger();
   }
 
-  const data = store.read();
+  const data = studioService.read();
   const baseSlug = slugifyTrigger(name) || newId("automation").slice(0, 12);
   let slug = baseSlug;
   let suffix = 2;
@@ -85,7 +85,7 @@ studioTriggers.post("/", async (c) => {
   const id = newId("automation");
   const now = new Date().toISOString();
   let created: Trigger | null = null;
-  store.update((draft) => {
+  studioService.update((draft) => {
     const message = createMessageForOwner(
       draft,
       {
@@ -171,7 +171,7 @@ studioTriggers.patch("/:id", async (c) => {
 
   if (body.complianceIdentityId !== undefined && body.complianceIdentityId !== null) {
     const identityId = body.complianceIdentityId.trim();
-    const exists = store.read().complianceIdentities.some((row) => row.id === identityId);
+    const exists = studioService.read().complianceIdentities.some((row) => row.id === identityId);
     if (!exists) return c.json({ error: "Compliance sender not found" }, 400);
   }
 
@@ -186,7 +186,7 @@ studioTriggers.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   let updated: Trigger | null = null;
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     const row = draft.triggers[idx]!;
@@ -251,7 +251,7 @@ studioTriggers.post("/:id/activate", (c) => {
   }
 
   const now = new Date().toISOString();
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     draft.triggers[idx] = {
@@ -270,7 +270,7 @@ studioTriggers.post("/:id/pause", (c) => {
   if (!existing) return c.json({ error: "not found" }, 404);
 
   const now = new Date().toISOString();
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     draft.triggers[idx] = {
@@ -294,7 +294,7 @@ studioTriggers.post("/:id/rotate-webhook-secret", (c) => {
 
   const secret = newToken();
   const now = new Date().toISOString();
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     const source = triggerSource(draft.triggers[idx]!);
@@ -340,7 +340,7 @@ studioTriggers.post("/:id/test-send", async (c) => {
   const triggerEventId = newId("triggerevent");
   const now = new Date().toISOString();
 
-  store.update((draft) => {
+  studioService.update((draft) => {
     draft.triggerEvents.push({
       id: triggerEventId,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -376,7 +376,7 @@ studioTriggers.post("/:id/test-send", async (c) => {
   });
 
   const automation = findTrigger(id)!;
-  const send = store.read().triggerSends.find((s) => s.id === sendId)!;
+  const send = studioService.read().triggerSends.find((s) => s.id === sendId)!;
   const result = await dispatchTriggerSend(automation, send, payload);
   if (!result.ok) {
     return c.json({ error: result.error, triggerSendId: sendId }, 502);
@@ -389,7 +389,7 @@ studioTriggers.get("/:id/activity", (c) => {
   const id = c.req.param("id")!;
   if (!findTrigger(id)) return c.json({ error: "not found" }, 404);
 
-  const data = store.read();
+  const data = studioService.read();
   const events = data.triggerEvents
     .filter((e) => e.triggerId === id)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))

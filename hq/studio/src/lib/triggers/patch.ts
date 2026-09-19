@@ -1,4 +1,4 @@
-import type { TriggerPurpose, TriggerSource } from "../../db/types";
+import type { TriggerPurpose, TriggerSource } from "@db/types";
 
 export function defaultFromForDomain(domain: string): string {
   return `hello@${domain}`;

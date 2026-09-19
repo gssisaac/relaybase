@@ -1,20 +1,20 @@
-import { loadStudioDataStore, persistStudioDataStore } from "./orm/postgres-persist";
+import { loadStudioDataStore, persistStudioDataStore } from "@lib/orm/postgres-persist";
 import {
   commitPostgresStoreCache,
   readPostgresStoreClone,
   setPostgresStoreCache,
-} from "./postgres-store-runtime";
+} from "@lib/db/postgres-store-runtime";
 
-import { emptyNewsletterStats, normalizeNewsletterStats } from "../lib/newsletters/stats";
-import { normalizeTriggerStats } from "../lib/triggers/stats";
-import { newId, newToken } from "../lib/shared/ids";
-import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
-import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtures";
-import { ensureOwnerMessageFiles } from "../lib/messages/ensure-owner-message-files";
-import { templateCatalogStore } from "../lib/templates/template-catalog-store";
-import { messageIdForOwner } from "../lib/messages/resolve";
-import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
-import type { AccountComplianceSettings, Newsletter, StudioDataStore, Trigger } from "./types";
+import { emptyNewsletterStats, normalizeNewsletterStats } from "@lib/newsletters/stats";
+import { normalizeTriggerStats } from "@lib/triggers/stats";
+import { newId, newToken } from "@lib/shared/ids";
+import { getBuiltinTemplates } from "@lib/templates/builtin-templates";
+import { ensureDevScheduleFixtures } from "@lib/newsletters/dev-schedule-fixtures";
+import { ensureOwnerMessageFiles } from "@lib/messages/ensure-owner-message-files";
+import { templateCatalogStore } from "@lib/templates/template-catalog-store";
+import { messageIdForOwner } from "@lib/messages/resolve";
+import { ensureComplianceIdentitiesFromLegacy } from "@lib/compliance/identity";
+import type { AccountComplianceSettings, Newsletter, StudioDataStore, Trigger } from "@db/types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
@@ -346,7 +346,7 @@ export function reconcileAndHydrateStore(parsed: StudioDataStore): { store: Stud
   return { store, dirty };
 }
 
-export async function initPostgresStudioStore(): Promise<void> {
+export async function initPostgresStudioService(): Promise<void> {
   let loaded = await loadStudioDataStore();
   if (!loaded) {
     const seeded = reconcileAndHydrateStore(defaultStore());
@@ -363,7 +363,7 @@ export async function initPostgresStudioStore(): Promise<void> {
 }
 
 /** In-memory PostgreSQL cache (authoritative at runtime). */
-export const store = {
+export const studioService = {
   read(): StudioDataStore {
     return readPostgresStoreClone();
   },

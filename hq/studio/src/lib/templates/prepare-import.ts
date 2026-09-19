@@ -1,11 +1,11 @@
 import {
   STANDARD_COMPLIANCE_FOOTER_HTML_APPEND,
   templateHasEmbeddedComplianceFooter,
-} from "./standard-footer";
+} from "@lib/templates/standard-footer";
 import {
   normalizeTemplateVariablesSchema,
   parseTemplateVariablesYaml,
-} from "./variable-schema";
+} from "@lib/templates/variable-schema";
 
 export type PreparedTemplateImport = {
   htmlSource: string;

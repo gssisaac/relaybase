@@ -1,9 +1,9 @@
-import { store } from "../../db/store";
-import type { Message } from "../../db/types";
-import { resolveMessageLinkedOwner } from "./message-link";
+import { studioService } from "@services/studio-service";
+import type { Message } from "@db/types";
+import { resolveMessageLinkedOwner } from "@lib/messages/message-link";
 
 export function serializeMessage(row: Message) {
-  const linkedOwner = resolveMessageLinkedOwner(store.read(), row.id);
+  const linkedOwner = resolveMessageLinkedOwner(studioService.read(), row.id);
   return {
     id: row.id,
     name: row.name,

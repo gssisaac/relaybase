@@ -1,7 +1,7 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { SubscriberMember, Newsletter } from "../../db/types";
-import { isEmailSuppressedForGroup } from "../account/suppression";
-import { findSubscriberGroup } from "./group";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { SubscriberMember, Newsletter } from "@db/types";
+import { isEmailSuppressedForGroup } from "@lib/account/suppression";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
 
 export function findSubscriberContactInGroup(
   groupId: string,
@@ -45,7 +45,7 @@ export function listSubscriberContactsForBroadcast(
   newsletterId: string,
   filters?: { status?: string; q?: string },
 ): Array<SubscriberMember & { subscriberGroupId: string }> {
-  const broadcast = store
+  const broadcast = studioService
     .read()
     .newsletters.find((b) => b.id === newsletterId && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
   if (!broadcast?.subscriberGroupId) return [];

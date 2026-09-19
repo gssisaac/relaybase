@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { Message, Newsletter, StudioDataStore } from "../../db/types.ts";
-import { ensureDevScheduleFixtures } from "./dev-schedule-fixtures.ts";
+import type { Message, Newsletter, StudioDataStore } from "../db/types.ts";
+import { ensureDevScheduleFixtures } from "@lib/newsletters/dev-schedule-fixtures";
 
 function messageForNewsletter(newsletterId: string): Message {
   return {

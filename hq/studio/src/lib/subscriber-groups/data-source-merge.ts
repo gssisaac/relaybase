@@ -1,4 +1,4 @@
-import type { SubscriberDataSource } from "../../db/types";
+import type { SubscriberDataSource } from "@db/types";
 
 export function mergeDataSource(
   existing: SubscriberDataSource | null,

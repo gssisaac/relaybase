@@ -1,4 +1,4 @@
-import { store } from "../../db/store";
+import { studioService } from "@services/studio-service";
 
 type DomainRow = { domain?: string };
 
@@ -33,7 +33,7 @@ async function consoleAccessToken(
 
 /** Server-side Worker catalog (optional STUDIO_WORKER_CONSOLE_PASSTOKEN). */
 export async function fetchWorkerCatalogDomainNames(): Promise<string[]> {
-  const account = store.read().account;
+  const account = studioService.read().account;
   const workerUrl = account.workerUrl?.trim().replace(/\/$/, "") ?? "";
   const passtoken = process.env.STUDIO_WORKER_CONSOLE_PASSTOKEN?.trim() ?? "";
   if (!workerUrl || !passtoken) return [];

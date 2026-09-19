@@ -1,4 +1,4 @@
-import type { Template, TemplateCategory, TemplateTarget } from "../../db/types";
+import type { Template, TemplateCategory, TemplateTarget } from "@db/types";
 
 const CONVERSATIONAL_IDS = new Set([
   "msgtpl_automation_inbox_support",

@@ -1,5 +1,5 @@
-import type { NewsletterDispatchProgress } from "../newsletters/dispatch-progress";
-import type { NewsletterInProgressOverview } from "../newsletters/overview";
+import type { NewsletterDispatchProgress } from "@lib/newsletters/dispatch-progress";
+import type { NewsletterInProgressOverview } from "@lib/newsletters/overview";
 
 export type DashboardSendingAggregate = {
   newsletterCount: number;

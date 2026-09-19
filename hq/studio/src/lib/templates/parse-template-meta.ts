@@ -1,7 +1,7 @@
 import {
   normalizeTemplateVariablesSchema,
   parseTemplateVariablesYaml,
-} from "./variable-schema";
+} from "@lib/templates/variable-schema";
 
 export type ParsedTemplateMeta = {
   id: string;

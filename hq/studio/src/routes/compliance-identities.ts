@@ -1,21 +1,21 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { ComplianceIdentity } from "../db/types";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { ComplianceIdentity } from "@db/types";
 import {
   findComplianceIdentity,
   listComplianceIdentities,
   serializeComplianceIdentity,
   syncAccountComplianceMirror,
-} from "../lib/compliance/identity";
-import { newId } from "../lib/shared/ids";
+} from "@lib/compliance/identity";
+import { newId } from "@lib/shared/ids";
 
 export const studioComplianceIdentities = new Hono();
 
 // GET /studio/compliance-identities
 studioComplianceIdentities.get("/", (c) => {
   const identities = listComplianceIdentities().map(serializeComplianceIdentity);
-  const data = store.read();
+  const data = studioService.read();
   return c.json({
     identities,
     defaultComplianceIdentityId: data.account.defaultComplianceIdentityId,
@@ -43,7 +43,7 @@ studioComplianceIdentities.post("/", async (c) => {
   const id = newId("compliance");
   let created: ComplianceIdentity | null = null;
 
-  store.update((draft) => {
+  studioService.update((draft) => {
     created = {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -86,7 +86,7 @@ studioComplianceIdentities.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   let updated: ComplianceIdentity | null = null;
-  store.update((draft) => {
+  studioService.update((draft) => {
     const idx = draft.complianceIdentities.findIndex((row) => row.id === id);
     if (idx < 0) return;
     const prev = draft.complianceIdentities[idx]!;

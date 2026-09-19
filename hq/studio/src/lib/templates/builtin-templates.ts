@@ -1,7 +1,7 @@
-import { loadBuiltinTemplates, type BuiltinTemplate } from "./load-builtin-templates";
+import { loadBuiltinTemplates, type BuiltinTemplate } from "@lib/templates/load-builtin-templates";
 
 export type { BuiltinTemplate };
-export { primeWorkerBuiltinLayouts } from "./load-builtin-templates";
+export { primeWorkerBuiltinLayouts } from "@lib/templates/load-builtin-templates";
 
 /** Must match `public/templates/plain-text/meta.yaml`. */
 export const PLAIN_TEXT_TEMPLATE_ID = "tpl-plain-text";

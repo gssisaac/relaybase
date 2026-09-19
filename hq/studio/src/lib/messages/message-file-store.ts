@@ -1,6 +1,6 @@
-import type { Message } from "../../db/types";
-import { getPostgresStoreCache } from "../../db/postgres-store-runtime";
-import { isCatalogBlueprintMessageId, isLibraryMessageId } from "./message-library";
+import type { Message } from "@db/types";
+import { getPostgresStoreCache } from "@lib/db/postgres-store-runtime";
+import { isCatalogBlueprintMessageId, isLibraryMessageId } from "@lib/messages/message-library";
 
 function messageRows(): Message[] {
   const cache = getPostgresStoreCache();
@@ -32,10 +32,10 @@ export const messageFileStore = {
     return messageRows().find((m) => m.id === id);
   },
 
-  /** No-op — callers must persist via `store.update` (PostgreSQL snapshot). */
+  /** No-op — callers must persist via `studioService.update` (PostgreSQL snapshot). */
   save(_message: Message): void {},
 
-  /** No-op — callers must remove via `store.update`. */
+  /** No-op — callers must remove via `studioService.update`. */
   delete(_id: string): boolean {
     return true;
   },

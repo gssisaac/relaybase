@@ -1,7 +1,7 @@
 import { parse as parseYaml } from "yaml";
 
-import type { Template } from "../../db/types";
-import { applyCatalogTemplateMeta } from "./catalog-template-meta";
+import type { Template } from "@db/types";
+import { applyCatalogTemplateMeta } from "@lib/templates/catalog-template-meta";
 
 export function normalizeCatalogTemplate(row: Template): Template {
   if (row.layoutId === "tpl-header-image") {

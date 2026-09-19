@@ -1,5 +1,5 @@
-import type { Layout, Message, StudioDataStore, Trigger } from "../../db/types";
-import { messageFileStore } from "./message-file-store";
+import type { Layout, Message, StudioDataStore, Trigger } from "@db/types";
+import { messageFileStore } from "@lib/messages/message-file-store";
 
 export type ResolvedMessage = {
   subject: string;

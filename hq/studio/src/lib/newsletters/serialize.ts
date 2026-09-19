@@ -1,23 +1,23 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { Newsletter } from "../../db/types";
-import { findSubscriberGroup } from "../subscriber-groups/group";
-import { subscriberActiveCountForNewsletter } from "../subscriber-groups/resolver";
-import { getLayoutHtml, getLayoutSchema, resolveMessage, rowMessageId } from "../messages/resolve";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { Newsletter } from "@db/types";
+import { findSubscriberGroup } from "@lib/subscriber-groups/group";
+import { subscriberActiveCountForNewsletter } from "@lib/subscriber-groups/resolver";
+import { getLayoutHtml, getLayoutSchema, resolveMessage, rowMessageId } from "@lib/messages/resolve";
 
 export function findNewsletter(id: string): Newsletter | undefined {
-  return store.read().newsletters.find((b) => b.id === id && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
+  return studioService.read().newsletters.find((b) => b.id === id && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
 }
 
 export function getNewsletterLayoutHtml(layoutId: string | null | undefined): string | null {
-  return getLayoutHtml(store.read(), layoutId);
+  return getLayoutHtml(studioService.read(), layoutId);
 }
 
 export function getNewsletterLayoutSchema(layoutId: string | null | undefined) {
-  return getLayoutSchema(store.read(), layoutId);
+  return getLayoutSchema(studioService.read(), layoutId);
 }
 
 export function serializeNewsletter(row: Newsletter) {
-  const data = store.read();
+  const data = studioService.read();
   const group = row.subscriberGroupId ? findSubscriberGroup(row.subscriberGroupId) : undefined;
   const message = resolveMessage(data, rowMessageId(row));
   return {

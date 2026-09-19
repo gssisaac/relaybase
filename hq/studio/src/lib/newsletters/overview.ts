@@ -1,11 +1,11 @@
-import { store } from "../../db/store";
-import type { Newsletter, NewsletterStats, Recipient, TrackingEvent } from "../../db/types";
-import { requireMessage } from "../messages/resolve";
-import { buildNewsletterDispatchProgress, type NewsletterDispatchProgress } from "./dispatch-progress";
-import { emptyNewsletterStats } from "./stats";
+import { studioService } from "@services/studio-service";
+import type { Newsletter, NewsletterStats, Recipient, TrackingEvent } from "@db/types";
+import { requireMessage } from "@lib/messages/resolve";
+import { buildNewsletterDispatchProgress, type NewsletterDispatchProgress } from "@lib/newsletters/dispatch-progress";
+import { emptyNewsletterStats } from "@lib/newsletters/stats";
 
 function resolveNewsletterSubject(row: Newsletter): string {
-  return requireMessage(store.read(), row.messageId).subject;
+  return requireMessage(studioService.read(), row.messageId).subject;
 }
 
 export type SerializedNewsletter = {

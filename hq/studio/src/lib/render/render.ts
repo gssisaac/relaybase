@@ -1,19 +1,19 @@
 import { marked } from "marked";
 
-import { applyComplianceMergeTags } from "../compliance/footer";
-import { prepareBroadcastTemplateHtml } from "../templates/standard-footer";
-import { isPlainTextTemplate } from "../templates/builtin-templates";
+import { applyComplianceMergeTags } from "@lib/compliance/footer";
+import { prepareBroadcastTemplateHtml } from "@lib/templates/standard-footer";
+import { isPlainTextTemplate } from "@lib/templates/builtin-templates";
 import {
   applyTemplateVariablesToHtml,
   applyTemplateVariablesToPlainText,
   type TemplateVariablesSchema,
-} from "../templates/variable-schema";
-import { resolveStudioAssetUrl } from "../assets/resolve-url";
-import { applyGmailContentLinkStyles } from "./gmail-link-style";
+} from "@lib/templates/variable-schema";
+import { resolveStudioAssetUrl } from "@lib/assets/resolve-url";
+import { applyGmailContentLinkStyles } from "@lib/render/gmail-link-style";
 import { transformEmailButtonMarkersToBulletproof } from "./email-button-html.js";
 import { transformYouTubeEmbedsToHtml } from "./youtube.js";
-import { wrapLayoutBodyHtml } from "./layout-content-theme";
-import { markdownToPlainEmailText } from "./markdown-to-plain-email-text";
+import { wrapLayoutBodyHtml } from "@lib/render/layout-content-theme";
+import { markdownToPlainEmailText } from "@lib/render/markdown-to-plain-email-text";
 
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's

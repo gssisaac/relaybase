@@ -1,8 +1,8 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { Newsletter } from "../../db/types";
-import { buildSentOverview } from "../newsletters/overview";
-import { requireMessage } from "../messages/resolve";
-import { templateCatalogStore } from "../templates/template-catalog-store";
+import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import type { Newsletter } from "@db/types";
+import { buildSentOverview } from "@lib/newsletters/overview";
+import { requireMessage } from "@lib/messages/resolve";
+import { templateCatalogStore } from "@lib/templates/template-catalog-store";
 
 function rate(part: number, total: number): number {
   if (!total) return 0;
@@ -38,7 +38,7 @@ function clickRateForBroadcast(row: Newsletter): number {
 }
 
 export function buildStudioAnalytics() {
-  const data = store.read();
+  const data = studioService.read();
   const accountId = DEV_ACCOUNT_LINK_ID;
   const now = Date.now();
   const dayMs = 86_400_000;

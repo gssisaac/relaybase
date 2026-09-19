@@ -1,12 +1,12 @@
 import "reflect-metadata";
 import { serve } from "@hono/node-server";
-import app from "./app";
-import { ensurePostgresBootstrap } from "./bootstrap-postgres";
-import { assertPostgresStoreConfigured } from "./db/orm/data-source";
-import { flushPostgresAuthPersist } from "./db/postgres-auth-runtime";
-import { flushPostgresStorePersist } from "./db/postgres-store-runtime";
-import { readEnv } from "./env";
-import { startScheduler } from "./scheduler";
+import app from "@/app";
+import { ensurePostgresBootstrap } from "@/bootstrap-postgres";
+import { assertPostgresStoreConfigured } from "@lib/orm/data-source";
+import { flushPostgresAuthPersist } from "@lib/db/postgres-auth-runtime";
+import { flushPostgresStorePersist } from "@lib/db/postgres-store-runtime";
+import { readEnv } from "@/env";
+import { startScheduler } from "@/scheduler";
 
 const env = readEnv();
 /** Default 32832 — 32831 is reserved for desktop CF OAuth loopback (Tauri). */

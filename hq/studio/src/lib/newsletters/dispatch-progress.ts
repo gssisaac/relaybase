@@ -1,4 +1,4 @@
-import type { Recipient } from "../../db/types";
+import type { Recipient } from "@db/types";
 
 /** Recipients processed per scheduler tick (see `DISPATCH_QUEUE_POLL_MS`). */
 export const DISPATCH_BATCH_SIZE = 20;

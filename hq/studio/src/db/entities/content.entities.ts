@@ -8,7 +8,7 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 
-import { AccountLinkEntity } from "./tenant.entities";
+import { AccountLinkEntity } from "@db/entities/tenant.entities";
 
 @Entity({ name: "layouts" })
 export class LayoutEntity {

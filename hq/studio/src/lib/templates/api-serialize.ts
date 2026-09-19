@@ -1,1 +1,1 @@
-export { serializeLayout as serializeTemplate } from "./layout-serialize";
+export { serializeLayout as serializeTemplate } from "@lib/templates/layout-serialize";

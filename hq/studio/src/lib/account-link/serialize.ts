@@ -1,8 +1,8 @@
-import { store } from "../../db/store";
-import { accountDefaultComplianceIdentityId } from "../compliance/identity";
+import { studioService } from "@services/studio-service";
+import { accountDefaultComplianceIdentityId } from "@lib/compliance/identity";
 
 export function serializeAccountLink() {
-  const data = store.read();
+  const data = studioService.read();
   const account = data.account;
   return {
     id: account.id,

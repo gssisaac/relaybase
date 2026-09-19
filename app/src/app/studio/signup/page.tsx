@@ -1,50 +1,25 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { HqStudioSignupView } from "@/console/components/setup/common/auth/HqStudioSignupView";
-import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
-
-function StudioSignupInner() {
+/** Legacy `/studio/signup` → unified `/signup`. */
+function StudioSignupRedirectInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next");
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    const qs = searchParams.toString();
+    router.replace(qs ? `/signup?${qs}` : "/signup");
+  }, [router, searchParams]);
 
-    async function boot() {
-      if (hasHqSession()) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      const hqOk = await hqRefreshSession();
-      if (!active) return;
-      if (hqOk) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      setReady(true);
-    }
-
-    void boot();
-    return () => {
-      active = false;
-    };
-  }, [next, router]);
-
-  if (!ready) return <AppLoadingScreen />;
-  return <HqStudioSignupView />;
+  return null;
 }
 
-/** Relaybase Studio sign-up — `/studio/signup` (no shared tab UI with login). */
-export default function StudioSignupPage() {
+export default function StudioSignupRedirectPage() {
   return (
-    <Suspense fallback={<AppLoadingScreen />}>
-      <StudioSignupInner />
+    <Suspense fallback={null}>
+      <StudioSignupRedirectInner />
     </Suspense>
   );
 }

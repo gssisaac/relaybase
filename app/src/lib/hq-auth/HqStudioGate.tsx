@@ -40,7 +40,7 @@ export function HqStudioGate({ children }: { children: ReactNode }) {
     if (state !== "redirect") return;
     const qs = searchParams.toString();
     const next = `${pathname}${qs ? `?${qs}` : ""}`;
-    router.replace(`/studio/login?next=${encodeURIComponent(next)}`);
+    router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [state, pathname, router, searchParams]);
 
   if (state === "loading" || state === "redirect") {

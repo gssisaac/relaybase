@@ -7,6 +7,9 @@ export type HqUser = {
   email: string;
   name: string | null;
   accountLinkId: string;
+  username?: string | null;
+  cfAccountId?: string | null;
+  workerUrl?: string | null;
 };
 
 type AuthPayload = {
@@ -25,7 +28,7 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
-function applyAuthPayload(payload: AuthPayload): void {
+export function applyHqAuthPayload(payload: AuthPayload): void {
   accessToken = payload.accessToken;
   accessExpiresAt = Date.now() + Math.max(5, payload.expiresIn) * 1000;
   cachedUser = payload.user;
@@ -116,16 +119,24 @@ export async function hqSignup(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
-  applyAuthPayload(payload);
+  applyHqAuthPayload(payload);
   return payload.user;
 }
 
-export async function hqLogin(input: { email: string; password: string }): Promise<HqUser> {
+export async function hqLogin(input: {
+  email?: string;
+  username?: string;
+  password: string;
+}): Promise<HqUser> {
   const payload = await authFetch<AuthPayload>("/auth/login", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      username: input.username,
+      email: input.email,
+      password: input.password,
+    }),
   });
-  applyAuthPayload(payload);
+  applyHqAuthPayload(payload);
   return payload.user;
 }
 
@@ -139,7 +150,7 @@ export async function hqRefreshSession(): Promise<boolean> {
         method: "POST",
         body: "{}",
       });
-      applyAuthPayload(payload);
+      applyHqAuthPayload(payload);
       return true;
     } catch (err) {
       const status = err instanceof AuthFetchError ? err.status : 0;
@@ -179,7 +190,7 @@ export async function hqResetPassword(token: string, newPassword: string): Promi
     method: "POST",
     body: JSON.stringify({ token, newPassword }),
   });
-  applyAuthPayload(payload);
+  applyHqAuthPayload(payload);
   return payload.user;
 }
 

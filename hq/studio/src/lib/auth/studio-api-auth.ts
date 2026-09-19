@@ -37,23 +37,9 @@ export function studioApiAuthMiddleware() {
       return;
     }
 
-    const secret =
-      process.env.STUDIO_API_SECRET?.trim();
-    if (!secret) {
-      if (process.env.NODE_ENV === "production") {
-        return c.json({ error: "Studio API auth is not configured" }, 503);
-      }
-      await next();
-      return;
-    }
-
     const auth = c.req.header("Authorization")?.trim();
     const bearer = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null;
     const headerKey = c.req.header("X-Studio-API-Key")?.trim();
-    if (bearer === secret || headerKey === secret) {
-      await next();
-      return;
-    }
 
     if (bearer) {
       try {
@@ -66,8 +52,19 @@ export function studioApiAuthMiddleware() {
           return;
         }
       } catch {
-        /* fall through to 401 */
+        /* fall through */
       }
+    }
+
+    const secret = process.env.STUDIO_API_SECRET?.trim();
+    if (secret && (bearer === secret || headerKey === secret)) {
+      await next();
+      return;
+    }
+
+    if (!secret && process.env.NODE_ENV !== "production") {
+      await next();
+      return;
     }
 
     return c.json({ error: "unauthorized" }, 401);

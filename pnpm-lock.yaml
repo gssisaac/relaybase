@@ -133,7 +133,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.7
-        version: 16.2.7(@typescript-eslint/parser@8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       playwright:
         specifier: ^1.55.0
         version: 1.63.0
@@ -218,7 +218,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.7
-        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.7(@typescript-eslint/parser@8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -292,31 +292,6 @@ importers:
       wrangler:
         specifier: ^4.110.0
         version: 4.120.0
-
-  hq/studio:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^1.13.7
-        version: 1.19.17(hono@4.13.1)
-      hono:
-        specifier: ^4.7.11
-        version: 4.13.1
-      marked:
-        specifier: ^15.0.7
-        version: 15.0.12
-      yaml:
-        specifier: ^2.9.1
-        version: 2.9.1
-    devDependencies:
-      '@types/node':
-        specifier: ^20
-        version: 20.19.43
-      tsx:
-        specifier: ^4.19.2
-        version: 4.23.12
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
 
   hq/website:
     dependencies:

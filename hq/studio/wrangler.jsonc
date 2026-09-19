@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hq-relaybase-studio",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-07-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "workers_dev": true,
+  "r2_buckets": [
+    {
+      "binding": "STUDIO_DATA",
+      "bucket_name": "hq-relaybase-studio-data"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "HQ_AUTH_APP_URL": "https://relaybase.email",
+    "NODE_ENV": "production"
+  }
+}

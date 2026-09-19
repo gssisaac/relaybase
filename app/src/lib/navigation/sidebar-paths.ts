@@ -6,6 +6,8 @@ export const DEFAULT_STUDIO_PATH = "/studio/dashboard";
 
 const BLOCKED_PATH_PREFIXES = [
   "/login",
+  "/signup",
+  "/forgot-password",
   "/studio/login",
   "/studio/signup",
   "/cloud/login",

@@ -44,7 +44,7 @@ export default function HomePage() {
         router.replace("/inbox");
         return;
       }
-      router.replace("/studio/login");
+      router.replace("/login");
     }
 
     void routeWebHome();

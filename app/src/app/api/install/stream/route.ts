@@ -43,7 +43,7 @@ import {
   migrateWorkerDb,
   waitForWorkerReady,
 } from "@/server/cloudflare/schema";
-import { applyRefreshedCookie } from "@/server/cloudflare/session";
+import { applyRefreshedCookie, sealSignupStaging } from "@/server/cloudflare/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
   const wipeConfirmation = request.nextUrl.searchParams.get("wipeConfirmation");
   const mode =
     request.nextUrl.searchParams.get("mode") === "update" ? "update" : "install";
+  const cloudSignup = request.nextUrl.searchParams.get("cloudSignup") === "1";
 
   const client: CfClient = { accountId, apiToken: session.accessToken };
   const encoder = new TextEncoder();
@@ -273,6 +274,18 @@ export async function GET(request: NextRequest) {
 
         const workerVersion = (await fetchWorkerVersion(workerUrl)) ?? stagedVersion;
 
+        const pepperForClient =
+          cloudSignup || mode === "update" ? "" : mode === "install" && authPepper ? authPepper : "";
+
+        const cloudSignupReady = Boolean(cloudSignup && authPepper && mode === "install");
+        const installToken = cloudSignupReady
+          ? sealSignupStaging({
+              workerUrl,
+              accountId,
+              authPepper: authPepper!,
+            })
+          : "";
+
         send("done", {
           workerUrl,
           workerScriptName: DEFAULT_SCRIPT,
@@ -284,8 +297,10 @@ export async function GET(request: NextRequest) {
           dbAlreadyInitialized,
           dbApplied,
           workerVersion,
-          authPepper: mode === "install" && authPepper ? authPepper : "",
+          authPepper: pepperForClient,
           ownerAlreadyConfigured,
+          cloudSignupReady,
+          installToken,
         });
       } catch (err) {
         send("error", { error: err instanceof Error ? err.message : String(err) });

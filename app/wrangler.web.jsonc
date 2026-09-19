@@ -29,5 +29,8 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "hq-relaybase-web-app"
     }
-  ]
+  ],
+  "vars": {
+    "STUDIO_UPSTREAM_URL": "https://hq-relaybase-studio.gssisaac.workers.dev"
+  }
 }

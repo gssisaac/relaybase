@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "../cf/storage-fs";
 import path from "node:path";
 
 import type { StudioDataStore } from "./types";

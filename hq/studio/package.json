@@ -9,6 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "tsx --env-file=.env dist/index.js",
     "typecheck": "tsc --noEmit",
+    "deploy:cf": "wrangler deploy",
+    "dev:cf": "wrangler dev",
     "migrate:templates-yaml": "node scripts/migrate-templates-to-yaml.mjs",
     "generate:message-template-thumbnails": "pnpm -C ../../app run generate:message-template-thumbnails"
   },
@@ -19,8 +21,10 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250317.0",
     "@types/node": "^20",
     "tsx": "^4.19.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.120.0"
   }
 }

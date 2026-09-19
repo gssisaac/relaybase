@@ -1,50 +1,25 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { AppLoadingScreen } from "@/components/AppLoadingScreen";
-import { HqStudioLoginView } from "@/console/components/setup/common/auth/HqStudioLoginView";
-import { hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
-
-function StudioLoginInner() {
+/** Legacy `/studio/login` → unified `/login`. */
+function StudioLoginRedirectInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next");
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    const qs = searchParams.toString();
+    router.replace(qs ? `/login?${qs}` : "/login");
+  }, [router, searchParams]);
 
-    async function boot() {
-      if (hasHqSession()) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      const hqOk = await hqRefreshSession();
-      if (!active) return;
-      if (hqOk) {
-        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
-        return;
-      }
-      setReady(true);
-    }
-
-    void boot();
-    return () => {
-      active = false;
-    };
-  }, [next, router]);
-
-  if (!ready) return <AppLoadingScreen />;
-  return <HqStudioLoginView />;
+  return null;
 }
 
-/** Relaybase Studio sign-in — separate URL so Chrome autofill stays distinct from Worker login. */
-export default function StudioLoginPage() {
+export default function StudioLoginRedirectPage() {
   return (
-    <Suspense fallback={<AppLoadingScreen />}>
-      <StudioLoginInner />
+    <Suspense fallback={null}>
+      <StudioLoginRedirectInner />
     </Suspense>
   );
 }

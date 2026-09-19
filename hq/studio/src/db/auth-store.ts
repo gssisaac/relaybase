@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "../cf/storage-fs";
 import path from "node:path";
 
 import { store } from "./store";
@@ -66,6 +66,16 @@ export const authStore = {
   findUserByEmail(email: string): HqAuthUser | null {
     const normalized = email.trim().toLowerCase();
     return readAuthStore().users.find((u) => u.email === normalized) ?? null;
+  },
+
+  findUserByUsername(username: string): HqAuthUser | null {
+    const normalized = username.trim().toLowerCase();
+    return readAuthStore().users.find((u) => u.username === normalized) ?? null;
+  },
+
+  findUserByCfAccountId(cfAccountId: string): HqAuthUser | null {
+    const normalized = cfAccountId.trim().toLowerCase();
+    return readAuthStore().users.find((u) => u.cfAccountId === normalized) ?? null;
   },
 
   findUserById(userId: string): HqAuthUser | null {

@@ -110,8 +110,11 @@ export function OnboardingWizard() {
       {currentStep === "account" && (
         <Step3AccountCard
           defaultDomain={summary.activeDomain || ""}
-          onComplete={(email) => {
-            markStepComplete("account", { createdAddress: email });
+          onComplete={({ primaryEmail, emails }) => {
+            markStepComplete("account", {
+              createdAddress: primaryEmail,
+              createdAddresses: emails,
+            });
             goToStep("complete");
           }}
           onBack={() => goToStep("domain")}
@@ -122,6 +125,7 @@ export function OnboardingWizard() {
         <Step4CompleteCard
           activeDomain={summary.activeDomain}
           createdAddress={summary.createdAddress}
+          createdAddresses={summary.createdAddresses}
         />
       )}
     </OnboardingShell>

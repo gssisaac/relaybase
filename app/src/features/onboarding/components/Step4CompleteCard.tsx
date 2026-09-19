@@ -8,10 +8,18 @@ import { Button } from "@/components/ui/button";
 export function Step4CompleteCard({
   activeDomain,
   createdAddress,
+  createdAddresses,
 }: {
   activeDomain?: string;
   createdAddress?: string;
+  createdAddresses?: string[];
 }) {
+  const mailboxes =
+    createdAddresses && createdAddresses.length > 0
+      ? createdAddresses
+      : createdAddress
+        ? [createdAddress]
+        : [];
   const router = useRouter();
 
   return (
@@ -53,13 +61,21 @@ export function Step4CompleteCard({
               <span className="font-mono text-muted-foreground">{activeDomain}</span>
             </li>
           )}
-          {createdAddress && (
-            <li className="flex items-center gap-2.5">
-              <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+          {mailboxes.length > 0 && (
+            <li className="flex items-start gap-2.5">
+              <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
                 <Check className="size-3.5 stroke-[2.5]" />
               </div>
-              <span className="font-medium text-foreground">Primary Mailbox:</span>
-              <span className="font-mono text-muted-foreground">{createdAddress}</span>
+              <div className="min-w-0 space-y-1">
+                <span className="font-medium text-foreground">
+                  {mailboxes.length === 1 ? "Mailbox:" : "Mailboxes:"}
+                </span>
+                <ul className="space-y-0.5 font-mono text-xs text-muted-foreground sm:text-sm">
+                  {mailboxes.map((email) => (
+                    <li key={email}>{email}</li>
+                  ))}
+                </ul>
+              </div>
             </li>
           )}
         </ul>

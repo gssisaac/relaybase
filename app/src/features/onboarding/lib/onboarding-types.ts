@@ -24,7 +24,7 @@ export const ONBOARDING_STEPS: OnboardingStepInfo[] = [
     id: "account",
     stepNumber: 3,
     title: "Account",
-    description: "Create primary email address",
+    description: "Create mail accounts",
   },
   {
     id: "complete",
@@ -41,4 +41,5 @@ export type OnboardingSummaryData = {
   emailApiVerified: boolean;
   activeDomain?: string;
   createdAddress?: string;
+  createdAddresses?: string[];
 };

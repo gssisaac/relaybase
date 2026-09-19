@@ -22,6 +22,18 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "kv_namespaces": [
+    {
+      "binding": "hq_relaybase_feedback",
+      "id": "9cb464c4ffaf460aa5157185663d5f85"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "hq_relaybase_feedback_r2",
+      "bucket_name": "hq-relaybase-feedback"
+    }
+  ],
   "services": [
     {
       // Self-reference service binding, the service name must match the worker name
@@ -31,6 +43,12 @@
     }
   ],
   "vars": {
+    "NODE_ENV": "production",
+    "NEXT_PUBLIC_APP_URL": "https://relaybase.email",
+    "NEXT_PUBLIC_CONSOLE_URL": "https://console.relaybase.xyz",
+    "NEXT_PUBLIC_LICENSE_API_URL": "https://console.relaybase.xyz",
+    "NEXT_PUBLIC_STUDIO_API_BASE": "https://relaybase.email",
+    "NEXT_PUBLIC_STUDIO_PUBLIC_BASE": "https://relaybase.email",
     "STUDIO_UPSTREAM_URL": "https://studio-api.relaybase.email"
   }
 }

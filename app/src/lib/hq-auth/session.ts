@@ -1,6 +1,7 @@
 "use client";
 
 import { getStudioApiBase } from "@/studio/api";
+import { studioAuthNotFoundMessage } from "@/studio/lib/studio-user-messages";
 
 export type HqUser = {
   id: string;
@@ -90,8 +91,7 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let message = body?.error ?? `Request failed (${res.status})`;
     if (res.status === 404 && path.startsWith("/auth/")) {
-      message =
-        "Studio auth API not found — start hq/studio on port 32832 (not 32831; that port is used by Relaybase desktop OAuth).";
+      message = studioAuthNotFoundMessage();
     }
     throw new AuthFetchError(res.status, message);
   }

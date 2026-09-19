@@ -80,6 +80,10 @@ export function useMailAccountsStore(): MailAccountsStore {
   return store;
 }
 
+export function useOptionalMailAccountsStore(): MailAccountsStore | null {
+  return useContext(MailAccountsStoreContext);
+}
+
 export function useMailAccounts(): MailAccountsContextValue {
   const store = useMailAccountsStore();
   const [, setTick] = useState(0);

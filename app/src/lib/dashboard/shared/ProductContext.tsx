@@ -35,6 +35,12 @@ export function useProductId(): string {
   return useSession().userId;
 }
 
+/** Safe when `SessionProvider` is absent (e.g. root layout feedback dialog). */
+export function useOptionalProductId(): string {
+  const ctx = React.useContext(SessionContext);
+  return ctx?.userId ?? "";
+}
+
 /**
  * Dashboard data APIs live on the Next app (`/api/email/...`).
  * Do not point this at the customer Worker — that host has no /config,

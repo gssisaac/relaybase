@@ -77,6 +77,7 @@ import {
   resolveEmailApiBase,
 } from "@/lib/desktop/api";
 import { useDesktopChrome } from "@/lib/desktop/shell";
+import { exampleWorkerApiBaseUrl } from "@/studio/lib/studio-user-messages";
 import {
   forgetApiKey,
   loadApiKeyVaultEntries,
@@ -463,7 +464,7 @@ export function EmailSettingsKeysView() {
 
   const exampleApiKey = selectedKey?.apiKey ?? "YOUR_API_KEY";
   const exampleBaseUrl =
-    resolveEmailApiBase() || "https://relaybase-api.gssisaac.worker.dev";
+    resolveEmailApiBase() || exampleWorkerApiBaseUrl();
   const domainAddresses = selectedDomain
     ? accounts.addressesFor(selectedDomain)
     : [];

@@ -19,6 +19,7 @@ import {
   type ScheduleItem,
 } from "@/studio/lib/schedule/schedule-items";
 import { studioApi } from "@/studio/api";
+import { studioUserMessages } from "@/studio/lib/studio-user-messages";
 /** Match StudioOverviewView inset rows — bg lift, no borders. */
 const scheduleInsetItemClassName =
   "rounded-xl bg-secondary/70 px-3 py-2.5 transition-colors hover:bg-secondary dark:bg-accent/90 dark:hover:bg-accent";
@@ -58,7 +59,7 @@ export function ScheduleView() {
       const merged = mergeNewsletterSnapshots(list, overview.scheduled);
       setItems(upcomingNewsletterScheduleItems(merged));
     } catch {
-      toast.error("Could not load schedule — is hq/studio running on port 32832?");
+      toast.error(studioUserMessages.loadSchedule);
     } finally {
       setLoading(false);
       setRefreshing(false);

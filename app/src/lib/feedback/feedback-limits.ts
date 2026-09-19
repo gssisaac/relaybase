@@ -1,0 +1,2 @@
+export const MAX_FEEDBACK_IMAGES = 5;
+export const MAX_FEEDBACK_IMAGE_BYTES = 2 * 1024 * 1024;

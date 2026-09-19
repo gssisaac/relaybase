@@ -36,6 +36,7 @@ export function useNewslettersHub(): NewslettersHubStore {
         inProgress: store.inProgress !== null,
         sentOverview: store.sentOverview !== null,
         listFetching: store.listFetching,
+        listLoadError: store.listLoadError,
         inProgressFetching: store.inProgressFetching,
         sentOverviewFetching: store.sentOverviewFetching,
         listShowPlaceholder: store.listShowPlaceholder,

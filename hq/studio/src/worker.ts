@@ -5,17 +5,24 @@ export type StudioWorkerEnv = {
   STUDIO_BACKEND_URL?: string;
 };
 
-function backendOrigin(env: StudioWorkerEnv): string {
-  const raw =
-    env.STUDIO_BACKEND_URL?.trim() ||
-    "https://hq-relaybase-studio-dbver-production.up.railway.app";
+function backendOrigin(env: StudioWorkerEnv): string | null {
+  const raw = env.STUDIO_BACKEND_URL?.trim();
+  if (!raw) return null;
   return raw.replace(/\/$/, "");
 }
 
 export default {
   async fetch(request: Request, env: StudioWorkerEnv): Promise<Response> {
+    const origin = backendOrigin(env);
+    if (!origin) {
+      return Response.json(
+        { error: "Studio backend is not configured (STUDIO_BACKEND_URL)." },
+        { status: 503 },
+      );
+    }
+
     const incoming = new URL(request.url);
-    const target = `${backendOrigin(env)}${incoming.pathname}${incoming.search}`;
+    const target = `${origin}${incoming.pathname}${incoming.search}`;
 
     const headers = new Headers(request.headers);
     headers.set("x-forwarded-host", incoming.host);

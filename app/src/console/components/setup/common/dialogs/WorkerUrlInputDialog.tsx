@@ -116,7 +116,7 @@ export function WorkerUrlInputDialog({
                   setAccountName(e.target.value);
                   setError(null);
                 }}
-                placeholder={examplePlaceholder("gssisaac")}
+                placeholder={examplePlaceholder("your-subdomain")}
                 autoComplete="off"
                 autoFocus={tab === "auto"}
               />

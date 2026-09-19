@@ -7,6 +7,7 @@ import { ClientToaster } from "@/components/ClientToaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CloudflarePlanDialogHost } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { ZoomHotkeys } from "@/components/ZoomHotkeys";
+import { FeedbackDialogProvider } from "@/components/feedback/FeedbackDialogProvider";
 import { AppProviders } from "@/lib/desktop/shell";
 
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
@@ -45,7 +46,9 @@ export default function RootLayout({
         <ThemeProvider>
           <ChunkLoadRecovery />
           <AppProviders>
-            <TooltipProvider delay={200}>{children}</TooltipProvider>
+            <FeedbackDialogProvider>
+              <TooltipProvider delay={200}>{children}</TooltipProvider>
+            </FeedbackDialogProvider>
           </AppProviders>
           <ClientToaster />
           <CloudflarePlanDialogHost />

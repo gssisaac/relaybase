@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, WifiOff } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { EmptyListState } from "@/email/components/mailbox/EmailListShell";
+import { studioUserMessages } from "@/studio/lib/studio-user-messages";
 import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
 import { useDashboard } from "@/studio/stores/dashboard";
@@ -32,10 +34,7 @@ export function StudioDashboardView() {
 
   useEffect(() => {
     dashboard.ensureLoaded().catch(() => {
-      toast.error(
-        dashboard.loadError ??
-          "Could not load Studio dashboard — is hq/studio running on port 32832?",
-      );
+      toast.error(dashboard.loadError ?? studioUserMessages.loadDashboard);
     });
   }, [dashboard]);
 
@@ -59,8 +58,7 @@ export function StudioDashboardView() {
               onClick={() => {
                 void dashboard.refresh({ force: true }).catch(() => {
                   toast.error(
-                    dashboard.loadError ??
-                      "Could not load Studio dashboard — is hq/studio running on port 32832?",
+                    dashboard.loadError ?? studioUserMessages.loadDashboard,
                   );
                 });
               }}
@@ -213,11 +211,29 @@ export function StudioDashboardView() {
           ) : null}
 
           {!dashboard.fetching && !data ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Dashboard unavailable. Start hq/studio and refresh.
-              </CardContent>
-            </Card>
+            <EmptyListState
+              icon={WifiOff}
+              title="Dashboard unavailable"
+              description={
+                dashboard.loadError ?? studioUserMessages.dashboardUnavailable
+              }
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void dashboard.refresh({ force: true }).catch(() => {
+                      toast.error(
+                        dashboard.loadError ?? studioUserMessages.loadDashboard,
+                      );
+                    });
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  Retry
+                </Button>
+              }
+            />
           ) : null}
         </div>
       </div>

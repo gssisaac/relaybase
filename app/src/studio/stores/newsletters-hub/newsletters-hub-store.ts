@@ -9,6 +9,10 @@ import {
   type Newsletter,
   type StudioLayout,
 } from "@/studio/api";
+import {
+  studioLoadErrorMessage,
+  studioUserMessages,
+} from "@/studio/lib/studio-user-messages";
 
 const IN_PROGRESS_POLL_MS = 3000;
 const LIST_SENDING_POLL_MS = 3000;
@@ -105,10 +109,10 @@ export class NewslettersHubStore {
         });
         this.syncListSendingPoll();
       } catch (err) {
-        const message =
-          err instanceof Error && err.message
-            ? err.message
-            : "Could not load newsletters — is hq/studio running on port 32832?";
+        const message = studioLoadErrorMessage(
+          err,
+          studioUserMessages.loadNewsletters,
+        );
         runInAction(() => {
           if (!hasCache) this.listLoadError = message;
         });

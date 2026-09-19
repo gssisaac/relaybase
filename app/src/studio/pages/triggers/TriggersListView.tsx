@@ -29,6 +29,7 @@ import {
   triggerSourceSummary,
 } from "@/studio/lib/triggers/trigger-label";
 import { triggerDetailHref } from "@/studio/lib/paths";
+import { studioUserMessages } from "@/studio/lib/studio-user-messages";
 import { NewTriggerDialog } from "@/studio/pages/triggers/NewTriggerDialog";
 import { NewTriggerTemplateDialog } from "@/studio/pages/triggers/NewTriggerTemplateDialog";
 import { TriggersListSkeleton } from "@/studio/pages/triggers/TriggersListSkeleton";
@@ -79,7 +80,7 @@ export function TriggersListView() {
 
   useEffect(() => {
     void (analytics.ensureLoaded().catch(() => {
-      toast.error("Could not load analytics stats — is hq/studio running on port 32832?");
+      toast.error(studioUserMessages.loadTriggerStats);
     }));
   }, [analytics]);
 

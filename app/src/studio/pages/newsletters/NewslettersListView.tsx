@@ -1,6 +1,15 @@
 "use client";
 
-import { CalendarClock, Clock, FileEdit, Mail, Plus, RefreshCw, Send } from "lucide-react";
+import {
+  CalendarClock,
+  Clock,
+  FileEdit,
+  Mail,
+  Plus,
+  RefreshCw,
+  Send,
+  WifiOff,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -39,6 +48,10 @@ import {
   newsletterFilterLabel,
   type NewsletterFilter,
 } from "@/studio/pages/newsletters/newsletter-list-filters";
+import {
+  studioLoadErrorMessage,
+  studioUserMessages,
+} from "@/studio/lib/studio-user-messages";
 
 export type { NewsletterFilter };
 
@@ -103,9 +116,9 @@ export function NewslettersListView() {
       try {
         await hub.refreshList({ force });
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Could not load newsletters";
-        toast.error(message);
+        toast.error(
+          studioLoadErrorMessage(err, studioUserMessages.loadNewsletters),
+        );
       }
     },
     [hub],
@@ -113,8 +126,9 @@ export function NewslettersListView() {
 
   useEffect(() => {
     void hub.refreshList().catch((err) => {
-      const message = err instanceof Error ? err.message : "Could not load newsletters";
-      toast.error(message);
+      toast.error(
+        studioLoadErrorMessage(err, studioUserMessages.loadNewsletters),
+      );
     });
   }, [hub]);
 
@@ -308,14 +322,26 @@ export function NewslettersListView() {
               />
             )
           ) : !hub.listFetching || newsletters.length > 0 ? (
-            newsletters.length === 0 ? (
+            hub.listLoadError ? (
               <EmptyListState
-                icon={Mail}
-                title="No newsletters loaded"
-                description="Start hq/studio on port 32832, restart this app, then refresh. If you use STUDIO_UPSTREAM_URL, do not point it at port 32831 (desktop OAuth)."
+                icon={WifiOff}
+                title="Could not load newsletters"
+                description={hub.listLoadError}
                 action={
                   <Button size="sm" variant="outline" onClick={() => void load(true)}>
                     Retry
+                  </Button>
+                }
+              />
+            ) : newsletters.length === 0 ? (
+              <EmptyListState
+                icon={Mail}
+                title="No newsletters yet"
+                description="Create your first campaign from a template or start from a blank newsletter."
+                action={
+                  <Button size="sm" onClick={() => setCreateOpen(true)}>
+                    <Plus className="size-4" />
+                    New newsletter
                   </Button>
                 }
               />

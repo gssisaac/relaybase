@@ -95,7 +95,9 @@ export async function stageInstallPackage(
     "wrangler.toml",
   );
   if (!wranglerBuf) {
-    throw new Error("Install ZIP is missing wrangler.toml. Re-pack with pnpm pack:worker-install.");
+    throw new Error(
+      "Install package is missing wrangler.toml. Download the latest Worker install bundle and try again.",
+    );
   }
   const wrangler = wranglerBuf.toString("utf8");
 
@@ -114,14 +116,14 @@ export async function stageInstallPackage(
   const workerJsBuf = findZipFile(zip, ...fullPaths);
   if (!workerJsBuf) {
     throw new Error(
-      "Install ZIP is missing worker.{version}.js (or worker.js). Re-pack with pnpm pack:worker-install.",
+      "Install package is missing worker.js. Download the latest Worker install bundle and try again.",
     );
   }
   const workerJs = workerJsBuf.toString("utf8");
   if (!workerJsIsCurrent(workerJs)) {
     throw new Error(
-      "The hosted install ZIP is too old to initialize an empty database (no d1Bound in worker.js). " +
-        "Re-pack with `pnpm pack:worker-install`, deploy the website, then try again.",
+      "The hosted install package is too old to initialize an empty database. " +
+        "Download the latest Worker install bundle and try again.",
     );
   }
 

@@ -3,6 +3,10 @@
 import { makeAutoObservable, runInAction } from "mobx";
 
 import { studioApi, type StudioAnalytics } from "@/studio/api";
+import {
+  studioLoadErrorMessage,
+  studioUserMessages,
+} from "@/studio/lib/studio-user-messages";
 
 function cloneAnalyticsPayload(next: StudioAnalytics): StudioAnalytics {
   return structuredClone(next);
@@ -70,9 +74,11 @@ export class AnalyticsStore {
           this.commitPayload(next);
           this.loadError = null;
         });
-      } catch {
-        const message =
-          "Could not load Studio analytics — is hq/studio running on port 32832?";
+      } catch (err) {
+        const message = studioLoadErrorMessage(
+          err,
+          studioUserMessages.loadAnalytics,
+        );
         runInAction(() => {
           if (!hasCache) this.loadError = message;
         });

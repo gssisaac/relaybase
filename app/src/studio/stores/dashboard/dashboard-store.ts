@@ -3,6 +3,10 @@
 import { makeAutoObservable, runInAction } from "mobx";
 
 import { studioApi, type StudioDashboardPayload } from "@/studio/api";
+import {
+  studioLoadErrorMessage,
+  studioUserMessages,
+} from "@/studio/lib/studio-user-messages";
 
 const SENDING_POLL_MS = 5_000;
 
@@ -81,9 +85,11 @@ export class DashboardStore {
           this.loadError = null;
         });
         this.syncSendingPoll();
-      } catch {
-        const message =
-          "Could not load Studio dashboard — is hq/studio running on port 32832?";
+      } catch (err) {
+        const message = studioLoadErrorMessage(
+          err,
+          studioUserMessages.loadDashboard,
+        );
         runInAction(() => {
           if (!hasCache) this.loadError = message;
         });

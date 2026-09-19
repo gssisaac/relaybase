@@ -51,8 +51,6 @@ function mergeTagsUsedInContent(subject: string, bodyMarkdown: string): Broadcas
   return BROADCAST_MERGE_TAGS.filter((tag) => haystack.includes(tag.token));
 }
 
-type NewsletterDialogMode = "draft" | "schedule";
-
 const TRIGGER_PURPOSE_OPTIONS: { value: TriggerPurpose; label: string }[] = [
   { value: "transactional", label: "Transactional" },
   { value: "conversational", label: "Conversational" },
@@ -94,8 +92,7 @@ export function HubTemplateUseMenu({
   const { apiBase } = useEmailPaths();
 
   const [testOpen, setTestOpen] = useState(false);
-  const [newsletterOpen, setNewsletterOpen] = useState(false);
-  const [newsletterMode, setNewsletterMode] = useState<NewsletterDialogMode>("draft");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [triggerOpen, setTriggerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -122,8 +119,7 @@ export function HubTemplateUseMenu({
     void subscriberGroupsStore.ensureLoaded().catch(() => {});
   }, [subscriberGroupsStore]);
 
-  function resetNewsletterForm(mode: NewsletterDialogMode) {
-    setNewsletterMode(mode);
+  function resetScheduleForm() {
     setNewsletterSubscriberGroupId("");
     setScheduleAt("");
     setFormError(null);
@@ -163,18 +159,37 @@ export function HubTemplateUseMenu({
     }
   }
 
-  async function handleCreateNewsletter() {
+  async function handleCreateDraftNewsletter() {
+    setBusy(true);
+    setFormError(null);
+    try {
+      const snapshot = await resolveSnapshot();
+      if (!snapshot) return;
+
+      const newsletter = await createNewsletterFromHubTemplate({
+        hubTemplateId,
+        snapshot,
+      });
+
+      toast.success(`Newsletter “${newsletter.subject.trim() || "(No subject)"}” created`);
+      router.push(newsletterDetailHref(newsletter.id, "content"));
+    } catch (err) {
+      toast.error(err instanceof StudioApiError ? err.message : "Could not create newsletter");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleScheduleNewsletter() {
     const subscriberGroupId = newsletterSubscriberGroupId.trim();
     const domain = resolveGroupDomain(subscriberGroups, subscriberGroupId);
     if (!subscriberGroupId || !domain) {
       setFormError("Select a subscriber group");
       return;
     }
-    if (newsletterMode === "schedule") {
-      if (!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()) {
-        setFormError("Choose a schedule time in the future");
-        return;
-      }
+    if (!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()) {
+      setFormError("Choose a schedule time in the future");
+      return;
     }
 
     setBusy(true);
@@ -190,25 +205,18 @@ export function HubTemplateUseMenu({
         snapshot,
       });
 
-      if (newsletterMode === "schedule") {
-        if (!(await prepareCredentials(domain))) return;
-        const scheduled = await studioApi.scheduleNewsletter(
-          newsletter.id,
-          new Date(scheduleAt).toISOString(),
-        );
-        toast.success(
-          `Newsletter scheduled for ${new Date(scheduled.scheduledAt ?? scheduleAt).toLocaleString()}`,
-        );
-        setNewsletterOpen(false);
-        router.push(newsletterDetailHref(newsletter.id, "publish", scheduled.status));
-        return;
-      }
-
-      toast.success(`Newsletter “${newsletter.subject.trim() || "(No subject)"}” created`);
-      setNewsletterOpen(false);
-      router.push(newsletterDetailHref(newsletter.id, "content"));
+      if (!(await prepareCredentials(domain))) return;
+      const scheduled = await studioApi.scheduleNewsletter(
+        newsletter.id,
+        new Date(scheduleAt).toISOString(),
+      );
+      toast.success(
+        `Newsletter scheduled for ${new Date(scheduled.scheduledAt ?? scheduleAt).toLocaleString()}`,
+      );
+      setScheduleOpen(false);
+      router.push(newsletterDetailHref(newsletter.id, "publish", scheduled.status));
     } catch (err) {
-      setFormError(err instanceof StudioApiError ? err.message : "Could not create newsletter");
+      setFormError(err instanceof StudioApiError ? err.message : "Could not schedule newsletter");
     } finally {
       setBusy(false);
     }
@@ -287,38 +295,20 @@ export function HubTemplateUseMenu({
   const moreMenu = (
     <DropdownMenuContent align="end">
       {preferredPrimary !== "newsletter" ? (
-        <DropdownMenuItem
-          onClick={() => {
-            resetNewsletterForm("draft");
-            setNewsletterOpen(true);
-          }}
-        >
+        <DropdownMenuItem onClick={() => void handleCreateDraftNewsletter()}>
           <Mail className="size-4" />
           Create newsletter
         </DropdownMenuItem>
       ) : null}
-      {preferredPrimary !== "newsletter" ? (
-        <DropdownMenuItem
-          onClick={() => {
-            resetNewsletterForm("schedule");
-            setNewsletterOpen(true);
-          }}
-        >
-          <Calendar className="size-4" />
-          Schedule send
-        </DropdownMenuItem>
-      ) : null}
-      {preferredPrimary === "newsletter" ? (
-        <DropdownMenuItem
-          onClick={() => {
-            resetNewsletterForm("schedule");
-            setNewsletterOpen(true);
-          }}
-        >
-          <Calendar className="size-4" />
-          Schedule send
-        </DropdownMenuItem>
-      ) : null}
+      <DropdownMenuItem
+        onClick={() => {
+          resetScheduleForm();
+          setScheduleOpen(true);
+        }}
+      >
+        <Calendar className="size-4" />
+        Schedule send
+      </DropdownMenuItem>
       {preferredPrimary !== "trigger" ? (
         <DropdownMenuItem
           onClick={() => {
@@ -350,12 +340,9 @@ export function HubTemplateUseMenu({
             size="sm"
             disabled={busy}
             className="rounded-r-none"
-            onClick={() => {
-              resetNewsletterForm("draft");
-              setNewsletterOpen(true);
-            }}
+            onClick={() => void handleCreateDraftNewsletter()}
           >
-            Create newsletter
+            {busy ? "Creating…" : "Create newsletter"}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -466,21 +453,17 @@ export function HubTemplateUseMenu({
       </Dialog>
 
       <Dialog
-        open={newsletterOpen}
+        open={scheduleOpen}
         onOpenChange={(open) => {
-          setNewsletterOpen(open);
-          if (open) resetNewsletterForm(newsletterMode);
+          setScheduleOpen(open);
+          if (open) resetScheduleForm();
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {newsletterMode === "schedule" ? "Schedule newsletter" : "Create newsletter"}
-            </DialogTitle>
+            <DialogTitle>Schedule newsletter</DialogTitle>
             <DialogDescription>
-              {newsletterMode === "schedule"
-                ? "New newsletter from this template, scheduled to send to the linked subscriber group."
-                : "New draft newsletter with this template’s subject and body."}
+              New newsletter from this template, scheduled to send to the linked subscriber group.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -494,17 +477,15 @@ export function HubTemplateUseMenu({
                 onValueChange={(id) => setNewsletterSubscriberGroupId(id ?? "")}
               />
             </div>
-            {newsletterMode === "schedule" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="hub-template-schedule-at">Send at</Label>
-                <Input
-                  id="hub-template-schedule-at"
-                  type="datetime-local"
-                  value={scheduleAt}
-                  onChange={(e) => setScheduleAt(e.target.value)}
-                />
-              </div>
-            ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor="hub-template-schedule-at">Send at</Label>
+              <Input
+                id="hub-template-schedule-at"
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+              />
+            </div>
             {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
           </div>
           <DialogFooter>
@@ -512,16 +493,12 @@ export function HubTemplateUseMenu({
               variant="outline"
               size="sm"
               disabled={busy}
-              onClick={() => setNewsletterOpen(false)}
+              onClick={() => setScheduleOpen(false)}
             >
               Cancel
             </Button>
-            <Button size="sm" disabled={busy} onClick={() => void handleCreateNewsletter()}>
-              {busy
-                ? "Working…"
-                : newsletterMode === "schedule"
-                  ? "Schedule newsletter"
-                  : "Create newsletter"}
+            <Button size="sm" disabled={busy} onClick={() => void handleScheduleNewsletter()}>
+              {busy ? "Working…" : "Schedule newsletter"}
             </Button>
           </DialogFooter>
         </DialogContent>

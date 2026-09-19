@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, WifiOff } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { EmptyListState } from "@/email/components/mailbox/EmailListShell";
+import { studioUserMessages } from "@/studio/lib/studio-user-messages";
 import { CF_EMAIL_SENDING_LIMITS_URL } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
 import { useAnalytics } from "@/studio/stores/analytics";
@@ -28,10 +30,7 @@ export function StudioAnalyticsView() {
 
   useEffect(() => {
     analytics.ensureLoaded().catch(() => {
-      toast.error(
-        analytics.loadError ??
-          "Could not load Studio analytics — is hq/studio running on port 32832?",
-      );
+      toast.error(analytics.loadError ?? studioUserMessages.loadAnalytics);
     });
   }, [analytics]);
 
@@ -46,8 +45,7 @@ export function StudioAnalyticsView() {
             onClick={() => {
               void analytics.refresh({ force: true }).catch(() => {
                 toast.error(
-                  analytics.loadError ??
-                    "Could not load Studio analytics — is hq/studio running on port 32832?",
+                  analytics.loadError ?? studioUserMessages.loadAnalytics,
                 );
               });
             }}
@@ -200,11 +198,29 @@ export function StudioAnalyticsView() {
           ) : null}
 
           {!analytics.fetching && !data ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Analytics unavailable. Start hq/studio and refresh.
-              </CardContent>
-            </Card>
+            <EmptyListState
+              icon={WifiOff}
+              title="Analytics unavailable"
+              description={
+                analytics.loadError ?? studioUserMessages.analyticsUnavailable
+              }
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void analytics.refresh({ force: true }).catch(() => {
+                      toast.error(
+                        analytics.loadError ?? studioUserMessages.loadAnalytics,
+                      );
+                    });
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  Retry
+                </Button>
+              }
+            />
           ) : null}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { shouldProxyRequestToStudio } from "@/studio/lib/studio-proxy/studio-proxy-policy";
+import { studioMiddlewareUpstreamError } from "@/studio/lib/studio-user-messages";
 
 /** hq/studio dev server — not 32831 (desktop OAuth loopback). */
 const DEFAULT_STUDIO_UPSTREAM = "http://127.0.0.1:32832";
@@ -54,7 +55,7 @@ export async function middleware(request: NextRequest) {
     upstreamRes = await fetch(target, init);
   } catch {
     return NextResponse.json(
-      { error: "Studio upstream unreachable — start hq/studio or set STUDIO_UPSTREAM_URL" },
+      { error: studioMiddlewareUpstreamError() },
       { status: 502 },
     );
   }

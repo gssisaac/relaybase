@@ -10,7 +10,9 @@ export function hqAuthConfig() {
 
   const appBaseUrl =
     process.env.HQ_AUTH_APP_URL?.trim().replace(/\/$/, "") ||
-    "http://localhost:32830";
+    (process.env.NODE_ENV === "production"
+      ? "https://relaybase.email"
+      : "http://localhost:32830");
 
   return {
     jwtSecret,

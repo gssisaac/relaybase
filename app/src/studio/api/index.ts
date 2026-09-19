@@ -6,6 +6,10 @@ import {
   STUDIO_API_REQUEST_HEADER,
   STUDIO_PUBLIC_LINK_ORIGIN,
 } from "@/studio/lib/studio-origin";
+import {
+  studioApiFetchFallback,
+  studioApiNonJsonMessage,
+} from "@/studio/lib/studio-user-messages";
 
 export { getStudioApiBase, STUDIO_PUBLIC_LINK_ORIGIN } from "@/studio/lib/studio-origin";
 export { studioSubscriberApi } from "./subscriber-api";
@@ -428,17 +432,13 @@ export async function studioFetch<T>(path: string, init?: RequestInit): Promise<
   if (!res.ok) {
     const fallback =
       body?.error ??
-      (body === null && res.headers.get("content-type")?.includes("text/html")
-        ? "Studio API returned HTML — is hq/studio running (pnpm dev in hq/studio)?"
-        : `request failed (${res.status})`);
+      (body === null
+        ? studioApiFetchFallback(res.status, res.headers.get("content-type"))
+        : `Request failed (${res.status})`);
     throw new StudioApiError(res.status, fallback, body);
   }
   if (body === null) {
-    throw new StudioApiError(
-      res.status,
-      "Studio API returned a non-JSON response — is hq/studio running on port 32832?",
-      null,
-    );
+    throw new StudioApiError(res.status, studioApiNonJsonMessage(), null);
   }
   return body as T;
 }

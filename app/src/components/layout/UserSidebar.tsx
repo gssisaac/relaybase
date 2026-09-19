@@ -20,7 +20,6 @@ import {
   Plus,
   Send,
   Settings,
-  SlidersHorizontal,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -52,11 +51,8 @@ import {
   writeSidebarMode,
   type SidebarMode,
 } from "@/lib/navigation/sidebar-mode";
-import {
-  composeFeedbackHref,
-  composeNewHref,
-  FEEDBACK_TO_EMAIL,
-} from "@/email/lib/compose/compose-open";
+import { composeNewHref } from "@/email/lib/compose/compose-open";
+import { useFeedbackDialog } from "@/components/feedback/FeedbackDialogProvider";
 import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/lib/paths";
 import {
   AlertDialog,
@@ -687,6 +683,28 @@ function EmailModeNav({
   );
 }
 
+function sidebarFooterRowClass(collapsed: boolean, extra?: string) {
+  return cn(
+    "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors",
+    "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+    collapsed ? "justify-center gap-0" : "justify-start gap-2",
+    extra,
+  );
+}
+
+function RelaybaseMark({ className }: { className?: string }) {
+  return (
+    <img
+      src="/icon.png"
+      alt=""
+      width={14}
+      height={14}
+      className={cn("size-3.5 shrink-0", className)}
+      aria-hidden
+    />
+  );
+}
+
 function MailSettingsButton({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -710,17 +728,14 @@ function MailSettingsButton({ collapsed }: { collapsed: boolean }) {
       title={collapsed ? "Settings" : undefined}
       aria-label="Settings"
       className={cn(
-        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+        sidebarFooterRowClass(collapsed),
         inSettings
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-        collapsed ? "justify-center gap-0" : "gap-2",
+          : undefined,
       )}
     >
       <Settings className="size-3.5 shrink-0" aria-hidden />
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 truncate">Settings</span>
-      ) : null}
+      {!collapsed ? <span className="truncate">Settings</span> : null}
     </Link>
   );
 }
@@ -736,17 +751,12 @@ function StudioSettingsButton({ collapsed }: { collapsed: boolean }) {
       title={collapsed ? "Settings" : undefined}
       aria-label="Settings"
       className={cn(
-        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-        collapsed ? "justify-center gap-0" : "gap-2",
+        sidebarFooterRowClass(collapsed),
+        active ? "bg-sidebar-accent text-sidebar-accent-foreground" : undefined,
       )}
     >
       <Settings className="size-3.5 shrink-0" aria-hidden />
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 truncate">Settings</span>
-      ) : null}
+      {!collapsed ? <span className="truncate">Settings</span> : null}
     </Link>
   );
 }
@@ -759,23 +769,16 @@ function GoToConsoleButton({
   onGoToConsole: () => void;
 }) {
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
-      size={collapsed ? "icon-sm" : "sm"}
       title={collapsed ? "Go to Console" : undefined}
       aria-label="Go to Console"
-      className={cn(
-        "text-[13px] font-medium text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-        collapsed ? "mx-auto" : "w-full justify-start gap-2 px-2 py-1.5",
-      )}
+      className={sidebarFooterRowClass(collapsed)}
       onClick={onGoToConsole}
     >
-      <SlidersHorizontal className="size-3.5 shrink-0" aria-hidden />
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 truncate">Go to Console</span>
-      ) : null}
-    </Button>
+      <RelaybaseMark />
+      {!collapsed ? <span className="truncate">Go to Console</span> : null}
+    </button>
   );
 }
 
@@ -787,62 +790,38 @@ function ConsoleSignOutButton({
   onSignOut: () => void;
 }) {
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
-      size={collapsed ? "icon-sm" : "sm"}
       title={collapsed ? "Sign out" : undefined}
       aria-label="Sign out"
-      className={cn(
-        "text-[13px] font-medium text-muted-foreground hover:bg-sidebar-accent/60 hover:text-destructive",
-        collapsed ? "mx-auto" : "w-full justify-start gap-2 px-2 py-1.5",
-      )}
+      className={sidebarFooterRowClass(collapsed, "hover:text-destructive")}
       onClick={onSignOut}
     >
       <LogOut className="size-3.5 shrink-0" aria-hidden />
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 truncate">Sign out</span>
-      ) : null}
-    </Button>
+      {!collapsed ? <span className="truncate">Sign out</span> : null}
+    </button>
   );
 }
 
-function SendFeedbackButton({
-  collapsed,
-  account,
-}: {
-  collapsed: boolean;
-  account?: string | null;
-}) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const href = composeFeedbackHref(account);
-  const to = searchParams.get("to")?.trim().toLowerCase();
-  const inCompose =
-    pathname === "/compose" ||
-    pathname.startsWith("/compose/") ||
-    pathname === "/email/compose" ||
-    pathname.startsWith("/email/compose/");
-  const active = inCompose && to === FEEDBACK_TO_EMAIL;
+function FeedbackFabButton({ collapsed }: { collapsed: boolean }) {
+  const { openFeedback } = useFeedbackDialog();
+  const { noDragClassName, isDesktop } = useDesktopChrome();
 
   return (
-    <Link
-      href={href}
-      title={collapsed ? "Send feedback" : undefined}
+    <button
+      type="button"
       aria-label="Send feedback"
+      title="Send feedback"
+      onClick={openFeedback}
       className={cn(
-        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-        collapsed ? "justify-center gap-0" : "gap-2",
+        "absolute bottom-3 right-3 z-30 flex items-center justify-center rounded-full bg-background text-muted-foreground shadow-lg ring-1 ring-border/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        collapsed ? "size-8" : "size-10",
+        noDragClassName,
       )}
+      {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
     >
-      <MessageSquare className="size-3.5 shrink-0" aria-hidden />
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 truncate">Send feedback</span>
-      ) : null}
-    </Link>
+      <MessageSquare className={collapsed ? "size-3.5" : "size-4"} aria-hidden />
+    </button>
   );
 }
 
@@ -1164,7 +1143,7 @@ export function UserSidebar({
   const aside = (
     <aside
       className={cn(
-        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground",
+        "relative flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground",
         isSheet ? "w-full border-0" : "border-r border-sidebar-border",
       )}
       style={isSheet ? undefined : { width: dockedAsideWidth }}
@@ -1341,18 +1320,11 @@ export function UserSidebar({
       <div
         className={cn(
           "flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2",
+          sidebarCollapsed ? "pr-2" : "pr-12",
           noDragClassName,
         )}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
-        <SendFeedbackButton
-          collapsed={sidebarCollapsed}
-          account={
-            searchParams.get("account")?.trim() ||
-            searchParams.get("from")?.trim() ||
-            null
-          }
-        />
         {mode === "email" ? (
           <MailSettingsButton collapsed={sidebarCollapsed} />
         ) : mode === "studio" ? (
@@ -1370,6 +1342,8 @@ export function UserSidebar({
           />
         ) : null}
       </div>
+
+      <FeedbackFabButton collapsed={sidebarCollapsed} />
 
       {isTeam && mailSession.workerUrl ? (
         <AddTeamAccountDialog

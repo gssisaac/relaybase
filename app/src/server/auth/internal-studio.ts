@@ -1,15 +1,16 @@
+import { workerEnvString } from "@/server/cloudflare/worker-env";
 import { getStudioApiBase } from "@/studio/lib/studio-origin";
 
 export function internalStudioAuthHeader(): string {
   return (
-    process.env.HQ_INTERNAL_AUTH_SECRET?.trim() ||
-    process.env.HQ_JWT_SECRET?.trim() ||
+    workerEnvString("HQ_INTERNAL_AUTH_SECRET") ||
+    workerEnvString("HQ_JWT_SECRET") ||
     "dev-hq-jwt-secret-change-me"
   );
 }
 
 function studioServerBase(): string {
-  const upstream = process.env.STUDIO_UPSTREAM_URL?.trim().replace(/\/$/, "");
+  const upstream = workerEnvString("STUDIO_UPSTREAM_URL")?.replace(/\/$/, "");
   if (upstream) return upstream;
   return getStudioApiBase().replace(/\/$/, "");
 }

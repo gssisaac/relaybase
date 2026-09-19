@@ -4,6 +4,8 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "node:crypto";
 import type { NextResponse } from "next/server";
 
+import { workerEnvString } from "@/server/cloudflare/worker-env";
+
 const OAUTH_COOKIE = "rb_cf_oauth";
 const PKCE_COOKIE = "rb_cf_pkce";
 
@@ -79,8 +81,8 @@ export type PkceState = {
 
 function sessionKey(): Buffer {
   const secret =
-    process.env.RELAYBASE_SESSION_SECRET ??
-    process.env.NEXTAUTH_SECRET ??
+    workerEnvString("RELAYBASE_SESSION_SECRET") ??
+    workerEnvString("NEXTAUTH_SECRET") ??
     "relaybase-dev-secret-do-not-use-in-production";
   return createHash("sha256").update(secret).digest();
 }

@@ -3,6 +3,9 @@
   // Staging / DB-version preview — does not attach relaybase.email routes.
   // URL: https://hq-relaybase-web-app-dbver.gssisaac.workers.dev
   // Deploy: `pnpm run deploy:web:dbver`
+  // Secrets (not in vars): HQ_JWT_SECRET, HQ_INTERNAL_AUTH_SECRET — must match Railway Studio.
+  //   pnpm exec wrangler secret put HQ_JWT_SECRET -c wrangler.web.dbver.jsonc
+  //   pnpm exec wrangler secret put HQ_INTERNAL_AUTH_SECRET -c wrangler.web.dbver.jsonc
   "name": "hq-relaybase-web-app-dbver",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],

@@ -32,6 +32,21 @@ export class HqAuthUserEntity {
   @Column({ type: "varchar", length: 128, nullable: true })
   name!: string | null;
 
+  /** Cloud login id (unique when set). See docs/auth/authentication.md */
+  @Index({ unique: true })
+  @Column({ type: "varchar", length: 64, nullable: true })
+  username!: string | null;
+
+  @Index({ unique: true })
+  @Column({ name: "cf_account_id", type: "varchar", length: 64, nullable: true })
+  cfAccountId!: string | null;
+
+  @Column({ name: "worker_url", type: "text", nullable: true })
+  workerUrl!: string | null;
+
+  @Column({ name: "passtoken_enc", type: "text", nullable: true })
+  passtokenEnc!: string | null;
+
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
 

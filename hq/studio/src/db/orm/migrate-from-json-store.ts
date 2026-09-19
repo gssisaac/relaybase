@@ -518,6 +518,10 @@ async function main() {
       entity.email = row.email;
       entity.passwordHash = row.passwordHash;
       entity.name = row.name;
+      entity.username = row.username?.trim().toLowerCase() ?? null;
+      entity.cfAccountId = row.cfAccountId?.trim().toLowerCase() ?? null;
+      entity.workerUrl = row.workerUrl?.trim() ?? null;
+      entity.passtokenEnc = row.passtokenEnc ?? null;
       entity.createdAt = parseDateRequired(row.createdAt);
       entity.updatedAt = parseDateRequired(row.updatedAt);
       return entity;

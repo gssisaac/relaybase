@@ -21,10 +21,17 @@ Uses `hq/studio/Dockerfile` (see `hq/studio/railway.toml`).
 | `STUDIO_PUBLIC_BASE_URL` | same as web preview URL |
 | `NODE_ENV` | `production` |
 | `PORT` | `8080` (Railway sets `PORT`; explicit is fine) |
+| `HQ_INTERNAL_AUTH_SECRET` | same value as on **`hq-relaybase-web-app-dbver`** Worker (register-cloud / OAuth reset) |
+| `HQ_VAULT_SECRET` | optional; encrypts `passtokenEnc` (defaults to `HQ_JWT_SECRET` if unset) |
 
-Do **not** set `TYPEORM_SYNC=1` in production (run `pnpm run orm:setup` once from CI or locally against public URL).
+Do **not** set `TYPEORM_SYNC=1` in production. After schema changes, run `pnpm run orm:sync` once from a trusted environment against the public DB URL, or apply a migration.
 
 Optional: `STUDIO_API_SECRET` if you lock down `/studio/*` with API key / bearer.
+
+**Web Worker (dbver)** must also set (Wrangler secrets, not committed):
+
+- `HQ_JWT_SECRET` — must match Studio
+- `HQ_INTERNAL_AUTH_SECRET` — must match Studio
 
 ## Deploy
 

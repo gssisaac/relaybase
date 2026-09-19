@@ -45,6 +45,19 @@ TYPEORM_SYNC=1 pnpm run orm:setup
 
 API routes still use the JSON file store (`src/db/store.ts`). PostgreSQL is wired for schema + migration; the next step is a repository layer behind `store.read()` / `store.update()`.
 
+### Auth schema (`hq_auth_users`)
+
+Cloud-unified auth fields (see `docs/auth/authentication.md`):
+
+| Column | Purpose |
+|--------|---------|
+| `username` | Unique cloud login id |
+| `cf_account_id` | Cloudflare account for OAuth password reset |
+| `worker_url` | Customer Worker base URL |
+| `passtoken_enc` | AES-256-GCM vault blob (never exposed to browsers) |
+
+Imported from `data/auth.json` via `orm:migrate:json` when present.
+
 ## Production
 
 Do **not** use `TYPEORM_SYNC=1` in production. Add TypeORM migrations once the schema stabilizes.

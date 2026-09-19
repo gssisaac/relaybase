@@ -15,12 +15,27 @@ if [[ -z "${HQ_JWT_SECRET:-}" ]]; then
   exit 1
 fi
 
-railway variables --service "$SERVICE" set \
-  "DATABASE_URL=${DATABASE_URL}" \
-  "HQ_JWT_SECRET=${HQ_JWT_SECRET}" \
-  "HQ_AUTH_APP_URL=${WEB_URL}" \
-  "STUDIO_PUBLIC_BASE_URL=${WEB_URL}" \
-  "NODE_ENV=production" \
+ARGS=(
+  "DATABASE_URL=${DATABASE_URL}"
+  "HQ_JWT_SECRET=${HQ_JWT_SECRET}"
+  "HQ_AUTH_APP_URL=${WEB_URL}"
+  "STUDIO_PUBLIC_BASE_URL=${WEB_URL}"
+  "NODE_ENV=production"
   "PORT=8080"
+)
+
+if [[ -n "${HQ_INTERNAL_AUTH_SECRET:-}" ]]; then
+  ARGS+=("HQ_INTERNAL_AUTH_SECRET=${HQ_INTERNAL_AUTH_SECRET}")
+fi
+
+if [[ -n "${HQ_VAULT_SECRET:-}" ]]; then
+  ARGS+=("HQ_VAULT_SECRET=${HQ_VAULT_SECRET}")
+fi
+
+if [[ -n "${STUDIO_API_SECRET:-}" ]]; then
+  ARGS+=("STUDIO_API_SECRET=${STUDIO_API_SECRET}")
+fi
+
+pnpm dlx @railway/cli variables --service "$SERVICE" set "${ARGS[@]}"
 
 echo "Variables set on service ${SERVICE}."

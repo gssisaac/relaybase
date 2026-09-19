@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cfApiTokenHealth, cfApiTokenPermissionsRejected, formatCfTokenAccessFix, cfTokenPermissionChecks, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl, cloudflareR2BucketUrl, cloudflareEmailRoutingOverviewUrl, cloudflareEmailRoutingRulesUrl } from "./cloudflare.ts";
+import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cfApiTokenHealth, cfApiTokenPermissionsRejected, formatCfTokenAccessFix, cfTokenPermissionChecks, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl, cloudflareZoneDashboardUrl, cloudflareR2BucketUrl, cloudflareEmailRoutingOverviewUrl, cloudflareEmailRoutingRulesUrl } from "./cloudflare.ts";
 
 describe("mailApiReady", () => {
   it("is ready when the token is set and the probe is not false", () => {
@@ -207,6 +207,10 @@ describe("cloudflare dashboard urls", () => {
     assert.equal(
       cloudflareDomainsOverviewUrl(accountId),
       `https://dash.cloudflare.com/${accountId}/domains/overview`,
+    );
+    assert.equal(
+      cloudflareZoneDashboardUrl(accountId, "zone123"),
+      `https://dash.cloudflare.com/${accountId}/zone123`,
     );
   });
 

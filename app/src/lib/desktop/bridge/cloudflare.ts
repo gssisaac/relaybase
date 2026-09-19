@@ -446,6 +446,17 @@ export function cloudflareDomainsOverviewUrl(accountId: string): string {
   return `https://dash.cloudflare.com/${id}/domains/overview`;
 }
 
+/** Cloudflare dashboard → zone overview (nameservers, DNS, status). */
+export function cloudflareZoneDashboardUrl(
+  accountId: string,
+  zoneId: string,
+): string {
+  const acct = accountId.trim();
+  const zone = zoneId.trim();
+  if (!acct || !zone) return cloudflareDomainsOverviewUrl(accountId);
+  return `https://dash.cloudflare.com/${acct}/${zone}`;
+}
+
 /**
  * Cloudflare dashboard → this zone's Email Routing page. Zone-scoped, not
  * account-scoped: falls back to the account's zone list when `zoneId` is

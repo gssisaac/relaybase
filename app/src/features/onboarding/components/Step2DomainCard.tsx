@@ -20,6 +20,8 @@ import { useDomain, type DomainAddJob, type DomainSummary } from "@/lib/dashboar
 import { listCloudflareZones } from "@/lib/dashboard/list-cf-zones";
 import type { ZoneSummary } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
+import { domainIsMailReady, isZoneNeedSetup } from "@/lib/domain/zone-setup";
+import { DomainNeedSetupPopover } from "./DomainNeedSetupPopover";
 
 type ConnectedDomainRow = {
   domain: string;
@@ -76,7 +78,7 @@ export function Step2DomainCard({
 
   // Find ready domains
   const readyDomains = useMemo(
-    () => domainStore.domains.filter((d) => !d.onboarding || d.onboarding.status === "ready"),
+    () => domainStore.domains.filter((d) => domainIsMailReady(d.onboarding)),
     [domainStore.domains],
   );
 
@@ -182,14 +184,16 @@ export function Step2DomainCard({
               const hasPendingJob =
                 row.pendingJob !== null && isJobInFlight(row.pendingJob);
               const isFailed = onboarding?.status === "failed";
+              const needSetup = Boolean(onboarding && isZoneNeedSetup(onboarding));
               const isConnecting =
                 hasPendingJob ||
                 onboarding?.status === "running" ||
-                onboarding?.status === "waiting";
+                (onboarding?.status === "waiting" && !needSetup);
               const isReady =
                 !hasPendingJob &&
                 !isConnecting &&
-                Boolean(d && (!onboarding || onboarding.status === "ready"));
+                !needSetup &&
+                Boolean(d && domainIsMailReady(onboarding));
               const isSelected =
                 (currentActiveDomain || "").toLowerCase() === row.domain.toLowerCase();
 
@@ -213,7 +217,12 @@ export function Step2DomainCard({
                           {onboarding?.lastError ?? "Onboarding failed. Check DNS records."}
                         </p>
                       )}
-                      {isConnecting && !isFailed && onboarding?.currentStepLabel ? (
+                      {needSetup && !isFailed ? (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          Update nameservers at your registrar to finish setup.
+                        </p>
+                      ) : null}
+                      {isConnecting && !isFailed && !needSetup && onboarding?.currentStepLabel ? (
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {onboarding.currentStepLabel}
                         </p>
@@ -230,6 +239,19 @@ export function Step2DomainCard({
                         <Check className="size-3" />
                         Ready
                       </Badge>
+                    ) : needSetup && onboarding && !isFailed ? (
+                      <DomainNeedSetupPopover
+                        domain={row.domain}
+                        accountId={accountId}
+                        onboarding={onboarding}
+                      >
+                        <Badge
+                          variant="outline"
+                          className="cursor-pointer gap-1 border-sky-500/40 bg-sky-500/10 text-xs text-sky-800 dark:text-sky-300"
+                        >
+                          Need setup
+                        </Badge>
+                      </DomainNeedSetupPopover>
                     ) : isConnecting && !isFailed ? (
                       <Badge
                         variant="outline"

@@ -19,6 +19,7 @@ export type ZoneSummary = {
   status: string;
   /** Cloudflare account that owns the zone. Omitted by older Workers. */
   accountId?: string;
+  nameServers?: string[];
 };
 
 export type WorkerConnectResult = {

@@ -22,7 +22,7 @@ export function OnboardingShell({
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-8 sm:py-12",
+        "mx-auto flex w-full max-w-xl flex-col gap-6 pb-8 sm:pb-12",
         className,
       )}
     >

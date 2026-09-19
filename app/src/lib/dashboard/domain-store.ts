@@ -35,7 +35,10 @@ export type OnboardingOverallStatus =
   | "ready"
   | "failed";
 
-export type OnboardingFailureCode = "ZONE_NOT_FOUND" | "MX_CONFLICT";
+export type OnboardingFailureCode =
+  | "ZONE_NOT_FOUND"
+  | "ZONE_PENDING"
+  | "MX_CONFLICT";
 
 export class DomainMxConflictError extends Error {
   mxConflicts: MxConflictRecord[];
@@ -75,6 +78,9 @@ export type DomainOnboardingSummary = {
   sendingSubdomainId: string | null;
   mxConflicts: MxConflictRecord[];
   steps: DomainOnboardingStep[];
+  /** Cloudflare-assigned nameservers when the zone is not active yet. */
+  nameServers?: string[];
+  cfZoneStatus?: string | null;
 };
 
 export type DomainSummary = {
@@ -220,6 +226,22 @@ function onboardingSettled(
   return null;
 }
 
+/** Add/onboarding jobs can finish while the zone still needs registrar/CF setup. */
+function onboardingWaitResult(
+  onboarding: DomainOnboardingSummary | null | undefined,
+): "ready" | "failed" | "need_setup" | null {
+  const settled = onboardingSettled(onboarding);
+  if (settled) return settled;
+  if (!onboarding || onboarding.status !== "waiting") return null;
+  if (
+    onboarding.lastErrorCode === "ZONE_PENDING" ||
+    onboarding.lastErrorCode === "ZONE_NOT_FOUND"
+  ) {
+    return "need_setup";
+  }
+  return null;
+}
+
 function isJobTerminal(job: DomainAddJob): boolean {
   return job.phase === "done" || job.phase === "failed";
 }
@@ -269,11 +291,11 @@ export class DomainStore {
     return this.addJobs.some((j) => {
       if (j.phase === "done" || j.phase === "failed") return false;
       if (j.phase === "seeding_addresses") return true;
-      const settled = onboardingSettled(
+      const outcome = onboardingWaitResult(
         this.domains.find((d) => d.domain === j.domain)?.onboarding,
       );
-      // Server already settled — spinner should not wait on a hung submit.
-      if (settled) return false;
+      // Server already settled (including need_setup) — do not wait on hung submit.
+      if (outcome) return false;
       return true;
     });
   }
@@ -715,10 +737,10 @@ export class DomainStore {
       if (this.completingJobIds.has(job.id)) continue;
 
       const summary = this.domains.find((d) => d.domain === job.domain);
-      const settled = onboardingSettled(summary?.onboarding);
-      if (!settled) continue;
+      const outcome = onboardingWaitResult(summary?.onboarding);
+      if (!outcome) continue;
 
-      if (settled === "failed") {
+      if (outcome === "failed") {
         runInAction(() => {
           job.phase = "failed";
           job.error =
@@ -728,14 +750,17 @@ export class DomainStore {
         continue;
       }
 
-      // ready — if submit HTTP is still in flight, finish without it
-      if (job.phase === "submitting") {
-        void this.completeJobFromReady(job);
+      // ready / need_setup — if submit HTTP is still in flight, finish without it
+      if (job.phase === "submitting" || job.phase === "onboarding") {
+        void this.completeJobFromReady(job, outcome === "need_setup");
       }
     }
   }
 
-  private async completeJobFromReady(job: DomainAddJob) {
+  private async completeJobFromReady(
+    job: DomainAddJob,
+    needSetup = false,
+  ) {
     if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
     this.completingJobIds.add(job.id);
     try {
@@ -755,7 +780,9 @@ export class DomainStore {
       } else {
         runInAction(() => {
           job.phase = "done";
-          job.message = `${job.domain} ready`;
+          job.message = needSetup
+            ? `${job.domain} added — finish domain setup`
+            : `${job.domain} ready`;
         });
       }
       this.scheduleDismiss(job.id);
@@ -985,8 +1012,11 @@ export class DomainStore {
 
   private waitForOnboarding(domain: string): Promise<"ready" | "failed"> {
     const existing = this.domains.find((d) => d.domain === domain);
-    const settled = onboardingSettled(existing?.onboarding);
-    if (settled) return Promise.resolve(settled);
+    const outcome = onboardingWaitResult(existing?.onboarding);
+    if (outcome === "need_setup" || outcome === "ready") {
+      return Promise.resolve("ready");
+    }
+    if (outcome === "failed") return Promise.resolve("failed");
 
     return new Promise((resolve) => {
       let set = this.waiters.get(domain);
@@ -1002,10 +1032,12 @@ export class DomainStore {
   private resolveWaiters() {
     for (const [domain, set] of this.waiters) {
       const summary = this.domains.find((d) => d.domain === domain);
-      const settled = onboardingSettled(summary?.onboarding);
-      if (!settled) continue;
+      const outcome = onboardingWaitResult(summary?.onboarding);
+      if (!outcome) continue;
       this.waiters.delete(domain);
-      for (const resolve of set) resolve(settled);
+      for (const resolve of set) {
+        resolve(outcome === "need_setup" ? "ready" : outcome);
+      }
     }
   }
 
@@ -1054,11 +1086,18 @@ export class DomainStore {
     if (this.pollInFlight) return;
     this.pollInFlight = true;
     try {
-      const pending = this.domains.filter(
-        (d) =>
-          d.onboarding?.status === "running" ||
-          d.onboarding?.status === "waiting",
-      );
+      const pending = this.domains.filter((d) => {
+        const o = d.onboarding;
+        if (!o) return false;
+        if (
+          o.status === "waiting" &&
+          (o.lastErrorCode === "ZONE_PENDING" ||
+            o.lastErrorCode === "ZONE_NOT_FOUND")
+        ) {
+          return false;
+        }
+        return o.status === "running" || o.status === "waiting";
+      });
 
       if (pending.length > 0) {
         for (const entry of pending) {

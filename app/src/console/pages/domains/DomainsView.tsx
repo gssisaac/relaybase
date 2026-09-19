@@ -76,6 +76,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { isZoneNeedSetup } from "@/lib/domain/zone-setup";
+import { DomainNeedSetupPopover } from "@/features/onboarding/components/DomainNeedSetupPopover";
 
 function domainBadgeClass(problem: boolean): string {
   return cn("text-[10px]", problem && "text-destructive");
@@ -91,6 +93,7 @@ function onboardingLabel(onboarding: DomainOnboardingSummary | null): string {
         ? `Running · ${onboarding.currentStepLabel}`
         : "Running";
     case "waiting":
+      if (isZoneNeedSetup(onboarding)) return "Need setup";
       return "Waiting for DNS";
     case "failed":
       return "Failed";
@@ -440,6 +443,24 @@ export function DomainsView() {
                           >
                             {onboardingLabel(onboarding)}
                           </Badge>
+                          {onboarding &&
+                          isZoneNeedSetup(onboarding) &&
+                          cfAccountId ? (
+                            <DomainNeedSetupPopover
+                              domain={entry.domain}
+                              accountId={cfAccountId}
+                              onboarding={onboarding}
+                            >
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-[11px] text-sky-800 dark:text-sky-300"
+                              >
+                                NS details
+                              </Button>
+                            </DomainNeedSetupPopover>
+                          ) : null}
                           <OnboardingInfoPopover
                             onboarding={onboarding}
                             onTroubleshootMx={

@@ -3,14 +3,13 @@ import type {
   InstallDecision,
   InstallLogEvent,
 } from "./install";
+import type {
+  InstallModuleEvent,
+  InstallModuleId,
+  InstallModuleStatus,
+} from "@/features/auth/lib/signup-install-modules";
 
-export type InstallModuleId = "r2" | "d1" | "worker" | "secrets" | "schema";
-export type InstallModuleStatus = "pending" | "running" | "done" | "error";
-
-export type InstallModuleEvent = {
-  id: InstallModuleId;
-  status: InstallModuleStatus;
-};
+export type { InstallModuleEvent, InstallModuleId, InstallModuleStatus };
 
 const logHandlers = new Set<(event: InstallLogEvent) => void>();
 const moduleHandlers = new Set<(event: InstallModuleEvent) => void>();

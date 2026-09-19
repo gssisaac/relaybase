@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ExternalLink, Loader2, Shield } from "lucide-react";
+import { Check, ExternalLink, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -8,9 +8,12 @@ import { Button } from "@/components/ui/button";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
 import { RollbackModulesDialog } from "@/features/auth/components/RollbackModulesDialog";
 import {
-  SIGNUP_INSTALL_MODULES,
-  SIGNUP_MODULE_ORDER,
+  emptyModuleLogs,
+  emptyModuleState,
   installLogModuleForStep,
+  visibleSignupInstallModules,
+  type InstallModuleId,
+  type SignupInstallModuleDef,
 } from "@/features/auth/lib/signup-install-modules";
 import { signupModuleDashboardUrl } from "@/features/auth/lib/signup-module-dashboard-url";
 import {
@@ -21,34 +24,23 @@ import {
   runWebInstallStream,
   subscribeWebInstallLog,
   subscribeWebInstallModule,
-  type InstallModuleId,
   type InstallModuleStatus,
 } from "@/lib/desktop/bridge/web-install-stream";
 import { cn } from "@/lib/utils";
-
-function initialModuleStatuses(): Record<InstallModuleId, InstallModuleStatus> {
-  return {
-    r2: "pending",
-    d1: "pending",
-    worker: "pending",
-    secrets: "pending",
-    schema: "pending",
-  };
-}
 
 export function SignupModuleInstallPanel() {
   const router = useRouter();
   const installStartedRef = useRef(false);
   const [cfAccountId, setCfAccountId] = useState("");
   const [cfAccountName, setCfAccountName] = useState("");
-  const [statuses, setStatuses] = useState(initialModuleStatuses);
-  const [moduleLogs, setModuleLogs] = useState<Record<InstallModuleId, string[]>>(() => ({
-    r2: [],
-    d1: [],
-    worker: [],
-    secrets: [],
-    schema: [],
-  }));
+  const [visibleModules, setVisibleModules] = useState<SignupInstallModuleDef[]>([]);
+  const [statuses, setStatuses] = useState<Partial<Record<InstallModuleId, InstallModuleStatus>>>(
+    {},
+  );
+  const [moduleLogs, setModuleLogs] = useState<Partial<Record<InstallModuleId, string[]>>>({});
+  const [cfResourceIds, setCfResourceIds] = useState<Partial<Record<InstallModuleId, string>>>(
+    {},
+  );
   const [expandedLog, setExpandedLog] = useState<InstallModuleId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installing, setInstalling] = useState(true);
@@ -56,20 +48,25 @@ export function SignupModuleInstallPanel() {
   const [pendingInstallToken, setPendingInstallToken] = useState("");
   const [rollbackOpen, setRollbackOpen] = useState(false);
 
+  const moduleOrder = useMemo(() => visibleModules.map((m) => m.id), [visibleModules]);
+
   const runInstall = useCallback(async () => {
     const plan = readSignupInstallPlan();
     if (!plan) {
       router.replace("/signup/probe");
       return;
     }
+    const modules = visibleSignupInstallModules(plan.decisions);
+    setVisibleModules(modules);
     setCfAccountId(plan.cfAccountId);
     setCfAccountName(plan.cfAccountName);
     setError(null);
     setInstalling(true);
     setInstallComplete(false);
     setPendingInstallToken("");
-    setStatuses(initialModuleStatuses());
-    setModuleLogs({ r2: [], d1: [], worker: [], secrets: [], schema: [] });
+    setCfResourceIds({});
+    setStatuses(emptyModuleState(modules));
+    setModuleLogs(emptyModuleLogs(modules));
     try {
       const result = await runWebInstallStream({
         accountId: plan.cfAccountId,
@@ -99,11 +96,14 @@ export function SignupModuleInstallPanel() {
       if (!line) return;
       setModuleLogs((prev) => ({
         ...prev,
-        [moduleId]: [...prev[moduleId].slice(-80), line],
+        [moduleId]: [...(prev[moduleId] ?? []).slice(-80), line],
       }));
     });
     const unsubModule = subscribeWebInstallModule((ev) => {
       setStatuses((prev) => ({ ...prev, [ev.id]: ev.status }));
+      if (ev.cfResourceId?.trim()) {
+        setCfResourceIds((prev) => ({ ...prev, [ev.id]: ev.cfResourceId!.trim() }));
+      }
     });
     return () => {
       unsubLog();
@@ -118,17 +118,15 @@ export function SignupModuleInstallPanel() {
   }, [runInstall]);
 
   const activeIndex = useMemo(() => {
-    const running = SIGNUP_MODULE_ORDER.findIndex((id) => statuses[id] === "running");
+    const running = moduleOrder.findIndex((id) => statuses[id] === "running");
     if (running >= 0) return running;
-    const lastDone = [...SIGNUP_MODULE_ORDER]
-      .reverse()
-      .findIndex((id) => statuses[id] === "done");
-    if (lastDone >= 0) return SIGNUP_MODULE_ORDER.length - 1 - lastDone;
+    const lastDone = [...moduleOrder].reverse().findIndex((id) => statuses[id] === "done");
+    if (lastDone >= 0) return moduleOrder.length - 1 - lastDone;
     return -1;
-  }, [statuses]);
+  }, [moduleOrder, statuses]);
 
   function cardOpacity(id: InstallModuleId): string {
-    const idx = SIGNUP_MODULE_ORDER.indexOf(id);
+    const idx = moduleOrder.indexOf(id);
     const status = statuses[id];
     if (status === "running" || status === "done" || status === "error") {
       return "opacity-100";
@@ -153,13 +151,13 @@ export function SignupModuleInstallPanel() {
             : "Installation stopped."}
       </p>
       <ul className="space-y-2">
-        {SIGNUP_INSTALL_MODULES.map((mod) => {
+        {visibleModules.map((mod) => {
           const status = statuses[mod.id];
-          const logs = moduleLogs[mod.id];
+          const logs = moduleLogs[mod.id] ?? [];
           const logOpen = expandedLog === mod.id;
           const dashUrl =
             status === "done" && cfAccountId
-              ? signupModuleDashboardUrl(mod.id, cfAccountId)
+              ? signupModuleDashboardUrl(mod.id, cfAccountId, cfResourceIds[mod.id])
               : null;
           return (
             <li
@@ -171,11 +169,7 @@ export function SignupModuleInstallPanel() {
             >
               <div className="flex items-start gap-3">
                 <div className="mt-0.5 shrink-0">
-                  {mod.icon === "Shield" ? (
-                    <Shield className="size-5 text-[#F38020]" aria-hidden />
-                  ) : (
-                    <CloudflareModuleIcon kind={mod.icon} className="size-5" />
-                  )}
+                  <CloudflareModuleIcon kind={mod.icon} className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
@@ -223,10 +217,16 @@ export function SignupModuleInstallPanel() {
         })}
       </ul>
 
+      {visibleModules.length === 0 && installing ? (
+        <p className="text-center text-sm text-muted-foreground">
+          Preparing your account…
+        </p>
+      ) : null}
+
       {installComplete ? (
         <div className="space-y-3 pt-1 text-center">
           <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
-            All modules installed
+            Ready to create your account
           </p>
           <p className="text-xs text-muted-foreground">
             Confirm each resource in Cloudflare above, then continue. You can roll back individual

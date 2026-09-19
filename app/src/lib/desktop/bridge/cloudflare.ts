@@ -514,6 +514,15 @@ export function cloudflareD1DashboardUrl(accountId: string): string {
   return `https://dash.cloudflare.com/${id}/workers/d1`;
 }
 
+/** Cloudflare dashboard → a specific D1 database by id. */
+export function cloudflareD1DatabaseUrl(accountId: string, databaseId: string): string {
+  const account = accountId.trim();
+  const dbId = databaseId.trim();
+  if (!account) return "https://dash.cloudflare.com/";
+  if (!dbId) return cloudflareD1DashboardUrl(account);
+  return `https://dash.cloudflare.com/${account}/workers/d1/databases/${encodeURIComponent(dbId)}`;
+}
+
 /** Cloudflare dashboard → Worker service page (no /production suffix). */
 export function cloudflareWorkerServiceUrl(
   accountId: string,

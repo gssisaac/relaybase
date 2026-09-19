@@ -15,7 +15,8 @@
     "orm:sync": "tsx --env-file=.env src/db/orm/run-sync-schema.ts",
     "orm:migrate:json": "tsx --env-file=.env src/db/orm/migrate-from-json-store.ts",
     "orm:setup": "pnpm run orm:ensure-db && pnpm run orm:sync && pnpm run orm:migrate:json",
-    "deploy:railway": "pnpm dlx @railway/cli up --service hq-relaybase-studio-dbver -y -d",
+    "deploy:cf": "wrangler deploy",
+    "deploy:railway": "pnpm dlx @railway/cli up --service hq-relaybase-studio -y -d",
     "generate:message-template-thumbnails": "pnpm -C ../../app run generate:message-template-thumbnails"
   },
   "dependencies": {
@@ -28,9 +29,11 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250317.0",
     "@types/node": "^20",
     "@types/pg": "^8.15.5",
     "tsx": "^4.19.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.120.0"
   }
 }

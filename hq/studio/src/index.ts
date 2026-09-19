@@ -1,11 +1,11 @@
 import "reflect-metadata";
 import { serve } from "@hono/node-server";
 import app from "./app";
-import { initPostgresAuthStore } from "./db/auth-store";
-import { initStudioDataSource, isPostgresStoreEnabled } from "./db/orm/data-source";
+import { ensurePostgresBootstrap } from "./bootstrap-postgres";
+import { isPostgresStoreEnabled } from "./db/orm/data-source";
 import { flushPostgresAuthPersist } from "./db/postgres-auth-runtime";
 import { flushPostgresStorePersist } from "./db/postgres-store-runtime";
-import { initPostgresStudioStore, store } from "./db/store";
+import { store } from "./db/store";
 import { readEnv } from "./env";
 import { startScheduler } from "./scheduler";
 
@@ -17,9 +17,7 @@ async function main() {
   const production = (process.env.NODE_ENV ?? "").trim() === "production";
 
   if (isPostgresStoreEnabled()) {
-    await initStudioDataSource();
-    await initPostgresStudioStore();
-    await initPostgresAuthStore();
+    await ensurePostgresBootstrap();
     console.log("relaybase-studio PostgreSQL: connected (store + auth)");
   } else if (production) {
     throw new Error("DATABASE_URL is required when NODE_ENV=production");

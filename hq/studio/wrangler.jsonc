@@ -3,26 +3,11 @@
   "name": "hq-relaybase-studio",
   "main": "src/worker.ts",
   "compatibility_date": "2026-07-12",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "rules": [
-    { "type": "Text", "globs": ["**/*.yaml", "**/*.yml"], "fallthrough": true },
-    { "type": "Data", "globs": ["**/*.png"], "fallthrough": true }
-  ],
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "account_id": "3adf03d991843094a7343eebc0a98007",
   "workers_dev": true,
   "routes": [{ "pattern": "studio-api.relaybase.email", "custom_domain": true }],
-  "r2_buckets": [
-    {
-      "binding": "STUDIO_DATA",
-      "bucket_name": "hq-relaybase-studio-data"
-    }
-  ],
-  "triggers": {
-    "crons": ["*/5 * * * *"]
-  },
   "vars": {
-    "HQ_AUTH_APP_URL": "https://relaybase.email",
-    "STUDIO_PUBLIC_BASE_URL": "https://relaybase.email",
-    "NODE_ENV": "production"
+    "STUDIO_BACKEND_URL": "https://hq-relaybase-studio-dbver-production.up.railway.app"
   }
 }

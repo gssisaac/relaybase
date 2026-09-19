@@ -1,9 +1,24 @@
-# Deploy `hq-relaybase-studio` (Railway)
+# Deploy `hq-relaybase-studio`
+
+Production Studio API is the Cloudflare Worker **`hq-relaybase-studio`** (`studio-api.relaybase.email`):
+
+```bash
+cd hq/studio
+pnpm run deploy:cf
+```
+
+Set Worker secrets: `DATABASE_URL`, `HQ_JWT_SECRET`, `HQ_INTERNAL_AUTH_SECRET`, optional `HQ_VAULT_SECRET`, `STUDIO_API_SECRET`.
+
+---
+
+## Optional: Railway (Node server)
+
+Use Railway only for local/staging parity or if you run Studio outside Workers.
 
 ## Prerequisites
 
 - Railway project with Postgres (database **`relaybase`** on private URL).
-- Service name: **`hq-relaybase-studio-dbver`**
+- Service name: **`hq-relaybase-studio`**
 - **Root directory** in Railway: monorepo root (not `hq/studio/`).
 - Service settings → **Config file path**: `hq/studio/railway.toml` (absolute from repo root).
 
@@ -37,7 +52,7 @@ Do **not** set `TYPEORM_SYNC=1` in production.
 ```bash
 pnpm dlx @railway/cli login
 cd /path/to/repo/root
-railway link   # project + service hq-relaybase-studio-dbver
+railway link   # project + service hq-relaybase-studio
 
 pnpm -C hq/studio run deploy:railway
 ```

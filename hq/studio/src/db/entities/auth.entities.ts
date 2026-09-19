@@ -32,6 +32,9 @@ export class HqAuthUserEntity {
   @Column({ type: "varchar", length: 128, nullable: true })
   name!: string | null;
 
+  @Column({ type: "varchar", length: 32, default: "owner" })
+  type!: "owner" | "team";
+
   /** Cloud login id (unique when set). See docs/auth/authentication.md */
   @Index({ unique: true })
   @Column({ type: "varchar", length: 64, nullable: true })

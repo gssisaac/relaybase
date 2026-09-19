@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import { newsletterAssetKey } from "@lib/assets/key";
 import { resolveWorkerSendCredentials } from "@lib/mail/credentials";
 import { sendMail } from "@lib/mail/sender";
@@ -30,6 +29,8 @@ import { isValidEmail } from "@lib/shared/email";
 import { newId, newToken } from "@lib/shared/ids";
 import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
 import { messageFileStore } from "@lib/messages/message-file-store";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export const studioMessages = new Hono();
 
@@ -66,7 +67,7 @@ studioMessages.post("/", async (c) => {
   if (!name) return c.json({ error: "name is required" }, 400);
 
   const now = new Date().toISOString();
-  const created = studioService.update((draft) =>
+  const created = mutateStudioDocument((draft) =>
     createMessage(
       draft,
       {
@@ -107,7 +108,7 @@ studioMessages.post("/:id/assets", async (c) => {
 
   const key = newsletterAssetKey(messageId, filename);
   const storedFilename = key.slice(messageId.length + 1);
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     if (!draft.messageAssets) draft.messageAssets = [];
     draft.messageAssets = draft.messageAssets.filter((a) => a.key !== key);
     draft.messageAssets.push({
@@ -156,7 +157,7 @@ studioMessages.post("/:id/test-send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const message = requireMessage(studioService.read(), id);
+  const message = requireMessage(readStudioDocument(), id);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
   const mergeTags: Record<string, string> = {
@@ -165,7 +166,7 @@ studioMessages.post("/:id/test-send", async (c) => {
   };
   const recipientName = recipientDisplayName(mergeTags, to);
 
-  const data = studioService.read();
+  const data = readStudioDocument();
   const defaultComplianceId = accountDefaultComplianceIdentityId(data);
   const orgName = defaultComplianceId
     ? complianceSettingsFromIdentity(findComplianceIdentity(defaultComplianceId)).organizationName
@@ -235,7 +236,7 @@ studioMessages.patch("/:id", async (c) => {
   }
 
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     patchMessage(
       draft,
       id,
@@ -263,7 +264,7 @@ studioMessages.delete("/:id", (c) => {
   if (!messageFileStore.findById(id)) return c.json({ error: "not found" }, 404);
 
   messageFileStore.delete(id);
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.messageAssets = (draft.messageAssets ?? []).filter((a) => a.messageId !== id);
     draft.messages = draft.messages.filter((m) => m.id !== id);
   });

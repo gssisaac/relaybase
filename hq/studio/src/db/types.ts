@@ -1,5 +1,5 @@
 /**
- * Studio store document (PostgreSQL entities ↔ in-memory cache).
+ * Studio document types (PostgreSQL entities ↔ `readStudioDocument` aggregate).
  *
  * Layout — HTML frame · Template — read-only catalog blueprint · Message — editable copy ·
  * Trigger — event send · Newsletter — subscriber send.

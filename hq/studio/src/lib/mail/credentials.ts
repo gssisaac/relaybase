@@ -1,4 +1,4 @@
-import { studioService } from "@services/studio-service";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export type WorkerSendCredentials =
   | { ok: true; workerUrl: string; apiKey: string }
@@ -6,7 +6,7 @@ export type WorkerSendCredentials =
 
 /** Resolve Worker origin + domain-scoped send key for broadcast dispatch. */
 export function resolveWorkerSendCredentials(): WorkerSendCredentials {
-  const account = studioService.read().account;
+  const account = readStudioDocument().account;
   const workerUrl = account.workerUrl?.trim().replace(/\/$/, "") ?? "";
   const envKey = process.env.STUDIO_WORKER_SEND_API_KEY?.trim();
   const apiKey = envKey || account.sendApiKey?.trim() || "";

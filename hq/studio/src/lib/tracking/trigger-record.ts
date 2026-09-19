@@ -1,6 +1,6 @@
-import { studioService } from "@services/studio-service";
 import { newId } from "@lib/shared/ids";
 import { rollupTriggerStatsFromSends } from "@lib/triggers/stats";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 function refreshTriggerStats(draft: import("@db/types").StudioDataStore, triggerId: string) {
   const aIdx = draft.triggers.findIndex((a) => a.id === triggerId);
@@ -20,12 +20,11 @@ function refreshTriggerStats(draft: import("@db/types").StudioDataStore, trigger
 
 export function recordAutomationTrackingOpen(triggerId: string, triggerSendId: string) {
   try {
-    const send = studioService
-      .read()
+    const send = readStudioDocument()
       .triggerSends.find((s) => s.id === triggerSendId && s.triggerId === triggerId);
     if (!send) return;
     const now = new Date().toISOString();
-    studioService.update((draft) => {
+    mutateStudioDocument((draft) => {
       const idx = draft.triggerSends.findIndex((s) => s.id === triggerSendId);
       if (idx < 0) return;
       draft.triggerSends[idx] = {
@@ -56,12 +55,11 @@ export function recordAutomationTrackingClick(
   url: string,
 ) {
   try {
-    const send = studioService
-      .read()
+    const send = readStudioDocument()
       .triggerSends.find((s) => s.id === triggerSendId && s.triggerId === triggerId);
     if (!send) return;
     const now = new Date().toISOString();
-    studioService.update((draft) => {
+    mutateStudioDocument((draft) => {
       const idx = draft.triggerSends.findIndex((s) => s.id === triggerSendId);
       if (idx < 0) return;
       draft.triggerSends[idx] = {

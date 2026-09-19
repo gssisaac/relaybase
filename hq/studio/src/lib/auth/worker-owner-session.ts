@@ -48,6 +48,14 @@ export async function mintWorkerOwnerSession(
 ): Promise<
   { ok: true; session: WorkerOwnerSessionPayload } | { ok: false; error: string; status: number }
 > {
+  if ((user.type ?? "owner") !== "owner") {
+    return {
+      ok: false,
+      error: "Console access is only available for account owners.",
+      status: 403,
+    };
+  }
+
   const workerUrl = user.workerUrl?.trim().replace(/\/$/, "") ?? "";
   if (!workerUrl) {
     return { ok: false, error: "No Worker is linked to this account.", status: 404 };

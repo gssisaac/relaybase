@@ -1,6 +1,7 @@
 import { loadAuthStoreFromPostgres } from "@lib/orm/postgres-auth-persist";
 import {
-  commitPostgresAuthCache,
+  enqueueAuthPersist,
+  patchPostgresAuthCache,
   readPostgresAuthClone,
   setPostgresAuthCache,
 } from "@lib/db/postgres-auth-runtime";
@@ -10,6 +11,14 @@ import type {
   HqPasswordResetTokenRecord,
   HqRefreshTokenRecord,
 } from "@db/auth-types";
+import {
+  deleteRefreshTokenById,
+  deleteRefreshTokensForUser,
+  markPasswordResetTokenUsed,
+  saveAuthUser,
+  savePasswordResetToken,
+  saveRefreshToken,
+} from "@services/auth/auth.repository";
 
 function normalizeAuthStore(raw: HqAuthStore): HqAuthStore {
   return {
@@ -24,12 +33,6 @@ function readAuthImpl(): HqAuthStore {
   return readPostgresAuthClone();
 }
 
-function updateAuthImpl(mutator: (draft: HqAuthStore) => void): HqAuthStore {
-  const draft = readPostgresAuthClone();
-  mutator(draft);
-  return commitPostgresAuthCache(normalizeAuthStore(draft));
-}
-
 export async function initPostgresAuthService(): Promise<void> {
   const loaded = await loadAuthStoreFromPostgres();
   setPostgresAuthCache(normalizeAuthStore(loaded));
@@ -38,10 +41,6 @@ export async function initPostgresAuthService(): Promise<void> {
 export const authService = {
   read(): HqAuthStore {
     return readAuthImpl();
-  },
-
-  update(mutator: (draft: HqAuthStore) => void): HqAuthStore {
-    return updateAuthImpl(mutator);
   },
 
   findUserByEmail(email: string): HqAuthUser | null {
@@ -63,29 +62,60 @@ export const authService = {
     return readAuthImpl().users.find((u) => u.id === userId) ?? null;
   },
 
+  createUser(user: HqAuthUser): HqAuthUser {
+    patchPostgresAuthCache((draft) => {
+      draft.users.push(user);
+    });
+    enqueueAuthPersist(() => saveAuthUser(user));
+    return user;
+  },
+
+  updateUser(userId: string, patch: Partial<Pick<HqAuthUser, "passwordHash" | "updatedAt" | "name">>): HqAuthUser | null {
+    let updated: HqAuthUser | null = null;
+    patchPostgresAuthCache((draft) => {
+      const row = draft.users.find((u) => u.id === userId);
+      if (!row) return;
+      if (patch.passwordHash !== undefined) row.passwordHash = patch.passwordHash;
+      if (patch.updatedAt !== undefined) row.updatedAt = patch.updatedAt;
+      if (patch.name !== undefined) row.name = patch.name;
+      updated = { ...row };
+    });
+    if (updated) {
+      enqueueAuthPersist(() => saveAuthUser(updated!));
+    }
+    return updated;
+  },
+
   addRefreshToken(record: HqRefreshTokenRecord): void {
-    authService.update((draft) => {
+    patchPostgresAuthCache((draft) => {
       draft.refreshTokens.push(record);
     });
+    enqueueAuthPersist(() => saveRefreshToken(record));
   },
 
   replaceRefreshToken(oldId: string, next: HqRefreshTokenRecord): void {
-    authService.update((draft) => {
+    patchPostgresAuthCache((draft) => {
       draft.refreshTokens = draft.refreshTokens.filter((t) => t.id !== oldId);
       draft.refreshTokens.push(next);
+    });
+    enqueueAuthPersist(async () => {
+      await deleteRefreshTokenById(oldId);
+      await saveRefreshToken(next);
     });
   },
 
   revokeRefreshTokenById(id: string): void {
-    authService.update((draft) => {
+    patchPostgresAuthCache((draft) => {
       draft.refreshTokens = draft.refreshTokens.filter((t) => t.id !== id);
     });
+    enqueueAuthPersist(() => deleteRefreshTokenById(id));
   },
 
   revokeAllRefreshTokensForUser(userId: string): void {
-    authService.update((draft) => {
+    patchPostgresAuthCache((draft) => {
       draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== userId);
     });
+    enqueueAuthPersist(() => deleteRefreshTokensForUser(userId));
   },
 
   findRefreshTokenByHash(tokenHash: string): HqRefreshTokenRecord | null {
@@ -93,9 +123,10 @@ export const authService = {
   },
 
   addPasswordResetToken(record: HqPasswordResetTokenRecord): void {
-    authService.update((draft) => {
+    patchPostgresAuthCache((draft) => {
       draft.passwordResetTokens.push(record);
     });
+    enqueueAuthPersist(() => savePasswordResetToken(record));
   },
 
   findPasswordResetByHash(tokenHash: string): HqPasswordResetTokenRecord | null {
@@ -103,9 +134,10 @@ export const authService = {
   },
 
   markPasswordResetUsed(id: string): void {
-    authService.update((draft) => {
+    patchPostgresAuthCache((draft) => {
       const row = draft.passwordResetTokens.find((t) => t.id === id);
       if (row) row.used = true;
     });
+    enqueueAuthPersist(() => markPasswordResetTokenUsed(id));
   },
 };

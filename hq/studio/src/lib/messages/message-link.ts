@@ -1,6 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio-service";
 import type { StudioDataStore } from "@db/types";
 import { newsletterSubject } from "@lib/newsletters/subject";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
 
 export type MessageLinkedOwner = {
   kind: "trigger" | "newsletter";

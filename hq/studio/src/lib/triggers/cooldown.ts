@@ -1,4 +1,4 @@
-import { studioService } from "@services/studio-service";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export function isWithinTriggerCooldown(
   triggerId: string,
@@ -9,7 +9,7 @@ export function isWithinTriggerCooldown(
   if (cooldownSeconds <= 0) return false;
   const normalized = email.trim().toLowerCase();
   const cutoff = nowMs - cooldownSeconds * 1000;
-  const sends = studioService.read().triggerSends;
+  const sends = readStudioDocument().triggerSends;
   for (let i = sends.length - 1; i >= 0; i -= 1) {
     const row = sends[i]!;
     if (row.triggerId !== triggerId) continue;

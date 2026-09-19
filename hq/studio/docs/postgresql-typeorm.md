@@ -44,12 +44,19 @@ TYPEORM_SYNC=1 pnpm run orm:setup
 |------|------|
 | `src/db/types.ts`, `src/db/auth-types.ts` | Store document + auth record types |
 | `src/db/entities/` | TypeORM entity definitions |
-| `src/lib/db/` | PostgreSQL helpers (persist, runtime cache, parse-date, client config) |
+| `src/lib/db/` | Runtime read caches, parse-date, client config |
 | `src/lib/orm/data-source.ts` | DataSource factory + singleton init |
 | `src/lib/orm/run-sync-schema.ts` | `synchronize: true` helper (requires `TYPEORM_SYNC=1`) |
-| `src/services/studio-service.ts`, `auth-service.ts` | `studioService` / `authService` read/update API |
+| `src/services/repositories.ts` | Typed TypeORM repository accessors |
+| `src/services/auth/auth.repository.ts` | Auth row-level writes (no full-table TRUNCATE) |
+| `src/services/studio/studio-document.service.ts` | In-memory studio document + `mutateStudioDocument` → TypeORM upsert |
+| `src/services/studio/studio-document.persist.ts` | Bulk load/upsert via `store-entity-map` (no TRUNCATE) |
+| `src/services/domain/*.service.ts` | TypeORM-first domain services (`newsletterService`, `accountLinkService`, …) |
+| `src/services/auth-service.ts` | Auth cache + row-level `auth.repository` writes |
 
-`studioService.read()` / `studioService.update()` and `authService` use PostgreSQL (in-memory cache + snapshot persist).
+**Auth:** per-row TypeORM saves; no full-table TRUNCATE on token refresh.
+
+**Studio:** `readStudioDocument()` / `mutateStudioDocument()` replace the removed `studioService`. Prefer domain services for new code; mutators persist with entity upsert only.
 
 ### Auth schema (`hq_auth_users`)
 

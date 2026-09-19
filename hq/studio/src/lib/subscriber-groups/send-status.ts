@@ -1,6 +1,7 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { SubscriberSendStatus } from "@db/types";
 import { normalizeSuppressionEmail, recordGroupUnsubscribe } from "@lib/account/suppression";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export function setSubscriberContactSendStatus(
   groupId: string,
@@ -10,7 +11,7 @@ export function setSubscriberContactSendStatus(
 ): void {
   const now = new Date().toISOString();
   let email: string | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const gIdx = draft.subscriberGroups.findIndex(
       (g) => g.id === groupId && g.accountLinkId === DEV_ACCOUNT_LINK_ID,
     );
@@ -36,7 +37,7 @@ export function setSubscriberContactSendStatus(
   }
 
   const normalized = normalizeSuppressionEmail(email);
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.accountSuppressions = draft.accountSuppressions.filter(
       (s) =>
         !(
@@ -56,7 +57,7 @@ export function markSubscriberContactBounced(
 ): void {
   const now = new Date().toISOString();
   const normalized = email.trim().toLowerCase();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const gIdx = draft.subscriberGroups.findIndex(
       (g) => g.id === groupId && g.accountLinkId === DEV_ACCOUNT_LINK_ID,
     );

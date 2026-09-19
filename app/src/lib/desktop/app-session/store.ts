@@ -2,8 +2,12 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
+import { ensureCloudWorkerSession } from "@/lib/auth/cloud-worker-session";
+import { getHqUser, hasHqSession } from "@/lib/hq-auth/session";
+
 import { isSystemCanceledBiometry, isUserDismissedBiometry } from "../biometry/dismiss";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
+import { isDesktopRuntime } from "../bridge";
 import { createDefaultDeps } from "./defaults";
 import { isWorkerUnreachableError, visibleUnlockError } from "./errors";
 import { resolveWorkerUrl } from "./resolve-worker-url";
@@ -38,7 +42,6 @@ export class AppSessionStore {
   error: string | null = null;
   revealedPasstoken: { passtoken: string } | null = null;
   busy = false;
-  consoleGateOpen = false;
   /** Last Worker call failed because the network / Worker was unreachable. */
   workerUnreachable = false;
   /** Worker D1 passtoken prefix from GET /console/auth-status (non-secret). */
@@ -47,6 +50,8 @@ export class AppSessionStore {
   bioDismissed = false;
   /** UnlockView already started a Touch ID prompt this boot (avoids remount loops). */
   unlockBioPrompted = false;
+  /** Passtoken / unlock overlay for console when refresh and cloud mint both fail. */
+  consoleGateOpen = false;
   private consoleUnauthorizedInFlight = false;
 
   private identity: IdentitySnapshot = {
@@ -557,7 +562,12 @@ export class AppSessionStore {
     return this.hasConsoleAccess;
   }
 
-  /** Grant console access: silent refresh, else Touch ID → keyring passtoken. */
+  /** Web or desktop with HQ cloud session — console via owner role + server-minted Worker tokens. */
+  private usesCloudConsoleAccess(): boolean {
+    return !isDesktopRuntime() || hasHqSession();
+  }
+
+  /** Grant console access: cloud owner role + Worker session, else keyring / passtoken (local desktop). */
   async ensureConsoleAccess(workerUrl?: string): Promise<boolean> {
     if (this.hasConsoleAccess) return true;
 
@@ -565,6 +575,43 @@ export class AppSessionStore {
       workerUrl?.trim().replace(/\/$/, "") ||
       this.resolvedWorkerUrl("owner") ||
       undefined;
+
+    if (this.usesCloudConsoleAccess()) {
+      const user = getHqUser();
+      if (!user || user.type !== "owner") {
+        runInAction(() => {
+          this.consoleGateOpen = false;
+          this.error =
+            user?.type === "team"
+              ? "Console access is only available for account owners."
+              : null;
+        });
+        return false;
+      }
+
+      this.busy = true;
+      this.error = null;
+      try {
+        const ok = await ensureCloudWorkerSession();
+        const status = await this.deps.ownerSessionStatus(resolvedUrl);
+        runInAction(() => {
+          this.ownerStatus = status;
+          this.busy = false;
+          this.consoleGateOpen = !ok || !status.hasConsoleAccess;
+          if (ok) this.markWorkerReachable();
+        });
+        return ok && status.hasConsoleAccess;
+      } catch (err) {
+        runInAction(() => {
+          this.busy = false;
+          if (isWorkerUnreachableError(err)) this.markWorkerUnreachable();
+          this.consoleGateOpen = true;
+          const shown = visibleUnlockError(err, "owner");
+          if (shown) this.error = shown;
+        });
+        return false;
+      }
+    }
 
     if (this.hasOwnerConsoleRefresh()) {
       this.busy = true;

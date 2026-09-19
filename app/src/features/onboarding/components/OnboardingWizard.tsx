@@ -10,8 +10,10 @@ import { Step2DomainCard } from "./Step2DomainCard";
 import { Step3AccountCard } from "./Step3AccountCard";
 import { Step4CompleteCard } from "./Step4CompleteCard";
 import { useOnboardingState } from "../hooks/useOnboardingState";
+import { shouldRedirectToCloudOnboarding } from "@/features/onboarding/lib/needs-cloud-onboarding";
 import { getHqUser, hasHqSession, hqRefreshSession } from "@/lib/hq-auth/session";
 import { ensureCloudWorkerSession } from "@/lib/auth/cloud-worker-session";
+import { DEFAULT_DASHBOARD_PATH } from "@/lib/navigation/sidebar-paths";
 
 export function OnboardingWizard() {
   const router = useRouter();
@@ -39,7 +41,20 @@ export function OnboardingWizard() {
         return;
       }
 
+      const user = getHqUser();
+      if (user?.type === "team") {
+        if (active) router.replace("/studio/dashboard");
+        return;
+      }
+
       await ensureCloudWorkerSession().catch(() => false);
+
+      const needsSetup = await shouldRedirectToCloudOnboarding();
+      if (!needsSetup) {
+        if (active) router.replace(DEFAULT_DASHBOARD_PATH);
+        return;
+      }
+
       if (active) {
         setAuthReady(true);
       }

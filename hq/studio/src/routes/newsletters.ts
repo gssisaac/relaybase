@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { Newsletter } from "@db/types";
 import { isValidEmail } from "@lib/shared/email";
 import { claimNewsletterForSend, resolveTestSendUnsubscribeToken } from "@lib/newsletters/send-claim";
@@ -30,20 +29,21 @@ import {
 import { STUDIO_PUBLIC_BASE_URL } from "@lib/shared/studio-url";
 import { newId, newToken } from "@lib/shared/ids";
 import { studioNewsletterSubscribers } from "@/routes/newsletter-subscribers";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export const studioNewsletters = new Hono();
 
 // GET /studio/broadcasts
 studioNewsletters.get("/", (c) => {
-  const rows = studioService
-    .read()
+  const rows = readStudioDocument()
     .newsletters.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return c.json({ newsletters: rows.map(serializeNewsletter) });
 });
 
 studioNewsletters.get("/sent-stats", (c) => {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const subscriberNameById = new Map(data.subscriberGroups.map((g) => [g.id, g.name]));
   return c.json(
     buildSentOverview({
@@ -56,7 +56,7 @@ studioNewsletters.get("/sent-stats", (c) => {
 });
 
 studioNewsletters.get("/in-progress", (c) => {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const mine = data.newsletters.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID);
   const sending = mine
     .filter((b) => b.status === "sending")
@@ -106,10 +106,10 @@ studioNewsletters.post("/", async (c) => {
       return c.json({ error: "Subscriber group must belong to the selected domain" }, 400);
     }
   } else if (!domain) {
-    domain = studioService.read().account.domain?.trim().toLowerCase() || "";
+    domain = readStudioDocument().account.domain?.trim().toLowerCase() || "";
   }
   const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     if (domain) draft.account.domain = domain;
     if (workerUrl) draft.account.workerUrl = workerUrl;
   });
@@ -118,7 +118,7 @@ studioNewsletters.post("/", async (c) => {
   }
 
   const id = newId("newsletter");
-  const data = studioService.read();
+  const data = readStudioDocument();
   const baseSlug =
     slugifyNewsletter(body.slug?.trim() || "") ||
     id.replace(/^newsletter_/, "").slice(0, 12) ||
@@ -131,7 +131,7 @@ studioNewsletters.post("/", async (c) => {
   }
   const now = new Date().toISOString();
   let created: Newsletter | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const message = createMessageForOwner(
       draft,
       {
@@ -246,7 +246,7 @@ studioNewsletters.patch("/:id", async (c) => {
 
   if (body.complianceIdentityId !== undefined && body.complianceIdentityId !== null) {
     const identityId = body.complianceIdentityId.trim();
-    const exists = studioService.read().complianceIdentities.some((row) => row.id === identityId);
+    const exists = readStudioDocument().complianceIdentities.some((row) => row.id === identityId);
     if (!exists) return c.json({ error: "Compliance sender not found" }, 400);
   }
 
@@ -285,9 +285,9 @@ studioNewsletters.patch("/:id", async (c) => {
   }
 
   if (body.listStatus === "archived" && existing.listStatus !== "archived") {
-    const sending = studioService.read().newsletters.find((b) => b.id === id && b.status === "sending");
+    const sending = readStudioDocument().newsletters.find((b) => b.id === id && b.status === "sending");
     if (sending) {
-      const sendingMessage = requireMessage(studioService.read(), sending.messageId);
+      const sendingMessage = requireMessage(readStudioDocument(), sending.messageId);
       return c.json(
         {
           error: `Cannot archive broadcast while '${sendingMessage.subject || "a newsletter"}' is currently sending.`,
@@ -301,7 +301,7 @@ studioNewsletters.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   let updated: Newsletter | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     if (domainPatch) {
       draft.account.domain = domainPatch;
       if (workerUrl) draft.account.workerUrl = workerUrl;
@@ -400,7 +400,7 @@ studioNewsletters.post("/:id/test-send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const message = requireMessage(studioService.read(), broadcast.messageId);
+  const message = requireMessage(readStudioDocument(), broadcast.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
   const unsubscribeToken = resolveTestSendUnsubscribeToken(broadcast, to);
@@ -455,7 +455,7 @@ studioNewsletters.post("/:id/send", async (c) => {
     }
     return c.json({ error: `cannot send from status "${existing.status}"` }, 409);
   }
-  const existingMessage = requireMessage(studioService.read(), existing.messageId);
+  const existingMessage = requireMessage(readStudioDocument(), existing.messageId);
   if (!existingMessage.subject.trim()) {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
@@ -482,7 +482,7 @@ studioNewsletters.post("/:id/send", async (c) => {
   }
 
   const result = await dispatchNewsletterToSubscribers(broadcast, members);
-  const row = studioService.read().newsletters.find((r) => r.id === id)!;
+  const row = readStudioDocument().newsletters.find((r) => r.id === id)!;
   return c.json({ newsletter: serializeNewsletter(row), ...result });
 });
 
@@ -493,7 +493,7 @@ studioNewsletters.post("/:id/schedule", async (c) => {
   if (broadcast.status !== "draft") {
     return c.json({ error: `cannot schedule from status "${broadcast.status}"` }, 409);
   }
-  const scheduleMessage = requireMessage(studioService.read(), broadcast.messageId);
+  const scheduleMessage = requireMessage(readStudioDocument(), broadcast.messageId);
   if (!scheduleMessage.subject.trim()) {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
@@ -510,7 +510,7 @@ studioNewsletters.post("/:id/schedule", async (c) => {
   }
 
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.scheduledJobs.push({
       id: newId("job"),
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -531,7 +531,7 @@ studioNewsletters.post("/:id/schedule", async (c) => {
     }
   });
 
-  return c.json(serializeNewsletter(studioService.read().newsletters.find((r) => r.id === id)!));
+  return c.json(serializeNewsletter(readStudioDocument().newsletters.find((r) => r.id === id)!));
 });
 
 studioNewsletters.post("/:id/cancel-schedule", async (c) => {
@@ -543,7 +543,7 @@ studioNewsletters.post("/:id/cancel-schedule", async (c) => {
   }
 
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.scheduledJobs = draft.scheduledJobs.filter(
       (j) => !(j.kind === "newsletter" && j.refId === id && j.status === "pending"),
     );
@@ -558,7 +558,7 @@ studioNewsletters.post("/:id/cancel-schedule", async (c) => {
     }
   });
 
-  return c.json(serializeNewsletter(studioService.read().newsletters.find((r) => r.id === id)!));
+  return c.json(serializeNewsletter(readStudioDocument().newsletters.find((r) => r.id === id)!));
 });
 
 studioNewsletters.post("/:id/duplicate", (c) => {
@@ -570,13 +570,13 @@ studioNewsletters.post("/:id/duplicate", (c) => {
   const baseSlug = `${source.slug}-copy`;
   let slug = baseSlug;
   let suffix = 2;
-  while (studioService.read().newsletters.some((b) => b.slug === slug)) {
+  while (readStudioDocument().newsletters.some((b) => b.slug === slug)) {
     slug = `${baseSlug}-${suffix}`;
     suffix += 1;
   }
 
   let created: Newsletter | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const sourceMessage = requireMessage(draft, source.messageId);
     const message = createMessageForOwner(
       draft,
@@ -626,7 +626,7 @@ studioNewsletters.get("/:id/stats", (c) => {
   const broadcast = findNewsletter(id);
   if (!broadcast) return c.json({ error: "not found" }, 404);
 
-  const data = studioService.read();
+  const data = readStudioDocument();
   const recipients = data.recipients
     .filter((r) => r.newsletterId === id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

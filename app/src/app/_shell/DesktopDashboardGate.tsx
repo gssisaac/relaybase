@@ -19,6 +19,7 @@ import { EnableEmailApiDialogHost } from "@/console/components/setup/common/upda
 import { ConsoleRouteGate } from "@/console/components/setup/common/layout/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import { shouldRedirectToCloudOnboarding } from "@/features/onboarding/lib/needs-cloud-onboarding";
 import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
 import { isStudioSettingsPath } from "@/lib/navigation/studio-settings-path";
 import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
@@ -159,7 +160,8 @@ type DashboardGateMode =
   | "desktop"
   | "web-owner"
   | "web-redirect-login"
-  | "web-redirect-studio";
+  | "web-redirect-studio"
+  | "web-redirect-onboarding";
 
 export function DesktopDashboardGate({
   children,
@@ -185,6 +187,11 @@ export function DesktopDashboardGate({
 
       if (auth === "login") {
         setGateMode("web-redirect-login");
+        return;
+      }
+
+      if (await shouldRedirectToCloudOnboarding()) {
+        setGateMode("web-redirect-onboarding");
         return;
       }
 
@@ -216,13 +223,18 @@ export function DesktopDashboardGate({
     }
     if (gateMode === "web-redirect-studio") {
       router.replace("/studio/dashboard");
+      return;
+    }
+    if (gateMode === "web-redirect-onboarding") {
+      router.replace("/onboarding");
     }
   }, [gateMode, pathname, router]);
 
   if (
     gateMode === "loading" ||
     gateMode === "web-redirect-login" ||
-    gateMode === "web-redirect-studio"
+    gateMode === "web-redirect-studio" ||
+    gateMode === "web-redirect-onboarding"
   ) {
     return <AppLoadingScreen />;
   }

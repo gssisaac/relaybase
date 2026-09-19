@@ -1,10 +1,10 @@
-import { studioService } from "@services/studio-service";
 import { requireMessage } from "@lib/messages/resolve";
 import { findSubscriberContactByUnsubscribeToken } from "@lib/subscriber-groups/resolver";
 import { setSubscriberContactSendStatus } from "@lib/subscriber-groups/send-status";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 function findContactForBroadcast(newsletterId: string, token: string) {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const broadcast = data.newsletters.find((b) => b.id === newsletterId);
   if (!broadcast?.subscriberGroupId) return { broadcast, contact: undefined };
   const contact = findSubscriberContactByUnsubscribeToken(broadcast.subscriberGroupId, token);
@@ -12,7 +12,7 @@ function findContactForBroadcast(newsletterId: string, token: string) {
 }
 
 function recordUnsubscribeOnRecipients(newsletterId: string, email: string, now: string) {
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     let newlyMarked = false;
     for (let i = 0; i < draft.recipients.length; i += 1) {
       const r = draft.recipients[i]!;
@@ -52,7 +52,7 @@ export function performBroadcastUnsubscribe(
   return {
     ok: true,
     email: contact.email,
-    listName: requireMessage(studioService.read(), broadcast.messageId).subject.trim() || "this list",
+    listName: requireMessage(readStudioDocument(), broadcast.messageId).subject.trim() || "this list",
   };
 }
 

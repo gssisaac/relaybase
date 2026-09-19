@@ -1,13 +1,14 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { Trigger, TriggerSource } from "@db/types";
 import { triggerSource } from "@lib/messages/resolve";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 function isActiveTrigger(row: Trigger): boolean {
   return row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.listStatus === "active" && row.status === "active";
 }
 
 export function findTriggerById(id: string): Trigger | undefined {
-  return studioService.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
+  return readStudioDocument().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
 }
 
 export function findTriggerForInbound(input: {
@@ -21,8 +22,7 @@ export function findTriggerForInbound(input: {
   const subject = input.subject?.trim().toLowerCase() ?? "";
   const fromDomain = input.fromEmail?.split("@")[1]?.trim().toLowerCase() ?? "";
 
-  const candidates = studioService
-    .read()
+  const candidates = readStudioDocument()
     .triggers.filter((a): a is Trigger => {
       if (!isActiveTrigger(a)) return false;
       return triggerSource(a).type === "mailbox_inbound";

@@ -1,11 +1,11 @@
-import { studioService } from "@services/studio-service";
 import type { Newsletter, NewsletterStats, Recipient, TrackingEvent } from "@db/types";
 import { requireMessage } from "@lib/messages/resolve";
 import { buildNewsletterDispatchProgress, type NewsletterDispatchProgress } from "@lib/newsletters/dispatch-progress";
 import { emptyNewsletterStats } from "@lib/newsletters/stats";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 function resolveNewsletterSubject(row: Newsletter): string {
-  return requireMessage(studioService.read(), row.messageId).subject;
+  return requireMessage(readStudioDocument(), row.messageId).subject;
 }
 
 export type SerializedNewsletter = {

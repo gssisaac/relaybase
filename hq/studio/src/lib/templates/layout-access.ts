@@ -1,6 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID } from "@services/studio-service";
 import type { Layout } from "@db/types";
 import { messageFileStore } from "@lib/messages/message-file-store";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
 
 export function canAccessCustomLayout(row: Layout): boolean {
   return row.accountLinkId === DEV_ACCOUNT_LINK_ID || row.accountLinkId === null;

@@ -1,4 +1,3 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import { buildNewsletterInProgressOverview } from "@lib/newsletters/overview";
 import { serializeNewsletter } from "@lib/newsletters/serialize";
 import { serializeTemplate } from "@lib/messages/serialize-template";
@@ -7,11 +6,13 @@ import { subscriberGroupToSummary } from "@lib/subscriber-groups/api-serialize";
 import { templateCatalogStore } from "@lib/templates/template-catalog-store";
 import { catalogTemplateMatchesTarget } from "@lib/templates/catalog-template-meta";
 import { buildDashboardSendingAggregate } from "@lib/dashboard/sending-aggregate";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
 
 export function buildStudioDashboard() {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const accountId = DEV_ACCOUNT_LINK_ID;
   const now = Date.now();
   const dayMs = 86_400_000;

@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type {
   Trigger,
   TriggerSource,
@@ -13,6 +12,8 @@ import { isWithinTriggerCooldown } from "@lib/triggers/cooldown";
 import { dispatchTriggerSend } from "@lib/triggers/dispatch";
 import { payloadHasRequiredFields, readPayloadString } from "@lib/triggers/payload-path";
 import { isEmailSuppressedForTrigger } from "@lib/triggers/suppression";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export type FireAutomationInput = {
   automation: Trigger;
@@ -91,14 +92,12 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
     input.idempotencyKey?.trim() ||
     defaultIdempotencyKey(automation.id, input.payload);
 
-  const existing = studioService
-    .read()
+  const existing = readStudioDocument()
     .triggerEvents.find(
       (e) => e.accountLinkId === DEV_ACCOUNT_LINK_ID && e.idempotencyKey === idempotencyKey,
     );
   if (existing) {
-    const send = studioService
-      .read()
+    const send = readStudioDocument()
       .triggerSends.find((s) => s.triggerEventId === existing.id);
     return {
       triggerEventId: existing.id,
@@ -140,7 +139,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
   let triggerSendId: string | null = null;
   let sendError: string | undefined;
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const aIdx = draft.triggers.findIndex((a) => a.id === automation.id);
     if (aIdx >= 0) {
       const stats = draft.triggers[aIdx]!.stats;
@@ -178,7 +177,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
   }
 
   triggerSendId = newId("autosend");
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.triggerSends.push({
       id: triggerSendId!,
       triggerId: automation.id,
@@ -208,13 +207,13 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
     }
   });
 
-  const freshAutomation = studioService.read().triggers.find((a) => a.id === automation.id)!;
-  const sendRow = studioService.read().triggerSends.find((s) => s.id === triggerSendId)!;
+  const freshAutomation = readStudioDocument().triggers.find((a) => a.id === automation.id)!;
+  const sendRow = readStudioDocument().triggerSends.find((s) => s.id === triggerSendId)!;
   const dispatchResult = await dispatchTriggerSend(freshAutomation, sendRow, input.payload);
 
   if (!dispatchResult.ok) {
     sendError = dispatchResult.error;
-    studioService.update((draft) => {
+    mutateStudioDocument((draft) => {
       const teIdx = draft.triggerEvents.findIndex((e) => e.id === triggerEventId);
       if (teIdx >= 0) {
         draft.triggerEvents[teIdx] = {
@@ -233,7 +232,7 @@ export async function fireTrigger(input: FireAutomationInput): Promise<FireAutom
     };
   }
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const teIdx = draft.triggerEvents.findIndex((e) => e.id === triggerEventId);
     if (teIdx >= 0) {
       draft.triggerEvents[teIdx] = {
@@ -260,7 +259,7 @@ export function recordUnmatchedTriggerEvent(input: {
 }): string {
   const id = newId("triggerevent");
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.triggerEvents.push({
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,

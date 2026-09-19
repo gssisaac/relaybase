@@ -91,6 +91,7 @@ import {
   signOutRedirectPath,
   signOutRelaybase,
 } from "@/lib/desktop/auth";
+import { getHqUser, subscribeHqAuth } from "@/lib/hq-auth/session";
 import { useHqStudioSignedIn } from "@/lib/hq-auth/use-hq-studio-signed-in";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
@@ -952,11 +953,15 @@ export function UserSidebar({
   const userId = useProductId();
   const router = useRouter();
   const studioSignedIn = useHqStudioSignedIn();
+  const [hqUser, setHqUser] = useState(() => getHqUser());
+  useEffect(() => subscribeHqAuth(() => setHqUser(getHqUser())), []);
   const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
   const { settings: emailSettingsHref } = useEmailPaths();
   const { settings: studioSettingsHref } = useStudioPaths();
   const isTeam = teamMode || mailSession.isTeamMode;
+  const canOpenConsole =
+    !isTeam && (hqUser === null || hqUser.type === "owner");
   const { availableAddresses, enabledAccounts } = useMailAccounts();
   const enabledSet = useMemo(
     () => new Set(enabledAccounts.map((e) => e.toLowerCase())),
@@ -1335,7 +1340,7 @@ export function UserSidebar({
             onSignOut={() => setSignOutOpen(true)}
           />
         )}
-        {!isTeam && mode !== "dashboard" ? (
+        {canOpenConsole && mode !== "dashboard" ? (
           <GoToConsoleButton
             collapsed={sidebarCollapsed}
             onGoToConsole={() => void switchMode("dashboard")}

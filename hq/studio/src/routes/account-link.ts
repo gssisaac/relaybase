@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import { serializeAccountLink } from "@lib/account-link/serialize";
 import {
   accountDefaultComplianceIdentityId,
   syncAccountComplianceMirror,
 } from "@lib/compliance/identity";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export const studioAccountLink = new Hono();
 
@@ -42,7 +43,7 @@ studioAccountLink.patch("/", async (c) => {
       ? undefined
       : body.sendApiKey?.trim() || null;
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     if (draft.account.id !== DEV_ACCOUNT_LINK_ID) return;
     if (domain !== undefined) draft.account.domain = domain;
     if (workerUrl !== undefined) draft.account.workerUrl = workerUrl;

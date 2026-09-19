@@ -1,4 +1,3 @@
-import { studioService } from "@services/studio-service";
 import type { Trigger, TriggerSend } from "@db/types";
 import { requireMessage } from "@lib/messages/resolve";
 import { sendMail } from "@lib/mail/sender";
@@ -12,13 +11,14 @@ import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "@lib/t
 import { triggerSendMailOptions, buildTriggerListUnsubscribeUrl, renderTriggerForSend } from "@lib/triggers/render";
 import { getTriggerLayoutHtml, getTriggerLayoutSchema } from "@lib/triggers/serialize";
 import { rollupTriggerStatsFromSends } from "@lib/triggers/stats";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export async function dispatchTriggerSend(
   automation: Trigger,
   send: TriggerSend,
   payload: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const message = requireMessage(studioService.read(), automation.messageId);
+  const message = requireMessage(readStudioDocument(), automation.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml =
     getTriggerLayoutHtml(layoutId) ?? getTriggerLayoutHtml("tpl-minimal") ?? "{{content}}";
@@ -69,7 +69,7 @@ export async function dispatchTriggerSend(
 
   const now = new Date().toISOString();
   if (!result.ok) {
-    studioService.update((draft) => {
+    mutateStudioDocument((draft) => {
       const sIdx = draft.triggerSends.findIndex((s) => s.id === send.id);
       if (sIdx >= 0) {
         draft.triggerSends[sIdx] = {
@@ -91,7 +91,7 @@ export async function dispatchTriggerSend(
     return result;
   }
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const sIdx = draft.triggerSends.findIndex((s) => s.id === send.id);
     if (sIdx >= 0) {
       draft.triggerSends[sIdx] = {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { RestoreLastRoute } from "@/components/RestoreLastRoute";
 import { SessionPhaseScreen } from "@/console/components/setup/common/layout/SessionPhaseScreen";
+import { shouldRedirectToCloudOnboarding } from "@/features/onboarding/lib/needs-cloud-onboarding";
 import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import {
@@ -33,7 +34,15 @@ export default function HomePage() {
         return;
       }
       if (auth === "ready") {
+        if (await shouldRedirectToCloudOnboarding()) {
+          router.replace("/onboarding");
+          return;
+        }
         router.replace(DEFAULT_DASHBOARD_PATH);
+        return;
+      }
+      if (await shouldRedirectToCloudOnboarding()) {
+        router.replace("/onboarding");
         return;
       }
       router.replace(DEFAULT_STUDIO_PATH);

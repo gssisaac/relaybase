@@ -1,23 +1,17 @@
 import type { Message } from "@db/types";
-import { getPostgresStoreCache } from "@lib/db/postgres-store-runtime";
 import { isCatalogBlueprintMessageId, isLibraryMessageId } from "@lib/messages/message-library";
+import { readStudioDocument } from "@services/studio/studio-document.service";
 
 function messageRows(): Message[] {
-  const cache = getPostgresStoreCache();
-  if (!cache) {
-    throw new Error("PostgreSQL store cache is not initialized");
-  }
-  return cache.messages;
+  return readStudioDocument().messages;
 }
 
-/** Editable messages live in the PostgreSQL store (`messages` table). */
+/** Editable messages live in PostgreSQL (`messages` table). */
 export const messageFileStore = {
-  /** Standalone saved copies (not trigger/newsletter-owned, not catalog presets). */
   listLibrary(): Message[] {
     return this.listAll().filter((m) => isLibraryMessageId(m.id));
   },
 
-  /** All editable messages for `/studio/messages` (includes trigger/newsletter bodies). */
   listForGallery(): Message[] {
     return this.listAll().filter((m) => !isCatalogBlueprintMessageId(m.id));
   },
@@ -32,10 +26,10 @@ export const messageFileStore = {
     return messageRows().find((m) => m.id === id);
   },
 
-  /** No-op — callers must persist via `studioService.update` (PostgreSQL snapshot). */
+  /** No-op — callers persist via `mutateStudioDocument`. */
   save(_message: Message): void {},
 
-  /** No-op — callers must remove via `studioService.update`. */
+  /** No-op — callers remove via `mutateStudioDocument`. */
   delete(_id: string): boolean {
     return true;
   },

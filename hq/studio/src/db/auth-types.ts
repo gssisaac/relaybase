@@ -1,3 +1,5 @@
+export type HqUserType = "owner" | "team";
+
 export type HqAuthUser = {
   id: string;
   /** Legacy email login; cloud accounts may use username only. */
@@ -5,6 +7,8 @@ export type HqAuthUser = {
   passwordHash: string;
   name: string | null;
   accountLinkId: string;
+  /** Cloud account role — console access requires owner. */
+  type: HqUserType;
   /** Cloud login id (unique). */
   username?: string | null;
   cfAccountId?: string | null;

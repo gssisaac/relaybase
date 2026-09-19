@@ -1,7 +1,8 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { SubscriberMember, Newsletter } from "@db/types";
 import { isEmailSuppressedForGroup } from "@lib/account/suppression";
 import { findSubscriberGroup } from "@lib/subscriber-groups/group";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument } from "@services/studio/studio-document.service";
 
 export function findSubscriberContactInGroup(
   groupId: string,
@@ -45,8 +46,7 @@ export function listSubscriberContactsForBroadcast(
   newsletterId: string,
   filters?: { status?: string; q?: string },
 ): Array<SubscriberMember & { subscriberGroupId: string }> {
-  const broadcast = studioService
-    .read()
+  const broadcast = readStudioDocument()
     .newsletters.find((b) => b.id === newsletterId && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
   if (!broadcast?.subscriberGroupId) return [];
 

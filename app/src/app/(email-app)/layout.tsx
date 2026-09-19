@@ -18,9 +18,10 @@ import {
   EmailCommandRuntimeProvider,
   GlobalCommandPalette,
 } from "@/email/commands";
+import { shouldRedirectToCloudOnboarding } from "@/features/onboarding/lib/needs-cloud-onboarding";
 import { ensureWebCloudAuth } from "@/lib/auth/cloud-worker-session";
 
-type MailGate = "loading" | "ready" | "login" | "studio-only";
+type MailGate = "loading" | "ready" | "login" | "studio-only" | "onboarding";
 
 function WebMailShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -35,12 +36,20 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    void ensureWebCloudAuth().then((result) => {
+    void (async () => {
+      const result = await ensureWebCloudAuth();
       if (!active) return;
-      if (result === "login") setGate("login");
-      else if (result === "studio-only") setGate("studio-only");
+      if (result === "login") {
+        setGate("login");
+        return;
+      }
+      if (await shouldRedirectToCloudOnboarding()) {
+        setGate("onboarding");
+        return;
+      }
+      if (result === "studio-only") setGate("studio-only");
       else setGate("ready");
-    });
+    })();
     return () => {
       active = false;
     };
@@ -51,6 +60,8 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
       const search = typeof window !== "undefined" ? window.location.search : "";
       const next = `${pathname}${search}`;
       router.replace(`/login?next=${encodeURIComponent(next)}`);
+    } else if (gate === "onboarding") {
+      router.replace("/onboarding");
     } else if (gate === "studio-only") {
       router.replace("/studio/dashboard");
     }

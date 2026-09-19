@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { SubscriberDataSource, SubscriberMember } from "@db/types";
 import { isEmailSuppressedForGroup } from "@lib/account/suppression";
 import {
@@ -12,13 +11,14 @@ import { findSubscriberGroup } from "@lib/subscriber-groups/group";
 import { setSubscriberContactSendStatus } from "@lib/subscriber-groups/send-status";
 import { syncSubscriberGroupAsync } from "@lib/subscriber-groups/sync";
 import { newId, newToken } from "@lib/shared/ids";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export const studioSubscriberGroups = new Hono();
 
 // GET /studio/subscriber-groups
 studioSubscriberGroups.get("/", (c) => {
-  const groups = studioService
-    .read()
+  const groups = readStudioDocument()
     .subscriberGroups.filter((g) => g.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .map(subscriberGroupToSummary);
   return c.json({ groups });
@@ -100,7 +100,7 @@ studioSubscriberGroups.post("/", async (c) => {
   }
 
   const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.account.domain = domain;
     if (workerUrl) draft.account.workerUrl = workerUrl;
   });
@@ -111,7 +111,7 @@ studioSubscriberGroups.post("/", async (c) => {
     ? mergeDataSource(null, body.dataSource, false)
     : null;
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.subscriberGroups.push({
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -185,7 +185,7 @@ studioSubscriberGroups.patch("/:id", async (c) => {
   }
 
   const dataSourceTouched = body.dataSource !== undefined;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     if (workerUrl) draft.account.workerUrl = workerUrl;
     const idx = draft.subscriberGroups.findIndex((g) => g.id === id);
     if (idx < 0) return;
@@ -226,7 +226,7 @@ studioSubscriberGroups.delete("/:id", (c) => {
   const id = c.req.param("id");
   const existed = Boolean(findSubscriberGroup(id));
   if (!existed) return c.json({ error: "not found" }, 404);
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.subscriberGroups = draft.subscriberGroups.filter((g) => g.id !== id);
   });
   return c.json({ ok: true });
@@ -278,7 +278,7 @@ studioSubscriberGroups.post("/:id/contacts", async (c) => {
     consentedAt: addedAt,
   };
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.subscriberGroups.findIndex((g) => g.id === group.id);
     if (idx >= 0) draft.subscriberGroups[idx]!.contacts.push(member);
   });
@@ -298,7 +298,7 @@ studioSubscriberGroups.delete("/:id/contacts", (c) => {
   const existed = group.contacts.some((m) => m.id === contactId);
   if (!existed) return c.json({ error: "not found" }, 404);
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.subscriberGroups.findIndex((g) => g.id === group.id);
     if (idx >= 0) {
       draft.subscriberGroups[idx]!.contacts = draft.subscriberGroups[idx]!.contacts.filter(

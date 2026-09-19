@@ -1,6 +1,7 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { AccountSuppressionReason } from "@db/types";
 import { newId } from "@lib/shared/ids";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export function normalizeSuppressionEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -13,7 +14,7 @@ export function isEmailSuppressedForGroup(
   accountLinkId: string = DEV_ACCOUNT_LINK_ID,
 ): boolean {
   const normalized = normalizeSuppressionEmail(email);
-  return studioService.read().accountSuppressions.some((s) => {
+  return readStudioDocument().accountSuppressions.some((s) => {
     if (s.accountLinkId !== accountLinkId) return false;
     if (s.email !== normalized) return false;
     if (s.subscriberGroupId === null) return true;
@@ -32,7 +33,7 @@ export function upsertAccountSuppression(input: {
   const email = normalizeSuppressionEmail(input.email);
   const now = new Date().toISOString();
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const existing = draft.accountSuppressions.find(
       (s) =>
         s.accountLinkId === accountLinkId &&

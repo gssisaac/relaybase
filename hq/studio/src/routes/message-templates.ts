@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import { forkMessageFromTemplate } from "@lib/messages/message";
 import { messageFileStore } from "@lib/messages/message-file-store";
 import { serializeMessage } from "@lib/messages/serialize-message";
 import { serializeTemplate } from "@lib/messages/serialize-template";
 import { templateCatalogStore } from "@lib/templates/template-catalog-store";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export const studioMessageTemplates = new Hono();
 
@@ -37,7 +38,7 @@ studioMessageTemplates.post("/:id/use", async (c) => {
 
   const now = new Date().toISOString();
   let forkedId: string | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const row = forkMessageFromTemplate(
       draft,
       templateId,

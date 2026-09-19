@@ -1,23 +1,14 @@
-import { loadStudioDataStore, persistStudioDataStore } from "@lib/orm/postgres-persist";
-import {
-  commitPostgresStoreCache,
-  readPostgresStoreClone,
-  setPostgresStoreCache,
-} from "@lib/db/postgres-store-runtime";
-
+import type { AccountComplianceSettings, Newsletter, StudioDataStore, Trigger } from "@db/types";
+import { ensureComplianceIdentitiesFromLegacy } from "@lib/compliance/identity";
+import { ensureOwnerMessageFiles } from "@lib/messages/ensure-owner-message-files";
+import { messageIdForOwner } from "@lib/messages/resolve";
+import { ensureDevScheduleFixtures } from "@lib/newsletters/dev-schedule-fixtures";
 import { emptyNewsletterStats, normalizeNewsletterStats } from "@lib/newsletters/stats";
-import { normalizeTriggerStats } from "@lib/triggers/stats";
 import { newId, newToken } from "@lib/shared/ids";
 import { getBuiltinTemplates } from "@lib/templates/builtin-templates";
-import { ensureDevScheduleFixtures } from "@lib/newsletters/dev-schedule-fixtures";
-import { ensureOwnerMessageFiles } from "@lib/messages/ensure-owner-message-files";
 import { templateCatalogStore } from "@lib/templates/template-catalog-store";
-import { messageIdForOwner } from "@lib/messages/resolve";
-import { ensureComplianceIdentitiesFromLegacy } from "@lib/compliance/identity";
-import type { AccountComplianceSettings, Newsletter, StudioDataStore, Trigger } from "@db/types";
-
-/** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
-export const DEV_ACCOUNT_LINK_ID = "dev";
+import { normalizeTriggerStats } from "@lib/triggers/stats";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
 
 function defaultCompliance(now: string): AccountComplianceSettings {
   return {
@@ -28,7 +19,7 @@ function defaultCompliance(now: string): AccountComplianceSettings {
   };
 }
 
-function defaultStore(): StudioDataStore {
+export function defaultStudioDocument(): StudioDataStore {
   const now = new Date().toISOString();
   const complianceId = newId("compliance");
   return {
@@ -86,7 +77,6 @@ function mapLegacySubscriberGroupId(id: string): string {
   return id.startsWith("audience_") ? `subscriber_${id.slice("audience_".length)}` : id;
 }
 
-/** Renamed audience → subscriber on load (shards, fields, id prefixes). */
 function migrateLegacyAudienceNaming(store: StudioDataStore): boolean {
   let touched = false;
   const legacy = store as StudioDataStore & { audienceGroups?: StudioDataStore["subscriberGroups"] };
@@ -217,7 +207,7 @@ function normalizeStore(store: StudioDataStore): { store: StudioDataStore; newsl
       const group = store.subscriberGroups.find((g) => g.id === row.subscriberGroupId);
       row.domain = group?.domain ?? "";
     }
-    row.stats = normalizeNewsletterStats(row.stats);
+    row.stats = normalizeNewsletterStats(row.stats ?? emptyNewsletterStats());
     if (row.startedAt === undefined) {
       row.startedAt =
         row.status === "draft" || row.status === "scheduled" ? null : (row.sentAt ?? null);
@@ -345,32 +335,3 @@ export function reconcileAndHydrateStore(parsed: StudioDataStore): { store: Stud
   if (ensureDevScheduleFixtures(store)) dirty = true;
   return { store, dirty };
 }
-
-export async function initPostgresStudioService(): Promise<void> {
-  let loaded = await loadStudioDataStore();
-  if (!loaded) {
-    const seeded = reconcileAndHydrateStore(defaultStore());
-    setPostgresStoreCache(seeded.store);
-    await persistStudioDataStore(seeded.store);
-    return;
-  }
-
-  const { store: reconciled, dirty } = reconcileAndHydrateStore(loaded);
-  setPostgresStoreCache(reconciled);
-  if (dirty) {
-    await persistStudioDataStore(reconciled);
-  }
-}
-
-/** In-memory PostgreSQL cache (authoritative at runtime). */
-export const studioService = {
-  read(): StudioDataStore {
-    return readPostgresStoreClone();
-  },
-  update(mutator: (draft: StudioDataStore) => void): StudioDataStore {
-    const draft = readPostgresStoreClone();
-    mutator(draft);
-    const { store: reconciled } = reconcileAndHydrateStore(draft);
-    return commitPostgresStoreCache(reconciled);
-  },
-};

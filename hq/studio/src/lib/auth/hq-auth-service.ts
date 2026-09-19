@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
 import { authService } from "@services/auth-service";
 import type { HqAuthUser } from "@db/auth-types";
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
+import { accountLinkService } from "@services/domain/account-link.service";
 import {
   verifyWorkerSignupProof,
   type WorkerSignupProof,
@@ -15,12 +15,14 @@ import { hashPassword, validatePasswordPolicy, verifyPassword } from "@lib/auth/
 import { hashOpaqueToken, newOpaqueToken } from "@lib/auth/token-hash";
 import { encryptPasstoken } from "@lib/vault/passtoken-vault";
 import { normalizeUsername, validateUsername } from "@lib/auth/username";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
 
 export type PublicHqUser = {
   id: string;
   email: string;
   name: string | null;
   accountLinkId: string;
+  type: "owner" | "team";
   username: string | null;
   cfAccountId: string | null;
   workerUrl: string | null;
@@ -32,6 +34,7 @@ function serializeUser(user: HqAuthUser): PublicHqUser {
     email: user.email,
     name: user.name,
     accountLinkId: user.accountLinkId,
+    type: user.type ?? "owner",
     username: user.username ?? null,
     cfAccountId: user.cfAccountId ?? null,
     workerUrl: user.workerUrl ?? null,
@@ -79,6 +82,7 @@ export function issueAccessToken(user: HqAuthUser): { accessToken: string; expir
       sub: user.id,
       email: user.email,
       accountLinkId: user.accountLinkId,
+      type: user.type ?? "owner",
       ...(user.username ? { username: user.username } : {}),
     },
     secret,
@@ -117,12 +121,7 @@ export function issueAuthResponse(c: Context, user: HqAuthUser) {
 }
 
 function linkWorkerUrlForNewAccount(workerUrl: string): void {
-  const normalized = workerUrl.trim().replace(/\/$/, "");
-  if (!normalized) return;
-  studioService.update((draft) => {
-    if (draft.account.id !== DEV_ACCOUNT_LINK_ID) return;
-    draft.account.workerUrl = normalized;
-  });
+  void accountLinkService.setWorkerUrl(DEV_ACCOUNT_LINK_ID, workerUrl);
 }
 
 export async function signupUser(input: {
@@ -160,19 +159,20 @@ export async function signupUser(input: {
   }
 
   const now = new Date().toISOString();
+  const signupType = input.workerProof.kind === "team" ? "team" : "owner";
+
   const user: HqAuthUser = {
     id: newId("usr"),
     email,
     passwordHash: hashPassword(input.password),
     name,
     accountLinkId: DEV_ACCOUNT_LINK_ID,
+    type: signupType,
     createdAt: now,
     updatedAt: now,
   };
 
-  authService.update((draft) => {
-    draft.users.push(user);
-  });
+  authService.createUser(user);
 
   linkWorkerUrlForNewAccount(input.workerUrl);
 
@@ -258,6 +258,7 @@ export function signupCloudUser(input: {
     passwordHash: hashPassword(input.password),
     name: username,
     accountLinkId: DEV_ACCOUNT_LINK_ID,
+    type: "owner",
     username,
     cfAccountId,
     workerUrl,
@@ -266,9 +267,7 @@ export function signupCloudUser(input: {
     updatedAt: now,
   };
 
-  authService.update((draft) => {
-    draft.users.push(user);
-  });
+  authService.createUser(user);
 
   linkWorkerUrlForNewAccount(workerUrl);
 
@@ -294,14 +293,8 @@ export function resetPasswordForCfAccount(
   const passwordHash = hashPassword(newPassword);
   const updatedAt = new Date().toISOString();
 
-  authService.update((draft) => {
-    const row = draft.users.find((u) => u.id === user.id);
-    if (row) {
-      row.passwordHash = passwordHash;
-      row.updatedAt = updatedAt;
-    }
-    draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== user.id);
-  });
+  authService.updateUser(user.id, { passwordHash, updatedAt });
+  authService.revokeAllRefreshTokensForUser(user.id);
 
   return {
     ok: true,
@@ -382,13 +375,7 @@ export function updateUserProfile(
   }
 
   const updatedAt = new Date().toISOString();
-  authService.update((draft) => {
-    const row = draft.users.find((u) => u.id === userId);
-    if (row) {
-      row.name = trimmed;
-      row.updatedAt = updatedAt;
-    }
-  });
+  authService.updateUser(userId, { name: trimmed, updatedAt });
 
   return {
     ok: true,
@@ -412,14 +399,8 @@ export function changeUserPassword(
   const passwordHash = hashPassword(newPassword);
   const updatedAt = new Date().toISOString();
 
-  authService.update((draft) => {
-    const row = draft.users.find((u) => u.id === userId);
-    if (row) {
-      row.passwordHash = passwordHash;
-      row.updatedAt = updatedAt;
-    }
-    draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== userId);
-  });
+  authService.updateUser(userId, { passwordHash, updatedAt });
+  authService.revokeAllRefreshTokensForUser(userId);
 
   return {
     ok: true,
@@ -448,17 +429,9 @@ export function resetPasswordWithToken(
   const passwordHash = hashPassword(newPassword);
   const updatedAt = new Date().toISOString();
 
-  authService.update((draft) => {
-    const u = draft.users.find((row) => row.id === user.id);
-    if (u) {
-      u.passwordHash = passwordHash;
-      u.updatedAt = updatedAt;
-    }
-    for (const row of draft.passwordResetTokens) {
-      if (row.id === record.id) row.used = true;
-    }
-    draft.refreshTokens = draft.refreshTokens.filter((t) => t.userId !== user.id);
-  });
+  authService.updateUser(user.id, { passwordHash, updatedAt });
+  authService.markPasswordResetUsed(record.id);
+  authService.revokeAllRefreshTokensForUser(user.id);
 
   return {
     ok: true,

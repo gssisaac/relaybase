@@ -14,9 +14,9 @@ import { wrapLayoutBodyHtml } from "@lib/render/layout-content-theme";
 import { markdownToPlainEmailText } from "@lib/render/markdown-to-plain-email-text";
 import { applyTriggerComplianceMergeTags, shouldIncludeListUnsubscribe } from "@lib/triggers/compliance";
 import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "@lib/triggers/merge-tags";
-import { studioService } from "@services/studio-service";
 import type { Trigger } from "@db/types";
 import { requireMessage } from "@lib/messages/resolve";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 function triggerAssetStem(triggerId: string): string {
   return triggerId.replace(/^automation_/, "").slice(0, 32) || "automation";
@@ -117,7 +117,7 @@ export type RenderAutomationInput = {
 export function renderTriggerForSend(input: RenderAutomationInput): string {
   const { automation, triggerSendId, templateHtml, studioBaseUrl } = input;
   const triggerId = automation.id;
-  const data = studioService.read();
+  const data = readStudioDocument();
   const message = requireMessage(data, automation.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
 

@@ -1,5 +1,4 @@
 import type { HqAuthStore } from "@db/auth-types";
-import { persistAuthStoreToPostgres } from "@lib/orm/postgres-auth-persist";
 
 let cache: HqAuthStore | null = null;
 let persistChain: Promise<void> = Promise.resolve();
@@ -23,15 +22,21 @@ export function readPostgresAuthClone(): HqAuthStore {
   return cloneAuthStore(cache);
 }
 
-export function commitPostgresAuthCache(next: HqAuthStore): HqAuthStore {
-  cache = next;
+/** Update in-memory auth cache only (after a targeted TypeORM write). */
+export function patchPostgresAuthCache(mutator: (draft: HqAuthStore) => void): HqAuthStore {
+  const draft = readPostgresAuthClone();
+  mutator(draft);
+  cache = draft;
+  return cloneAuthStore(draft);
+}
+
+export function enqueueAuthPersist(task: () => Promise<void>): void {
   persistChain = persistChain
-    .then(() => persistAuthStoreToPostgres(next))
+    .then(task)
     .catch((err) => {
       console.error("[auth-store] PostgreSQL persist failed:", err);
       throw err;
     });
-  return cloneAuthStore(next);
 }
 
 export async function flushPostgresAuthPersist(): Promise<void> {

@@ -1,4 +1,3 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { Trigger, TriggerSource } from "@db/types";
 import { findSubscriberGroup } from "@lib/subscriber-groups/group";
 import {
@@ -8,17 +7,19 @@ import {
   rowMessageId,
   triggerSource,
 } from "@lib/messages/resolve";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument } from "@services/studio/studio-document.service";
 
 export function findTrigger(id: string): Trigger | undefined {
-  return studioService.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
+  return readStudioDocument().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
 }
 
 export function getTriggerLayoutHtml(layoutId: string | null | undefined): string | null {
-  return getLayoutHtml(studioService.read(), layoutId);
+  return getLayoutHtml(readStudioDocument(), layoutId);
 }
 
 export function getTriggerLayoutSchema(layoutId: string | null | undefined) {
-  return getLayoutSchema(studioService.read(), layoutId);
+  return getLayoutSchema(readStudioDocument(), layoutId);
 }
 
 function maskTriggerSecret(source: TriggerSource): TriggerSource {
@@ -30,7 +31,7 @@ function maskTriggerSecret(source: TriggerSource): TriggerSource {
 }
 
 export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?: boolean }) {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const group = row.subscriberGroupId ? findSubscriberGroup(row.subscriberGroupId) : undefined;
   const source = triggerSource(row);
   const sourceOut =

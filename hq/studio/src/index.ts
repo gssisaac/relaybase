@@ -4,7 +4,7 @@ import app from "@/app";
 import { ensurePostgresBootstrap } from "@/bootstrap-postgres";
 import { assertPostgresStoreConfigured } from "@lib/orm/data-source";
 import { flushPostgresAuthPersist } from "@lib/db/postgres-auth-runtime";
-import { flushPostgresStorePersist } from "@lib/db/postgres-store-runtime";
+import { flushStudioDocumentPersist } from "@services/studio/studio-document.service";
 import { readEnv } from "@/env";
 import { startScheduler } from "@/scheduler";
 
@@ -20,7 +20,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     console.log(`[studio] ${signal} — flushing PostgreSQL writes…`);
     try {
-      await flushPostgresStorePersist();
+      await flushStudioDocumentPersist();
       await flushPostgresAuthPersist();
     } finally {
       process.exit(0);

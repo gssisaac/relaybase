@@ -1,13 +1,13 @@
-import { studioService } from "@services/studio-service";
 import type { Trigger } from "@db/types";
 import {
   accountDefaultComplianceIdentityId,
   complianceSettingsFromIdentity,
   findComplianceIdentity,
 } from "@lib/compliance/identity";
+import { readStudioDocument } from "@services/studio/studio-document.service";
 
 export function resolveComplianceIdentityForAutomation(triggerId: string) {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const automation = data.triggers.find((a) => a.id === triggerId);
   if (!automation) return undefined;
 

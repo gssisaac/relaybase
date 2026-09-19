@@ -1,5 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { Trigger } from "@db/types";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export function isEmailSuppressedForTrigger(
   automation: Trigger,
@@ -7,7 +8,7 @@ export function isEmailSuppressedForTrigger(
 ): boolean {
   if (!automation.applyMarketingSuppression) return false;
   const normalized = email.trim().toLowerCase();
-  const data = studioService.read();
+  const data = readStudioDocument();
   return data.accountSuppressions.some((s) => {
     if (s.accountLinkId !== DEV_ACCOUNT_LINK_ID || s.email !== normalized) return false;
     if (!s.subscriberGroupId) return true;

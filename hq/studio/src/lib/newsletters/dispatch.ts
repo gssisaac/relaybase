@@ -1,4 +1,3 @@
-import { studioService } from "@services/studio-service";
 import type { SubscriberMember, Newsletter } from "@db/types";
 import { sendMail } from "@lib/mail/sender";
 import { resolveWorkerSendCredentials } from "@lib/mail/credentials";
@@ -13,6 +12,7 @@ import { DISPATCH_BATCH_SIZE } from "@lib/newsletters/dispatch-progress";
 import { requireMessage } from "@lib/messages/resolve";
 import { getNewsletterLayoutHtml, getNewsletterLayoutSchema } from "@lib/newsletters/serialize";
 import { rollupNewsletterStatsFromRecipients } from "@lib/newsletters/stats";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export { DISPATCH_BATCH_SIZE };
 
@@ -24,7 +24,7 @@ function enqueueNewsletterRecipients(
   members: SubscriberMember[],
   now: string,
 ): void {
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const existing = new Set(
       draft.recipients
         .filter((r) => r.newsletterId === broadcast.id)
@@ -56,7 +56,7 @@ function enqueueNewsletterRecipients(
 }
 
 function rollupStatsForBroadcast(newsletterId: string) {
-  const data = studioService.read();
+  const data = readStudioDocument();
   return rollupNewsletterStatsFromRecipients(
     data.recipients.filter((r) => r.newsletterId === newsletterId),
     data.trackingEvents.filter((e) => e.newsletterId === newsletterId),
@@ -64,7 +64,7 @@ function rollupStatsForBroadcast(newsletterId: string) {
 }
 
 function finalizeNewsletterDispatchIfIdle(newsletterId: string): boolean {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const idx = data.newsletters.findIndex((b) => b.id === newsletterId);
   if (idx < 0) return true;
   const broadcast = data.newsletters[idx]!;
@@ -79,7 +79,7 @@ function finalizeNewsletterDispatchIfIdle(newsletterId: string): boolean {
 
   const now = new Date().toISOString();
   const stats = rollupStatsForBroadcast(newsletterId);
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const rowIdx = draft.newsletters.findIndex((b) => b.id === newsletterId);
     if (rowIdx < 0) return;
     draft.newsletters[rowIdx] = {
@@ -100,7 +100,7 @@ export async function processNewsletterDispatchBatch(
   newsletterId: string,
   limit: number,
 ): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
-  const broadcast = studioService.read().newsletters.find((b) => b.id === newsletterId);
+  const broadcast = readStudioDocument().newsletters.find((b) => b.id === newsletterId);
   if (!broadcast || broadcast.status !== "sending") {
     return { sent: 0, failed: 0, skipped: 0, completed: true };
   }
@@ -120,12 +120,12 @@ async function runBroadcastDispatchBatch(
   newsletterId: string,
   limit: number,
 ): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
-  const broadcast = studioService.read().newsletters.find((b) => b.id === newsletterId);
+  const broadcast = readStudioDocument().newsletters.find((b) => b.id === newsletterId);
   if (!broadcast || broadcast.status !== "sending") {
     return { sent: 0, failed: 0, skipped: 0, completed: true };
   }
 
-  const message = requireMessage(studioService.read(), broadcast.messageId);
+  const message = requireMessage(readStudioDocument(), broadcast.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
 
@@ -133,8 +133,7 @@ async function runBroadcastDispatchBatch(
   let failed = 0;
   let skipped = 0;
 
-  const queued = studioService
-    .read()
+  const queued = readStudioDocument()
     .recipients.filter((r) => r.newsletterId === newsletterId && r.status === "queued")
     .slice(0, limit);
 
@@ -143,7 +142,7 @@ async function runBroadcastDispatchBatch(
     const now = new Date().toISOString();
     for (const recipient of queued) {
       failed += 1;
-      studioService.update((draft) => {
+      mutateStudioDocument((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
         if (idx < 0) return;
         draft.recipients[idx] = {
@@ -162,7 +161,7 @@ async function runBroadcastDispatchBatch(
     const now = new Date().toISOString();
     for (const recipient of queued) {
       failed += 1;
-      studioService.update((draft) => {
+      mutateStudioDocument((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
         if (idx < 0) return;
         draft.recipients[idx] = {
@@ -177,7 +176,7 @@ async function runBroadcastDispatchBatch(
   }
 
   for (const recipient of queued) {
-    const live = studioService.read().recipients.find((r) => r.id === recipient.id);
+    const live = readStudioDocument().recipients.find((r) => r.id === recipient.id);
     if (
       live &&
       (live.status === "delivered" ||
@@ -189,20 +188,19 @@ async function runBroadcastDispatchBatch(
       continue;
     }
 
-    const member = studioService
-      .read()
+    const member = readStudioDocument()
       .subscriberGroups.flatMap((g) => g.contacts)
       .find((m) => m.id === recipient.subscriberMemberId);
     if (!member || member.sendStatus !== "active") {
       skipped += 1;
-      studioService.update((draft) => {
+      mutateStudioDocument((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
         if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "skipped" };
       });
       continue;
     }
 
-    studioService.update((draft) => {
+    mutateStudioDocument((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
       if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "sending" };
     });
@@ -243,7 +241,7 @@ async function runBroadcastDispatchBatch(
       listUnsubscribeUrl,
     });
     const sentAt = new Date().toISOString();
-    studioService.update((draft) => {
+    mutateStudioDocument((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
       if (idx < 0) return;
       draft.recipients[idx] = {
@@ -258,7 +256,7 @@ async function runBroadcastDispatchBatch(
     else failed += 1;
   }
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.newsletters.findIndex((b) => b.id === newsletterId);
     if (idx < 0) return;
     draft.newsletters[idx] = {

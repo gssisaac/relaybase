@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 
 import { LoginForm } from "@/features/auth/components/LoginForm";
+import { resolveCloudOwnerLandingPath } from "@/features/onboarding/lib/needs-cloud-onboarding";
 import { hasCloudSession, cloudRefreshSession } from "@/lib/auth/cloud-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
@@ -20,13 +21,16 @@ export default function CloudLoginPage() {
     }
     let active = true;
     void (async () => {
+      const search =
+        typeof window !== "undefined" ? window.location.search : "";
+      const next = new URLSearchParams(search).get("next");
       if (hasCloudSession()) {
-        router.replace("/studio/dashboard");
+        router.replace(await resolveCloudOwnerLandingPath(next));
         return;
       }
       const ok = await cloudRefreshSession();
       if (!active) return;
-      if (ok) router.replace("/studio/dashboard");
+      if (ok) router.replace(await resolveCloudOwnerLandingPath(next));
     })();
     return () => {
       active = false;

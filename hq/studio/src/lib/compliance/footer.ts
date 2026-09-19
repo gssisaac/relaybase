@@ -1,10 +1,10 @@
-import { studioService } from "@services/studio-service";
 import {
   accountDefaultComplianceIdentityId,
   complianceSettingsFromIdentity,
   findComplianceIdentity,
   resolveComplianceIdentityForBroadcast,
 } from "@lib/compliance/identity";
+import { readStudioDocument } from "@services/studio/studio-document.service";
 
 export function complianceMergeValues(broadcastId?: string): {
   organizationName: string;
@@ -13,7 +13,7 @@ export function complianceMergeValues(broadcastId?: string): {
 } {
   let identity = broadcastId ? resolveComplianceIdentityForBroadcast(broadcastId) : undefined;
   if (!identity && broadcastId?.startsWith("msgtpl_")) {
-    const defaultId = accountDefaultComplianceIdentityId(studioService.read());
+    const defaultId = accountDefaultComplianceIdentityId(readStudioDocument());
     identity = defaultId ? findComplianceIdentity(defaultId) : undefined;
   }
   const compliance = complianceSettingsFromIdentity(identity);

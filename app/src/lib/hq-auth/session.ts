@@ -3,11 +3,14 @@
 import { getStudioApiBase } from "@/studio/api";
 import { studioAuthNotFoundMessage } from "@/studio/lib/studio-user-messages";
 
+export type HqUserType = "owner" | "team";
+
 export type HqUser = {
   id: string;
   email: string;
   name: string | null;
   accountLinkId: string;
+  type: HqUserType;
   username?: string | null;
   cfAccountId?: string | null;
   workerUrl?: string | null;
@@ -32,7 +35,10 @@ function emit() {
 export function applyHqAuthPayload(payload: AuthPayload): void {
   accessToken = payload.accessToken;
   accessExpiresAt = Date.now() + Math.max(5, payload.expiresIn) * 1000;
-  cachedUser = payload.user;
+  cachedUser = {
+    ...payload.user,
+    type: payload.user.type === "team" ? "team" : "owner",
+  };
   emit();
 }
 
@@ -196,9 +202,12 @@ export async function hqResetPassword(token: string, newPassword: string): Promi
 
 export async function hqFetchMe(): Promise<HqUser> {
   const payload = await authFetch<{ user: HqUser }>("/auth/me");
-  cachedUser = payload.user;
+  cachedUser = {
+    ...payload.user,
+    type: payload.user.type === "team" ? "team" : "owner",
+  };
   emit();
-  return payload.user;
+  return cachedUser;
 }
 
 export async function hqUpdateProfile(name: string): Promise<HqUser> {

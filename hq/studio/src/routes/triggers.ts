@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { TriggerPurpose, Trigger, TriggerSource } from "@db/types";
 import { createMessageForOwner, patchMessage } from "@lib/messages/message";
 import { triggerSource } from "@lib/messages/resolve";
@@ -30,12 +29,13 @@ import {
 import { sanitizeTemplateVariables } from "@lib/templates/variable-schema";
 import { isValidEmail } from "@lib/shared/email";
 import { newId, newToken } from "@lib/shared/ids";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export const studioTriggers = new Hono();
 
 studioTriggers.get("/", (c) => {
-  const rows = studioService
-    .read()
+  const rows = readStudioDocument()
     .triggers.filter((a) => a.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return c.json({ triggers: rows.map((row) => serializeTrigger(row)) });
@@ -61,7 +61,7 @@ studioTriggers.post("/", async (c) => {
 
   const name = body.name?.trim();
   if (!name) return c.json({ error: "Trigger name is required" }, 400);
-  const domain = body.domain?.trim().toLowerCase() || studioService.read().account.domain?.trim().toLowerCase();
+  const domain = body.domain?.trim().toLowerCase() || readStudioDocument().account.domain?.trim().toLowerCase();
   if (!domain) return c.json({ error: "Select a sending domain for this automation" }, 400);
 
   const purpose = purposeFromInput(body.purpose);
@@ -73,7 +73,7 @@ studioTriggers.post("/", async (c) => {
     source = defaultHttpWebhookTrigger();
   }
 
-  const data = studioService.read();
+  const data = readStudioDocument();
   const baseSlug = slugifyTrigger(name) || newId("automation").slice(0, 12);
   let slug = baseSlug;
   let suffix = 2;
@@ -85,7 +85,7 @@ studioTriggers.post("/", async (c) => {
   const id = newId("automation");
   const now = new Date().toISOString();
   let created: Trigger | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const message = createMessageForOwner(
       draft,
       {
@@ -171,7 +171,7 @@ studioTriggers.patch("/:id", async (c) => {
 
   if (body.complianceIdentityId !== undefined && body.complianceIdentityId !== null) {
     const identityId = body.complianceIdentityId.trim();
-    const exists = studioService.read().complianceIdentities.some((row) => row.id === identityId);
+    const exists = readStudioDocument().complianceIdentities.some((row) => row.id === identityId);
     if (!exists) return c.json({ error: "Compliance sender not found" }, 400);
   }
 
@@ -186,7 +186,7 @@ studioTriggers.patch("/:id", async (c) => {
 
   const now = new Date().toISOString();
   let updated: Trigger | null = null;
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     const row = draft.triggers[idx]!;
@@ -251,7 +251,7 @@ studioTriggers.post("/:id/activate", (c) => {
   }
 
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     draft.triggers[idx] = {
@@ -270,7 +270,7 @@ studioTriggers.post("/:id/pause", (c) => {
   if (!existing) return c.json({ error: "not found" }, 404);
 
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     draft.triggers[idx] = {
@@ -294,7 +294,7 @@ studioTriggers.post("/:id/rotate-webhook-secret", (c) => {
 
   const secret = newToken();
   const now = new Date().toISOString();
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     const idx = draft.triggers.findIndex((a) => a.id === id);
     if (idx < 0) return;
     const source = triggerSource(draft.triggers[idx]!);
@@ -340,7 +340,7 @@ studioTriggers.post("/:id/test-send", async (c) => {
   const triggerEventId = newId("triggerevent");
   const now = new Date().toISOString();
 
-  studioService.update((draft) => {
+  mutateStudioDocument((draft) => {
     draft.triggerEvents.push({
       id: triggerEventId,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
@@ -376,7 +376,7 @@ studioTriggers.post("/:id/test-send", async (c) => {
   });
 
   const automation = findTrigger(id)!;
-  const send = studioService.read().triggerSends.find((s) => s.id === sendId)!;
+  const send = readStudioDocument().triggerSends.find((s) => s.id === sendId)!;
   const result = await dispatchTriggerSend(automation, send, payload);
   if (!result.ok) {
     return c.json({ error: result.error, triggerSendId: sendId }, 502);
@@ -389,7 +389,7 @@ studioTriggers.get("/:id/activity", (c) => {
   const id = c.req.param("id")!;
   if (!findTrigger(id)) return c.json({ error: "not found" }, 404);
 
-  const data = studioService.read();
+  const data = readStudioDocument();
   const events = data.triggerEvents
     .filter((e) => e.triggerId === id)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))

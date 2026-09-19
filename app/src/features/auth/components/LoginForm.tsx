@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthPageBrandMark } from "@/console/components/setup/common/layout/AuthPageBrandMark";
+import { resolveCloudOwnerLandingPath } from "@/features/onboarding/lib/needs-cloud-onboarding";
 import { cloudLogin } from "@/lib/auth/cloud-session";
 
 export function LoginForm() {
@@ -27,7 +28,8 @@ export function LoginForm() {
     setError(null);
     try {
       await cloudLogin({ username: username.trim(), password });
-      router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
+      const landing = await resolveCloudOwnerLandingPath(next);
+      router.replace(landing);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {

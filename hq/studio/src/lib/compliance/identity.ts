@@ -1,17 +1,17 @@
-import { DEV_ACCOUNT_LINK_ID, studioService } from "@services/studio-service";
 import type { AccountComplianceSettings, ComplianceIdentity, StudioDataStore } from "@db/types";
 import { newId } from "@lib/shared/ids";
+import { DEV_ACCOUNT_LINK_ID } from "@services/studio/constants";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export function listComplianceIdentities(accountLinkId = DEV_ACCOUNT_LINK_ID): ComplianceIdentity[] {
-  return studioService
-    .read()
+  return readStudioDocument()
     .complianceIdentities.filter((row) => row.accountLinkId === accountLinkId)
     .sort((a, b) => a.name.localeCompare(b.name) || a.createdAt.localeCompare(b.createdAt));
 }
 
 export function findComplianceIdentity(id: string | null | undefined): ComplianceIdentity | undefined {
   if (!id) return undefined;
-  return studioService.read().complianceIdentities.find((row) => row.id === id);
+  return readStudioDocument().complianceIdentities.find((row) => row.id === id);
 }
 
 export function accountDefaultComplianceIdentityId(data: StudioDataStore): string | null {
@@ -23,7 +23,7 @@ export function accountDefaultComplianceIdentityId(data: StudioDataStore): strin
 export function resolveComplianceIdentityForBroadcast(
   newsletterId: string,
 ): ComplianceIdentity | undefined {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const broadcast = data.newsletters.find((b) => b.id === newsletterId);
   if (!broadcast) return undefined;
 

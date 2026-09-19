@@ -1,8 +1,7 @@
-import { studioService } from "@services/studio-service";
+import { readStudioDocument } from "@services/studio/studio-document.service";
 
 export function aggregateNewsletterLinkClicks(newsletterId: string) {
-  const events = studioService
-    .read()
+  const events = readStudioDocument()
     .trackingEvents.filter((e) => e.newsletterId === newsletterId && e.type === "click" && e.url);
   const byUrl = new Map<string, { url: string; clicks: number; uniqueRecipients: Set<string> }>();
   for (const event of events) {
@@ -21,5 +20,5 @@ export function aggregateNewsletterLinkClicks(newsletterId: string) {
       clicks: row.clicks,
       uniqueClicks: row.uniqueRecipients.size,
     }))
-    .sort((a, b) => b.clicks - a.clicks || a.url.localeCompare(b.url));
+    .sort((a, b) => b.clicks - a.clicks);
 }

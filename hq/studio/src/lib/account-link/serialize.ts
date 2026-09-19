@@ -1,8 +1,8 @@
-import { studioService } from "@services/studio-service";
 import { accountDefaultComplianceIdentityId } from "@lib/compliance/identity";
+import { readStudioDocument, mutateStudioDocument } from "@services/studio/studio-document.service";
 
 export function serializeAccountLink() {
-  const data = studioService.read();
+  const data = readStudioDocument();
   const account = data.account;
   return {
     id: account.id,

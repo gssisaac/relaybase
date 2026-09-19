@@ -4,6 +4,7 @@ export type HqAccessClaims = {
   sub: string;
   email: string;
   accountLinkId: string;
+  type?: "owner" | "team";
   username?: string;
 };
 

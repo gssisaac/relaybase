@@ -31,7 +31,7 @@ import { useOptionalProductId } from "@/lib/dashboard/shared/ProductContext";
 export const FeedbackDialog = observer(function FeedbackDialog() {
   const store = getFeedbackDraftStore();
   const pathname = usePathname();
-  const productId = useProductId();
+  const productId = useOptionalProductId();
   const session = useAppSession();
   const mailRuntime = useOptionalMailRuntime();
   const mailSession = mailRuntime?.session;

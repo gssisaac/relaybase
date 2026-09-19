@@ -100,18 +100,18 @@ describe("groupConversations", () => {
     const toCopy = inbound({
       key: "to-copy",
       messageId: "<same@mail>",
-      toEmail: "support@kloyapp.com",
-      toEmails: ["support@kloyapp.com"],
-      ccEmails: ["isaac@kloyapp.com"],
+      toEmail: "support@example.org",
+      toEmails: ["support@example.org"],
+      ccEmails: ["ada@example.org"],
       bodyPreview: "preview",
       receivedAt: "2026-08-10T02:38:00.000Z",
     });
     const ccCopy = inbound({
       key: "cc-copy",
       messageId: "<same@mail>",
-      toEmail: "isaac@kloyapp.com",
-      toEmails: ["support@kloyapp.com"],
-      ccEmails: ["isaac@kloyapp.com"],
+      toEmail: "ada@example.org",
+      toEmails: ["support@example.org"],
+      ccEmails: ["ada@example.org"],
       bodyText: "full body",
       bodyPreview: "preview",
       receivedAt: "2026-08-10T02:38:00.000Z",
@@ -131,13 +131,13 @@ describe("inboundMatchesAccount", () => {
   it("matches MIME Cc as well as envelope To", () => {
     const msg = inbound({
       key: "k",
-      toEmail: "support@kloyapp.com",
-      toEmails: ["support@kloyapp.com"],
-      ccEmails: ["isaac@kloyapp.com"],
+      toEmail: "support@example.org",
+      toEmails: ["support@example.org"],
+      ccEmails: ["ada@example.org"],
     });
-    assert.equal(inboundMatchesAccount(msg, "support@kloyapp.com"), true);
-    assert.equal(inboundMatchesAccount(msg, "isaac@kloyapp.com"), true);
-    assert.equal(inboundMatchesAccount(msg, "other@kloyapp.com"), false);
+    assert.equal(inboundMatchesAccount(msg, "support@example.org"), true);
+    assert.equal(inboundMatchesAccount(msg, "ada@example.org"), true);
+    assert.equal(inboundMatchesAccount(msg, "other@example.org"), false);
   });
 });
 
@@ -146,15 +146,15 @@ describe("filterSentForAccount / sentIsMeForAccount", () => {
     const sent: SentEmail[] = [
       {
         id: "s1",
-        from: "isaac@kloyapp.com",
+        from: "ada@example.org",
         to: "tozer@example.com",
         subject: "Re: Q",
-        bodyPreview: "from isaac",
+        bodyPreview: "from ada",
         sentAt: "2026-08-10T02:41:00.000Z",
       },
       {
         id: "s2",
-        from: "support@kloyapp.com",
+        from: "support@example.org",
         to: "tozer@example.com",
         subject: "Re: Q",
         bodyPreview: "from support",
@@ -162,12 +162,12 @@ describe("filterSentForAccount / sentIsMeForAccount", () => {
       },
     ];
     assert.deepEqual(
-      filterSentForAccount(sent, "support@kloyapp.com").map((m) => m.id),
+      filterSentForAccount(sent, "support@example.org").map((m) => m.id),
       ["s2"],
     );
     assert.equal(filterSentForAccount(sent, "all").length, 2);
-    assert.equal(sentIsMeForAccount("isaac@kloyapp.com", "support@kloyapp.com"), false);
-    assert.equal(sentIsMeForAccount("support@kloyapp.com", "support@kloyapp.com"), true);
-    assert.equal(sentIsMeForAccount("isaac@kloyapp.com", "all"), true);
+    assert.equal(sentIsMeForAccount("ada@example.org", "support@example.org"), false);
+    assert.equal(sentIsMeForAccount("support@example.org", "support@example.org"), true);
+    assert.equal(sentIsMeForAccount("ada@example.org", "all"), true);
   });
 });

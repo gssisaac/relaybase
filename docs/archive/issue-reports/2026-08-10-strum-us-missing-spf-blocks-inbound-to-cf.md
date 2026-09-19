@@ -7,13 +7,13 @@
 
 ## Summary
 
-Replies from `isaac@strum.us` (Google Workspace) to `isaac@letssayso.com` (Cloudflare Email Routing / Relaybase) were blocked, while the same address received mail from `gssisaac@gmail.com` within ~2 minutes. Dashboard showed `isaac@letssayso.com` inbound enabled with prior received count &gt; 0.
+Replies from `isaac@strum.us` (Google Workspace) to `isaac@letssayso.com` (Cloudflare Email Routing / Relaybase) were blocked, while the same address received mail from an external Gmail address within ~2 minutes. Dashboard showed `isaac@letssayso.com` inbound enabled with prior received count &gt; 0.
 
 ## Symptoms
 
 1. Forward `isaac@letssayso.com` → `isaac@strum.us` delivered successfully.
 2. Reply `isaac@strum.us` → `isaac@letssayso.com` blocked (immediate).
-3. Test from Gmail (`gssisaac@gmail.com` → `isaac@letssayso.com`) succeeded.
+3. Test from Gmail (external personal inbox → `isaac@letssayso.com`) succeeded.
 4. Second Workspace reply shortly after was blocked again.
 5. Not a Relaybase “address missing” issue: Accounts UI listed `isaac@letssayso.com` with inbound on and 3 received.
 

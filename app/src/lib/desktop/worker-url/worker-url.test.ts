@@ -18,16 +18,16 @@ describe("worker-url", () => {
 
   it("builds the default workers.dev URL from an account slug", () => {
     assert.equal(
-      buildDefaultWorkerUrl("GssIsaac"),
-      "https://relaybase-api.gssisaac.workers.dev",
+      buildDefaultWorkerUrl("AcmeCorp"),
+      "https://relaybase-api.acmecorp.workers.dev",
     );
     assert.equal(buildDefaultWorkerUrl("  my-account  "), "https://relaybase-api.my-account.workers.dev");
   });
 
   it("parses subdomain from default URL pattern", () => {
     assert.equal(
-      parseDefaultWorkerSubdomain("https://relaybase-api.gssisaac.workers.dev"),
-      "gssisaac",
+      parseDefaultWorkerSubdomain("https://relaybase-api.acmecorp.workers.dev"),
+      "acmecorp",
     );
     assert.equal(parseDefaultWorkerSubdomain("https://custom.example.com"), null);
   });

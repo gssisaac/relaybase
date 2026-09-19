@@ -96,7 +96,7 @@ Migrations live in `../relaybase-worker/db/log/migrations/` (separate from `db/a
 - the raw MIME head contains `content-type: multipart/report` / `message/delivery-status`, or
 - `Auto-Submitted: auto-generated`.
 
-`parseBounceDiagnostic` scans the first ~8 KB of raw MIME for `Final-Recipient`, `Diagnostic-Code`, and `Status` headers (DSN RFC 3464). `buildBouncePreview` produces a human-readable string like `Bounce: Status 5.1.1 — 550 … — to isaac@wedesk.so`.
+`parseBounceDiagnostic` scans the first ~8 KB of raw MIME for `Final-Recipient`, `Diagnostic-Code`, and `Status` headers (DSN RFC 3464). `buildBouncePreview` produces a human-readable string like `Bounce: Status 5.1.1 — 550 … — to ada@example.com`.
 
 `../relaybase-worker/src/lib/inbound-store.ts` uses this so a bounce with an empty body still stores a non-empty `bodyText` / `bodyPreview` — the inbox no longer shows `(empty message)`.
 

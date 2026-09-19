@@ -12,7 +12,7 @@ import {
 describe("splitQuotedBody / joinQuotedBody", () => {
   it("splits empty reply + On … wrote: quote (reply prefill)", () => {
     const quote =
-      "On Aug 9, 2026, 2:44 AM, gssisaac@gmail.com wrote:\n\n> Hello\n> > Nested";
+      "On Aug 9, 2026, 2:44 AM, alice@example.com wrote:\n\n> Hello\n> > Nested";
     const body = `\n\n${quote}`;
     const split = splitQuotedBody(body);
     assert.equal(split.reply, "");

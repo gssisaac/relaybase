@@ -13,11 +13,11 @@ import {
 const PEPPER = "ab".repeat(16);
 const ZIP =
   "https://github.com/strum-us/relaybase-worker/releases/latest/download/relaybase-worker-install.zip";
-const WORKER = "https://relaybase-api.gssisaac.workers.dev";
+const WORKER = "https://relaybase-api.acmecorp.workers.dev";
 
 describe("resolveManualWorkerUrl", () => {
   it("builds the default URL from a subdomain slug", () => {
-    assert.equal(resolveManualWorkerUrl("GssIsaac"), WORKER);
+    assert.equal(resolveManualWorkerUrl("AcmeCorp"), WORKER);
   });
 
   it("normalizes a full Worker URL", () => {
@@ -66,7 +66,7 @@ describe("buildWorkerInstallCommand", () => {
 describe("buildStorageInitCommand", () => {
   const cmd = buildStorageInitCommand({
     pepper: PEPPER,
-    workerUrl: "gssisaac",
+    workerUrl: "acmecorp",
   });
 
   it("creates D1 and R2 with the original commands", () => {
@@ -76,7 +76,7 @@ describe("buildStorageInitCommand", () => {
     assert.match(cmd, /npx wrangler deploy/);
     assert.match(
       cmd,
-      /curl -X POST https:\/\/relaybase-api\.gssisaac\.workers\.dev\/console\/init-db/,
+      /curl -X POST https:\/\/relaybase-api\.acmecorp\.workers\.dev\/console\/init-db/,
     );
   });
 

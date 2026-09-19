@@ -277,7 +277,7 @@ describe("AppSessionStore unlock", () => {
 
   it("refreshOwnerForWorker loads keyring flags for that Worker URL", async () => {
     const kembo = "https://relaybase-api.kembo.workers.dev";
-    const isaac = "https://relaybase-api.gssisaac.workers.dev";
+    const acme = "https://relaybase-api.acmecorp.workers.dev";
     const store = createStore({
       ownerSessionStatus: (url) =>
         Promise.resolve(
@@ -289,11 +289,11 @@ describe("AppSessionStore unlock", () => {
         ),
     });
     connectOwner(store);
-    store.setStatuses(ownerStatus({ hasPasstoken: false, workerUrl: isaac }), teamStatus({}));
+    store.setStatuses(ownerStatus({ hasPasstoken: false, workerUrl: acme }), teamStatus({}));
     await store.refreshOwnerForWorker(kembo);
     assert.equal(store.ownerStatus?.hasPasstoken, true);
     assert.equal(store.canTryOwnerBio, true);
-    await store.refreshOwnerForWorker(isaac);
+    await store.refreshOwnerForWorker(acme);
     assert.equal(store.ownerStatus?.hasPasstoken, false);
     assert.equal(store.canTryOwnerBio, false);
   });

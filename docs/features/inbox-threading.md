@@ -99,7 +99,7 @@ Do **not** reintroduce “every Sent is me” when an account filter is active.
 
 Compose / API / mobile send persist Sent via `storeSentMail`, then **also** ingest a copy for each To/Cc address that exists on this Worker with `inboundEnabled !== false` (`../relaybase-worker/src/lib/mail/local-deliver.ts`).
 
-Cloudflare Email Sending `EMAIL` binding accept is not delivery into `email()`. Same-account hairpins (e.g. `jon@kloyapp.com` → `isaac@wedesk.so`) can succeed in Sent + ops_log while `email()` never runs. Local ingest writes the same R2/D1 inbound atom the handler would, then enqueues `inbound_events` so desktop polling can refresh.
+Cloudflare Email Sending `EMAIL` binding accept is not delivery into `email()`. Same-account hairpins (e.g. `jon@example.org` → `ada@example.com`) can succeed in Sent + ops_log while `email()` never runs. Local ingest writes the same R2/D1 inbound atom the handler would, then enqueues `inbound_events` so desktop polling can refresh.
 
 RFC Message-ID `by-message-id` pointers still dedupe: if Email Routing later invokes `email()`, `storeInboundMail` returns `created: false` and does not notify twice.
 

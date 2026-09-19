@@ -1,11 +1,11 @@
 {
-  "version": "0.1.9",
-  "notes": "# Relaybase 0.1.9\n\nPairs with Worker install bundle **0.1.6**.\n\n## Highlights\n- Web owner console: full dashboard, Cloudflare OAuth auto-install, and Worker updates in the browser\n- Cross-device sidebar, UI, and draft persistence via the Worker\n- Mailbox-mode desktop updates stay at or below the connected Worker’s desktop ceiling\n\n## Changes\n- Add web Cloudflare OAuth auto-install (popup flow, configurable redirect, reuse after Back)\n- Give web owners full console and dashboard access, matching desktop\n- Show Worker update in the web console; hide Desktop update on web\n- Wire team web mail to the shared UI and Worker `/mobile/*` APIs\n- Persist sidebar/UI/draft state to Worker `account_state` for web parity\n- Preserve Worker secrets on redeploy and allow same-version reinstall\n- Gate mailbox-mode desktop updates against Worker `DESKTOP_VERSION`\n- Show global Worker install status in the sidebar\n- Allow text selection in mail detail and copy full sender addresses\n- Trust user confirmation for CF API token setup when the probe disagrees\n- Add mobile shell navigation, responsive console tables, and full-width web layout",
-  "pub_date": "2026-09-14T05:54:47.407Z",
+  "version": "0.1.10",
+  "notes": "# Relaybase 0.1.10\n\nPairs with Worker install bundle **0.1.8**.\n\n## Highlights\n\n- Stop post-install Email Routing auto-repair that spammed ops logs after Worker updates\n- Web console fixes for OAuth, session persistence, and admin recovery\n\n## Changes\n\n- Remove desktop post-install bulk Email Routing repair; owners repair drift from the console when needed (pairs with Worker 0.1.8 cron removal)\n- Fix web Cloudflare OAuth `invalid_request` on relaybase.email\n- Persist web owner refresh in tab sessionStorage; route unauthenticated web users to `/login`\n- Add `/recover-admin` for forgot-passtoken recovery\n- Fix web deploy (OpenNext standalone layout and app lockfile during build)\n- Gmail-style mobile layout for the mail list",
+  "pub_date": "2026-09-17T07:54:24.122Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.9.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlN2ZkRJTmw2SFJaR21qMC8weFpVYkh6ck90QTZReE1uQjJ0Z1JZc0NQOWtKKzkyQmw2eStibjB3MjZIYm5qbFloSWJpK2o1RU13SE1SNDQ2dXFtcGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5MzY1MjUyCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKYTRvLzhnMTVKSXhpSGFGRGppYlJuaTdNZEFXb3phajAyVWhHM29BcGY5c2g1blVnek5yNDFTY2dmcWtjdmRSNDJEUWx3eU9UM09KVnk2RnNhOXQrQnc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.10.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVzQ3dFV0h6YU9Ycno5WHpPNG9paVppemRFMC9oY1VOeU1uS2ZkWmh4Zk1idHU1cjRTdklZdmRhSHplZW5ySzVoNjhFS21LQjRaMHcxMm92cnFXamdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NjMxNjM2CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKeXd6NzhySTh1R0pMZHBUTkxMcGtkY0NHRG9CRFV3cGJGcFhZcHBqZmxlbW5GdHozK0grLy9tMWxMWGQrOVg1SUFqR2E5SWs3QUh1dFNXUW8yTm9iRGc9PQo="
     }
   }
 }

@@ -13,7 +13,7 @@ Every opened email — regular inbox mail (e.g. a Google Takeout notification), 
 
 1. Selecting any message in the inbox list showed `(empty message)` in the body area.
 2. The `To` field in the detail header was blank even though the message had recipients.
-3. Forwarded messages (`Fwd: …`) and bounce DSNs (`bounces@cf-bounce.kloyapp.com`) were affected identically — confirming it was not forward/bounce-specific.
+3. Forwarded messages (`Fwd: …`) and bounce DSNs (`bounces@cf-bounce.example.org`) were affected identically — confirming it was not forward/bounce-specific.
 4. R2 `meta.json` for the same messages carried full `bodyText` / `bodyHtml` / `toEmails`.
 
 ## Root cause
@@ -50,4 +50,4 @@ Cherry-picked `d8a5f52` onto the feature branch (new commit `b23efb2`):
 ## Related
 
 - `2026-08-10-send-log-false-positive-empty-disposition.md` — earlier report of the same `(empty message)` symptom on bounce DSNs; that issue was a subset of this broader client bug.
-- The forward-to-`isaac@isaaclee.xyz` bounce observed on 2026-08-11 21:01 KST is a real async bounce (CF Email Sending empty disposition), documented in the prior report; the UI empty display was this bug.
+- The forward-to-`ada@example.net` bounce observed on 2026-08-11 21:01 KST is a real async bounce (CF Email Sending empty disposition), documented in the prior report; the UI empty display was this bug.

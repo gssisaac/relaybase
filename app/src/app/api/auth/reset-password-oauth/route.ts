@@ -27,11 +27,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cloudflare account id missing." }, { status: 400 });
   }
 
-  const studioRes = await fetch(studioAuthUrl("/auth/reset-password/oauth"), {
+  let internalAuth: string;
+  try {
+    internalAuth = await internalStudioAuthHeader();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Server auth is misconfigured." },
+      { status: 503 },
+    );
+  }
+
+  const studioRes = await fetch(await studioAuthUrl("/auth/reset-password/oauth"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Relaybase-Internal-Auth": internalStudioAuthHeader(),
+      "X-Relaybase-Internal-Auth": internalAuth,
     },
     body: JSON.stringify({
       cfAccountId,

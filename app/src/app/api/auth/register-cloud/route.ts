@@ -51,11 +51,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const studioRes = await fetch(studioAuthUrl("/auth/signup/cloud"), {
+  let internalAuth: string;
+  try {
+    internalAuth = await internalStudioAuthHeader();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Server auth is misconfigured." },
+      { status: 503 },
+    );
+  }
+
+  const studioRes = await fetch(await studioAuthUrl("/auth/signup/cloud"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Relaybase-Internal-Auth": internalStudioAuthHeader(),
+      "X-Relaybase-Internal-Auth": internalAuth,
     },
     body: JSON.stringify({
       username: body.username,

@@ -34,4 +34,7 @@ interface R2Bucket {
 interface CloudflareEnv {
   hq_relaybase_feedback?: KVNamespace;
   hq_relaybase_feedback_r2?: R2Bucket;
+  HQ_INTERNAL_AUTH_SECRET?: string;
+  HQ_JWT_SECRET?: string;
+  STUDIO_UPSTREAM_URL?: string;
 }

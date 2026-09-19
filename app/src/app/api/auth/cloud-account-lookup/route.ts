@@ -20,12 +20,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "No Cloudflare account on session" }, { status: 401 });
   }
 
+  let internalAuth: string;
+  try {
+    internalAuth = await internalStudioAuthHeader();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Server auth is misconfigured." },
+      { status: 503 },
+    );
+  }
+
   const studioRes = await fetch(
-    studioAuthUrl(
+    await studioAuthUrl(
       `/auth/cloud-account-lookup?cfAccountId=${encodeURIComponent(accountId)}`,
     ),
     {
-      headers: { "X-Relaybase-Internal-Auth": internalStudioAuthHeader() },
+      headers: { "X-Relaybase-Internal-Auth": internalAuth },
       cache: "no-store",
     },
   );

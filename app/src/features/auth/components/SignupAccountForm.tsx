@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { readSignupInstallToken } from "@/features/auth/lib/signup-session";
+import { clearSignupSession, readSignupInstallToken } from "@/features/auth/lib/signup-session";
 import { useIdAvailability } from "@/features/auth/hooks/useIdAvailability";
 import { registerCloudAccount } from "@/lib/auth/cloud-session";
 import { getStudioApiBase } from "@/studio/lib/studio-origin";
@@ -76,7 +76,8 @@ export function SignupAccountForm() {
         confirmPassword,
         installToken,
       });
-      router.replace("/studio/dashboard");
+      clearSignupSession();
+      router.replace("/onboarding");
     } catch (err) {
       setAccountError(err instanceof Error ? err.message : "Could not create account");
     } finally {

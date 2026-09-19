@@ -35,7 +35,7 @@ export type MailboxHealthResult = {
 /**
  * Fetch `GET /console/mailbox-health` via the owner session. Used by the
  * Domains / Accounts pages to surface per-domain last inbound and flag stale
- * receive (the `wedesk.so` silent-receive case). Returns a null snapshot when
+ * receive (the silent-receive case). Returns a null snapshot when
  * the Worker/D1 is not configured yet.
  */
 export async function fetchMailboxHealth(

@@ -88,5 +88,15 @@
     "sizeBytes": 10629448,
     "version": "0.1.9",
     "arch": "aarch64"
+  },
+  "Relaybase.0.1.10.aarch64.dmg": {
+    "sizeBytes": 11267985,
+    "version": "0.1.10",
+    "arch": "aarch64"
+  },
+  "Relaybase.0.1.10.aarch64.app.tar.gz": {
+    "sizeBytes": 10626066,
+    "version": "0.1.10",
+    "arch": "aarch64"
   }
 }

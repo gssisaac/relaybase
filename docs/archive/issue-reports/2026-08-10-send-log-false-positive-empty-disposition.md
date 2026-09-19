@@ -7,7 +7,7 @@
 
 ## Summary
 
-Compose forward to `isaac@wedesk.so` appeared successful in Sent and Dashboard Log (HTTP 200, status OK), while the recipient never received the message. Instead, the sender inbox received an empty bounce DSN from `bounces@cf-bounce.kloyapp.com` with subject `Fwd: Question about where my screenshots go`.
+Compose forward to `ada@example.com` appeared successful in Sent and Dashboard Log (HTTP 200, status OK), while the recipient never received the message. Instead, the sender inbox received an empty bounce DSN from `bounces@cf-bounce.example.org` with subject `Fwd: Question about where my screenshots go`.
 
 ## Symptoms
 
@@ -16,7 +16,7 @@ Compose forward to `isaac@wedesk.so` appeared successful in Sent and Dashboard L
    - Status: **OK**
    - HTTP status: **200**
    - Details: `{"delivered":[],"queued":[]}`
-3. A second Log row (Inbound / Bounce / Failed) arrived at the same second for peer `isaac@wedesk.so`.
+3. A second Log row (Inbound / Bounce / Failed) arrived at the same second for peer `ada@example.com`.
 4. Opening the bounce message in the mail UI showed **`(empty message)`**.
 
 ## Root cause

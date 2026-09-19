@@ -30,7 +30,7 @@ The per-domain array JSON indexes are gone. R2 now holds **one folder per mail**
 | `sent/{domain}/_list.json` (array) | `sent/{domain}/{id}/meta.json` (+ `raw.eml` when compose/API wrote MIME) |
 | `sent/_sendlog/_index.json` | deleted — `listSendLogs` does `bucket.list({ prefix: "sent/_sendlog/" })` |
 | `RELAYBASE_INBOX_INDEX` D1 (inbound FTS only) | `RELAYBASE_MAIL` D1 (`mailbox_messages` + `mailbox_fts`, inbound **and** sent) |
-| Message-ID dedupe = full-domain `meta.json` scan (the `wedesk.so` ingest killer) | single-key `by-message-id/{id}` pointer GET |
+| Message-ID dedupe = full-domain `meta.json` scan (the large-mailbox ingest killer) | single-key `by-message-id/{id}` pointer GET |
 
 The Worker **binding name stays `INBOUND`**. The bucket name `relaybase-mailbox` is unchanged. Only object keys and the D1 binding changed.
 

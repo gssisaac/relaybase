@@ -81,15 +81,15 @@ void main() {
       expect(container.read(authProvider).isConfigured, isFalse);
 
       final ok = await auth.connect(
-        accountEmail: 'a@kloyapp.com',
+        accountEmail: 'a@example.org',
         password: 'pwA',
       );
       expect(ok, isTrue);
       final state = container.read(authProvider);
       expect(state.isConfigured, isTrue);
-      expect(state.config?.normalizedAccountEmail, 'a@kloyapp.com');
+      expect(state.config?.normalizedAccountEmail, 'a@example.org');
       expect(state.managedAccounts, hasLength(1));
-      expect(state.managedAccounts.first.email, 'a@kloyapp.com');
+      expect(state.managedAccounts.first.email, 'a@example.org');
     });
 
     test('connect on an existing email updates its password', () async {
@@ -97,8 +97,8 @@ void main() {
       addTearDown(container.dispose);
       final auth = container.read(authProvider.notifier);
 
-      await auth.connect(accountEmail: 'a@kloyapp.com', password: 'pwA');
-      await auth.connect(accountEmail: 'a@kloyapp.com', password: 'pwA2');
+      await auth.connect(accountEmail: 'a@example.org', password: 'pwA');
+      await auth.connect(accountEmail: 'a@example.org', password: 'pwA2');
 
       final state = container.read(authProvider);
       expect(state.managedAccounts, hasLength(1));
@@ -111,13 +111,13 @@ void main() {
       addTearDown(container.dispose);
       final auth = container.read(authProvider.notifier);
 
-      await auth.connect(accountEmail: 'a@kloyapp.com', password: 'pwA');
-      await auth.connect(accountEmail: 'b@kloyapp.com', password: 'pwB');
-      expect(container.read(authProvider).config?.normalizedAccountEmail, 'b@kloyapp.com');
+      await auth.connect(accountEmail: 'a@example.org', password: 'pwA');
+      await auth.connect(accountEmail: 'b@example.org', password: 'pwB');
+      expect(container.read(authProvider).config?.normalizedAccountEmail, 'b@example.org');
 
-      await auth.switchAccount('a@kloyapp.com');
+      await auth.switchAccount('a@example.org');
       final state = container.read(authProvider);
-      expect(state.config?.normalizedAccountEmail, 'a@kloyapp.com');
+      expect(state.config?.normalizedAccountEmail, 'a@example.org');
       expect(state.managedAccounts, hasLength(2));
     });
 
@@ -126,14 +126,14 @@ void main() {
       addTearDown(container.dispose);
       final auth = container.read(authProvider.notifier);
 
-      await auth.connect(accountEmail: 'a@kloyapp.com', password: 'pwA');
-      await auth.connect(accountEmail: 'b@kloyapp.com', password: 'pwB');
+      await auth.connect(accountEmail: 'a@example.org', password: 'pwA');
+      await auth.connect(accountEmail: 'b@example.org', password: 'pwB');
       // Active is b. Remove b -> a becomes active.
-      await auth.removeAccount('b@kloyapp.com');
+      await auth.removeAccount('b@example.org');
 
       final state = container.read(authProvider);
       expect(state.managedAccounts, hasLength(1));
-      expect(state.config?.normalizedAccountEmail, 'a@kloyapp.com');
+      expect(state.config?.normalizedAccountEmail, 'a@example.org');
     });
 
     test('removeAccount signs out when the last account is removed', () async {
@@ -141,10 +141,10 @@ void main() {
       addTearDown(container.dispose);
       final auth = container.read(authProvider.notifier);
 
-      await auth.connect(accountEmail: 'a@kloyapp.com', password: 'pwA');
+      await auth.connect(accountEmail: 'a@example.org', password: 'pwA');
       expect(container.read(authProvider).isConfigured, isTrue);
 
-      await auth.removeAccount('a@kloyapp.com');
+      await auth.removeAccount('a@example.org');
 
       final state = container.read(authProvider);
       expect(state.isConfigured, isFalse);

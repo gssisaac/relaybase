@@ -100,7 +100,7 @@ export function splitRecipients(
 }
 
 /**
- * Format a sender or recipient into full display format e.g. "Isaac Lee <isaac@example.com>",
+ * Format a sender or recipient into full display format e.g. "Ada Lovelace <ada@example.com>",
  * falling back to email or name if only one is present.
  */
 export function formatFullAddress(

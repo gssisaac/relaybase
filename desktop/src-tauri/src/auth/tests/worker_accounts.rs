@@ -5,18 +5,18 @@ use crate::auth::worker_accounts::{
 #[test]
 fn normalize_strips_trailing_slash() {
     assert_eq!(
-        normalize_worker_url(" https://relaybase-api.gssisaac.workers.dev/ "),
-        "https://relaybase-api.gssisaac.workers.dev"
+        normalize_worker_url(" https://relaybase-api.acmecorp.workers.dev/ "),
+        "https://relaybase-api.acmecorp.workers.dev"
     );
 }
 
 #[test]
 fn account_names_are_scoped_by_url() {
-    let a = "https://relaybase-api.gssisaac.workers.dev";
+    let a = "https://relaybase-api.acmecorp.workers.dev";
     let b = "https://relaybase-api.kembo.workers.dev";
     assert_eq!(
         passtoken_account(a),
-        "owner-passtoken:https://relaybase-api.gssisaac.workers.dev"
+        "owner-passtoken:https://relaybase-api.acmecorp.workers.dev"
     );
     assert_ne!(passtoken_account(a), passtoken_account(b));
     assert_ne!(session_account(a), session_account(b));
@@ -26,11 +26,11 @@ fn account_names_are_scoped_by_url() {
 #[test]
 fn urls_compare_case_insensitively() {
     assert!(worker_urls_equal(
-        "https://Relaybase-Api.Gssisaac.workers.dev/",
-        "https://relaybase-api.gssisaac.workers.dev"
+        "https://Relaybase-Api.Acmecorp.workers.dev/",
+        "https://relaybase-api.acmecorp.workers.dev"
     ));
     assert!(!worker_urls_equal(
-        "https://relaybase-api.gssisaac.workers.dev",
+        "https://relaybase-api.acmecorp.workers.dev",
         "https://relaybase-api.kembo.workers.dev"
     ));
 }

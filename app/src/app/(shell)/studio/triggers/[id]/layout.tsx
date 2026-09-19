@@ -4,7 +4,7 @@ import { TriggerDetailProvider } from "@/studio/pages/triggers/TriggerDetailCont
 import { TriggersHubProvider } from "@/studio/stores/triggers-hub";
 
 export function generateStaticParams() {
-  return [];
+  return [{ id: "_" }];
 }
 
 export default async function AutomationIdLayout({

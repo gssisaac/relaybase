@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { NewsletterDetailRouteLayout } from "@/studio/pages/newsletters/NewsletterDetailRouteLayout";
 
 export function generateStaticParams() {
-  return [];
+  return [{ id: "_" }];
 }
 
 export default async function NewsletterIdLayout({

@@ -65,7 +65,7 @@ void main() {
     test('legacy single-account keys become a one-element managed list', () async {
       await service.save(
         workerUrl: 'https://worker.example.com',
-        accountEmail: 'isaac@kloyapp.com',
+        accountEmail: 'ada@example.org',
         password: 'secret123',
       );
       // Drop the managed list so loadAccounts triggers migration.
@@ -73,7 +73,7 @@ void main() {
 
       final accounts = await service.loadAccounts();
       expect(accounts, hasLength(1));
-      expect(accounts.first.email, 'isaac@kloyapp.com');
+      expect(accounts.first.email, 'ada@example.org');
       expect(accounts.first.password, 'secret123');
       expect(accounts.first.workerUrl, 'https://worker.example.com');
       expect(accounts.first.isActive, isTrue);
@@ -88,13 +88,13 @@ void main() {
     test('persists multiple accounts and mirrors the active one to legacy keys', () async {
       final accounts = [
         const StoredAccount(
-          email: 'a@kloyapp.com',
+          email: 'a@example.org',
           password: 'pwA',
           workerUrl: 'https://w.example.com',
           isActive: false,
         ),
         const StoredAccount(
-          email: 'b@kloyapp.com',
+          email: 'b@example.org',
           password: 'pwB',
           workerUrl: 'https://w.example.com',
           isActive: true,
@@ -105,24 +105,24 @@ void main() {
       final loaded = await service.loadAccounts();
       expect(loaded, hasLength(2));
       expect(loaded.where((a) => a.isActive).toList(), hasLength(1));
-      expect(loaded.firstWhere((a) => a.isActive).email, 'b@kloyapp.com');
+      expect(loaded.firstWhere((a) => a.isActive).email, 'b@example.org');
 
       final legacy = await service.read();
       expect(legacy, isNotNull);
-      expect(legacy!.accountEmail, 'b@kloyapp.com');
+      expect(legacy!.accountEmail, 'b@example.org');
       expect(legacy.password, 'pwB');
     });
 
     test('promotes the first account when none is marked active', () async {
       await service.saveAccounts([
         const StoredAccount(
-          email: 'a@kloyapp.com',
+          email: 'a@example.org',
           password: 'pwA',
           workerUrl: 'https://w.example.com',
           isActive: false,
         ),
         const StoredAccount(
-          email: 'b@kloyapp.com',
+          email: 'b@example.org',
           password: 'pwB',
           workerUrl: 'https://w.example.com',
           isActive: false,
@@ -136,7 +136,7 @@ void main() {
     test('clears legacy keys and managed list when saving an empty list', () async {
       await service.saveAccounts([
         const StoredAccount(
-          email: 'a@kloyapp.com',
+          email: 'a@example.org',
           password: 'pwA',
           workerUrl: 'https://w.example.com',
           isActive: true,
@@ -151,12 +151,12 @@ void main() {
   group('JSON shape', () {
     test('round-trips through toJson/fromJson', () {
       const original = StoredAccount(
-        email: 'a@kloyapp.com',
+        email: 'a@example.org',
         password: 'pwA',
         workerUrl: 'https://w.example.com',
         isActive: true,
-        domain: 'kloyapp.com',
-        displayName: 'Isaac',
+        domain: 'example.org',
+        displayName: 'Ada',
       );
       final json = original.toJson();
       expect(jsonDecode(jsonEncode(json)), json);

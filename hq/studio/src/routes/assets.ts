@@ -4,18 +4,16 @@ import path from "node:path";
 import { Hono } from "hono";
 
 import { store } from "../db/store";
-import { DEFAULT_BRAND_LOGO_FILENAME } from "../lib/templates/brand-logo";
 import { newsletterAssetKey } from "../lib/assets/key";
 import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
 import { newId } from "../lib/shared/ids";
-import { FALLBACK_BRAND_LOGO_PNG } from "../lib/assets/fallback-brand-logo";
+import { readDefaultBrandLogoPng } from "../lib/templates/read-brand-logo-png";
 
 export const studioAssets = new Hono();
 
 // GET /studio/brand/relaybase-icon.png — default template logo when none uploaded
 studioAssets.get("/brand/relaybase-icon.png", (c) => {
-  const filePath = path.join(process.cwd(), "public", "brand", DEFAULT_BRAND_LOGO_FILENAME);
-  const buf = fs.existsSync(filePath) ? fs.readFileSync(filePath) : FALLBACK_BRAND_LOGO_PNG;
+  const buf = readDefaultBrandLogoPng();
   return new Response(buf, {
     headers: {
       "content-type": "image/png",

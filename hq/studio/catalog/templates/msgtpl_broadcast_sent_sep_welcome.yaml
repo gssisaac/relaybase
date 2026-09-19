@@ -1,0 +1,33 @@
+id: msgtpl_broadcast_sent_sep_welcome
+name: September Welcome
+description: What to expect from Product Updates and how to opt out
+subject: Welcome to the product list
+previewText: What to expect from Product Updates and how to opt out
+bodyMarkdown: |
+  Welcome, {{contact.name}} —
+
+  You are on **Product Updates**, our low-frequency list for release notes, beta invites, and occasional roadmap context. We typically send **once or twice a month**, never daily blasts.
+
+  **What you will get**
+
+  - Shipped features with enough detail to decide whether to turn them on.
+  - Links to docs — not vague marketing fluff.
+  - Clear unsubscribe on every message (one click, no login).
+
+  **What you will not get**
+
+  - Re-forwarded newsletters from other tools.
+  - Purchased lists or “growth hack” sequences.
+
+  While you are here, skim the [getting started guide](https://relaybase.com/docs/start) if you have not connected a domain yet.
+
+  Glad you are along for the ride,
+  Product team @ Relaybase
+layoutId: tpl-warm-sand
+templateVariables:
+  header.greeting_tag: Welcome to Product Updates
+category: null
+isBuiltin: true
+createdAt: 2026-08-28T12:00:00.000Z
+updatedAt: 2026-09-15T03:08:16.042Z
+

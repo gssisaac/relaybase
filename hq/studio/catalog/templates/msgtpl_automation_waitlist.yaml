@@ -1,0 +1,33 @@
+id: msgtpl_automation_waitlist
+name: Waitlist confirmation
+description: Release notes and beta invites — once or twice a month
+subject: You are on the product list
+previewText: Release notes and beta invites — once or twice a month
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  You are on the **Relaybase product list**. We use it for release notes, beta invites, and occasional roadmap context — typically once or twice a month, never daily blasts.
+
+  **What you will get**
+
+  - Shipped features with enough detail to decide whether to turn them on
+  - Links to docs, not vague launch fluff
+  - A one-click unsubscribe on every message (no login)
+
+  **What you will not get**
+
+  - Re-forwarded newsletters from other tools
+  - Purchased lists or “growth hack” sequences
+
+  While you wait for the next note, the [getting started guide](https://relaybase.com/docs/start) is the shortest path if you already have a domain.
+
+  Glad you are along for the ride,  
+  Product team @ Relaybase
+layoutId: tpl-warm-sand
+templateVariables:
+  header.greeting_tag: You are on the list
+category: null
+isBuiltin: true
+createdAt: 2026-09-05T12:10:00.000Z
+updatedAt: 2026-09-05T12:10:00.000Z
+

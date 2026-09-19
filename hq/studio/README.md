@@ -19,7 +19,9 @@ Listens on `http://localhost:32832` (override with `PORT`). Port **32831** is us
 | Path | Contents |
 |------|----------|
 | `data/store/*.json` | Sharded dev store (account, layouts, newsletters, triggers, subscriber groups, …) |
-| `data/templates/*.yaml` | Read-only template gallery blueprints |
+| `catalog/templates/*.yaml` | Read-only template gallery blueprints (committed; bundled on Workers) |
+| `public/templates/*/meta.yaml` | HTML layout shells (committed; bundled on Workers) |
+| `data/templates/*.yaml` | Legacy — migrated to `catalog/`; no longer used for the gallery |
 | `data/messages/*.yaml` | Editable message bodies (newsletters, triggers, library copies) |
 
 Override the data root with `STUDIO_DATA_DIR`.

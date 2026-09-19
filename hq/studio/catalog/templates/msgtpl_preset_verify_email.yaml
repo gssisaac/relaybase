@@ -1,0 +1,31 @@
+id: |-
+  msgtpl_preset_verify_email
+accountLinkId: |-
+  dev
+name: |-
+  Verify email (transactional)
+subject: |-
+  Verify your email
+previewText: |-
+  Confirm this address to finish creating your account
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  Confirm this address to finish creating your account.
+
+  [Verify email]({{trigger.verifyUrl}})
+
+  If you did not sign up, ignore this message.
+
+  — Relaybase
+layoutId: |-
+  tpl-minimal
+templateVariables: {}
+category: |-
+  transactional
+isPreset: true
+createdAt: |-
+  2026-09-17T04:32:33.810Z
+updatedAt: |-
+  2026-09-17T04:32:33.810Z
+

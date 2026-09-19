@@ -1,6 +1,16 @@
 import app from "./app";
 import { flushR2Storage, initR2Storage } from "./cf/storage-fs";
+import { primeWorkerBuiltinCatalog } from "./lib/templates/builtin-catalog";
+import { loadBundledCatalogTemplates } from "./lib/templates/builtin-catalog.bundled";
+import { primeWorkerBuiltinLayouts } from "./lib/templates/builtin-templates";
+import { loadBundledBuiltinLayouts } from "./lib/templates/builtin-layouts.bundled";
+import { loadBundledBrandLogoPng } from "./lib/templates/brand-logo.bundled";
+import { primeWorkerBrandLogoPng } from "./lib/templates/read-brand-logo-png";
 import { runSchedulerCron } from "./scheduler";
+
+primeWorkerBuiltinCatalog(loadBundledCatalogTemplates());
+primeWorkerBuiltinLayouts(loadBundledBuiltinLayouts());
+primeWorkerBrandLogoPng(loadBundledBrandLogoPng());
 
 export type StudioWorkerEnv = {
   STUDIO_DATA: {
@@ -18,6 +28,7 @@ export type StudioWorkerEnv = {
   HQ_INTERNAL_AUTH_SECRET?: string;
   STUDIO_API_SECRET?: string;
   HQ_AUTH_APP_URL?: string;
+  STUDIO_PUBLIC_BASE_URL?: string;
   NODE_ENV?: string;
 };
 
@@ -33,6 +44,7 @@ function applyEnv(env: StudioWorkerEnv): void {
   if (env.HQ_INTERNAL_AUTH_SECRET) process.env.HQ_INTERNAL_AUTH_SECRET = env.HQ_INTERNAL_AUTH_SECRET;
   if (env.STUDIO_API_SECRET) process.env.STUDIO_API_SECRET = env.STUDIO_API_SECRET;
   if (env.HQ_AUTH_APP_URL) process.env.HQ_AUTH_APP_URL = env.HQ_AUTH_APP_URL;
+  if (env.STUDIO_PUBLIC_BASE_URL) process.env.STUDIO_PUBLIC_BASE_URL = env.STUDIO_PUBLIC_BASE_URL;
   process.env.NODE_ENV = env.NODE_ENV ?? "production";
   process.env.STUDIO_DATA_DIR = DATA_ROOT;
 }

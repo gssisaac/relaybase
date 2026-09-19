@@ -11,12 +11,16 @@ import {
 } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
+import { wrapLayoutBodyHtml } from "@/studio/lib/layouts/layout-content-theme";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
+import { markdownToEmailHtml } from "@/studio/lib/markdown/markdown-to-email-html";
+import { applyGmailContentLinkStyles } from "@/lib/markdown-editor/utils/editor-markdown";
 import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
 } from "@/studio/lib/compliance/compliance-identity";
+import { defaultBrandLogoUrl } from "@/studio/lib/brand/brand-logo";
 import { studioApi, type StudioAccountCompliance, type StudioLayout } from "@/studio/api";
 
 const PREVIEW_RECIPIENT = {
@@ -109,6 +113,7 @@ export function useMessageRenderedPreview({
       shell,
       layout?.variablesSchema ?? null,
       resolvedTemplateVariables,
+      { defaultBrandLogoUrl: defaultBrandLogoUrl() },
     );
   }, [layout?.htmlSource, layout?.variablesSchema, templateId, resolvedTemplateVariables]);
 
@@ -127,7 +132,15 @@ export function useMessageRenderedPreview({
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyNewsletterMergeTags(wrapped, PREVIEW_RECIPIENT, previewMergeOptions);
     }
-    const rawContent = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const md = bodyMarkdown.trim();
+    const rawContent =
+      previewHtml ||
+      (md
+        ? wrapLayoutBodyHtml(
+            applyGmailContentLinkStyles(markdownToEmailHtml(md)),
+            templateId,
+          )
+        : "<p style='color:#94a3b8'>Nothing to preview yet</p>");
     const content = applyTemplateVariablesToComposeContent(rawContent, {
       ...contentVarsInput,
       plainText: false,

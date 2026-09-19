@@ -1,0 +1,30 @@
+id: msgtpl_automation_magic_link
+name: Magic link sign-in
+description: One-time link — expires in a few minutes
+subject: Your Relaybase sign-in link
+previewText: One-time link — expires in a few minutes
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  Use this one-time link to sign in to Relaybase:
+
+  [Continue to Relaybase]({{trigger.loginUrl}})
+
+  The link expires in **{{trigger.expiresInMinutes}} minutes**. After that you will need to request a new one from the sign-in screen.
+
+  **Request details**
+
+  - Account: {{contact.email}}
+  - Device: {{trigger.deviceSummary}}
+  - When: {{trigger.requestedAt}}
+
+  If you did not try to sign in, you can ignore this email. Do not forward the link — it signs in whoever opens it.
+
+  — Relaybase
+layoutId: tpl-minimal
+templateVariables: {}
+category: null
+isBuiltin: true
+createdAt: 2026-09-02T09:10:00.000Z
+updatedAt: 2026-09-02T09:10:00.000Z
+

@@ -1,0 +1,41 @@
+id: msgtpl_broadcast_sent_sep_digest
+name: "Weekly Digest #36"
+description: Scheduler batches, stat reconciliation, and a Scale send preview
+subject: "Digest #36 — queue drain and rollups"
+previewText: Scheduler batches, stat reconciliation, and a Scale send preview
+bodyMarkdown: |
+  Hello {{contact.name}},
+
+  **Weekly Digest #36** — a concise read for engineers following the Scale broadcast workstream.
+
+  ### Shipped
+
+  * **Queue drain** — large audiences send in batches instead of blocking the HTTP request.
+
+  * **Stats rollup** — recipient ledger reconciles opens/clicks from tracking pixels.
+
+  * **Send credentials sync** — desktop app provisions a Worker key before dispatch.
+
+  ### In progress
+
+  * List-Unsubscribe headers through `/v1/send`
+
+  * Webhook path for async bounces
+
+  ### Worth your time
+
+   
+
+  Reply if you want early access to the bounce webhook — we are testing with three design partners.
+
+  — Engineering updates
+layoutId: tpl-curated-digest
+templateVariables:
+  digest.title: Engineering Digest
+  digest.read_time: 4 min read
+  digest.edition: "Weekly edition #36"
+category: null
+isBuiltin: true
+createdAt: 2026-09-07T09:00:00.000Z
+updatedAt: 2026-09-15T17:02:01.487Z
+

@@ -1,0 +1,32 @@
+id: msgtpl_automation_welcome
+name: Welcome after signup
+description: Your account is live — three things to do before you invite the team
+subject: Welcome to Relaybase
+previewText: Your account is live — three things to do before you invite the team
+bodyMarkdown: |-
+  Welcome, {{contact.name}} —
+
+  Your Relaybase account is live. Mail you send from here uses **your** verified domain and Worker — not a shared marketing subdomain.
+
+  ### Do these three things first
+
+  1. Connect DNS for your sending domain if you have not already.
+  2. Create an audience group and import people who already opted in.
+  3. Send a test broadcast to your own inbox before you invite the team.
+
+  [Open the getting started guide](https://relaybase.com/docs/start) · [Watch the 8-minute demo](https://relaybase.com/demo)
+
+  You will also get a separate verification email if this address is not confirmed yet. That message is only for the click — this one is the map.
+
+  If you want a walkthrough, reply to this thread. We still onboard early accounts by hand.
+
+  Glad you are here,  
+  The Relaybase team
+layoutId: tpl-warm-sand
+templateVariables:
+  header.greeting_tag: Welcome aboard
+category: null
+isBuiltin: true
+createdAt: 2026-09-01T10:05:00.000Z
+updatedAt: 2026-09-01T10:05:00.000Z
+

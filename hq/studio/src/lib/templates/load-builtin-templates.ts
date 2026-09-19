@@ -1,4 +1,4 @@
-import fs from "../../cf/storage-fs";
+import nodeFs from "node:fs";
 import path from "node:path";
 
 import { parseTemplateMetaYaml, type ParsedTemplateMeta } from "./parse-template-meta";
@@ -21,11 +21,11 @@ export function resolveBuiltinTemplatesDir(): string {
 
 function readTemplateDir(dirPath: string): BuiltinTemplate | null {
   const metaPath = path.join(dirPath, META_FILE);
-  if (!fs.existsSync(metaPath)) return null;
+  if (!nodeFs.existsSync(metaPath)) return null;
 
   let parsed: ReturnType<typeof parseTemplateMetaYaml>;
   try {
-    parsed = parseTemplateMetaYaml(fs.readFileSync(metaPath, "utf8"));
+    parsed = parseTemplateMetaYaml(nodeFs.readFileSync(metaPath, "utf8"));
   } catch {
     return null;
   }
@@ -39,15 +39,14 @@ function readTemplateDir(dirPath: string): BuiltinTemplate | null {
   };
 }
 
-/** Load built-in design templates from `public/templates/<slug>/meta.yaml`. */
-export function loadBuiltinTemplates(): BuiltinTemplate[] {
+function loadFromCommittedDir(): BuiltinTemplate[] {
   const root = resolveBuiltinTemplatesDir();
-  if (!fs.existsSync(root)) {
+  if (!nodeFs.existsSync(root)) {
     console.warn(`[studio] built-in templates dir missing: ${root}`);
     return [];
   }
 
-  const entries = fs.readdirSync(root, { withFileTypes: true });
+  const entries = nodeFs.readdirSync(root, { withFileTypes: true });
   const templates: BuiltinTemplate[] = [];
 
   for (const entry of entries) {
@@ -58,4 +57,19 @@ export function loadBuiltinTemplates(): BuiltinTemplate[] {
 
   templates.sort((a, b) => a.name.localeCompare(b.name));
   return templates;
+}
+
+/** Set by `worker.ts` from Wrangler-bundled layout meta YAML. */
+let workerBundledLayouts: BuiltinTemplate[] | null = null;
+
+export function primeWorkerBuiltinLayouts(templates: BuiltinTemplate[]): void {
+  workerBundledLayouts = templates;
+}
+
+/** Load built-in design templates from `public/templates/<slug>/meta.yaml`. */
+export function loadBuiltinTemplates(): BuiltinTemplate[] {
+  if (workerBundledLayouts) {
+    return workerBundledLayouts;
+  }
+  return loadFromCommittedDir();
 }

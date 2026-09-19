@@ -1,0 +1,26 @@
+id: msgtpl_automation_verify_email
+name: Verify email
+description: Confirm this address to finish creating your account
+subject: Verify your email
+previewText: Confirm this address to finish creating your account
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  Confirm this address so we can finish creating your Relaybase account.
+
+  [Verify email]({{trigger.verifyUrl}})
+
+  This link expires in **30 minutes**. If the button does not work, paste this URL into your browser:
+
+  {{trigger.verifyUrl}}
+
+  If you did not create an account, you can ignore this message — nothing will be activated on {{contact.email}}.
+
+  — Relaybase
+layoutId: tpl-minimal
+templateVariables: {}
+category: null
+isBuiltin: true
+createdAt: 2026-09-01T10:00:00.000Z
+updatedAt: 2026-09-01T10:00:00.000Z
+

@@ -1,6 +1,7 @@
 import { loadBuiltinTemplates, type BuiltinTemplate } from "./load-builtin-templates";
 
 export type { BuiltinTemplate };
+export { primeWorkerBuiltinLayouts } from "./load-builtin-templates";
 
 /** Must match `public/templates/plain-text/meta.yaml`. */
 export const PLAIN_TEXT_TEMPLATE_ID = "tpl-plain-text";
@@ -11,7 +12,7 @@ export function isPlainTextTemplate(templateId: string | null | undefined): bool
 
 let cachedBuiltinTemplates: BuiltinTemplate[] | null = null;
 
-/** Built-in templates read from disk (`public/templates/*`). */
+/** Built-in HTML layout shells (`public/templates/*`). */
 export function getBuiltinTemplates(): BuiltinTemplate[] {
   if (process.env.NODE_ENV === "production" && cachedBuiltinTemplates) {
     return cachedBuiltinTemplates;

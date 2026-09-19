@@ -1,0 +1,36 @@
+id: msgtpl_broadcast_sent_aug_security
+name: Mid-August Security Note
+description: A short security note for accounts using Scale send keys
+subject: Rotate your domain-scoped API keys
+previewText: A short security note for accounts using Scale send keys
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  We are asking all early Scale testers to **rotate domain-scoped API keys** this week.
+
+  **Why now**
+
+  * Scale stores a send key to call `POST /v1/send` on your Worker.
+
+  * Keys issued before August may have been copied into local dev stores or shared in screenshots.
+
+  **What to do**
+
+  1. Console → **API Keys** → revoke the old `Studio Newsletter` key if present.
+
+  1. Send a test mail from Scale — the app will issue a fresh key automatically.
+
+  1. Confirm the `from` address matches the key domain (`@relaybase.xyz`).
+
+  This takes about two minutes and prevents stale credentials from lingering in JSON fixtures.
+
+  Stay safe,\
+   Relaybase Security
+layoutId: tpl-dark-obsidian
+templateVariables:
+  header.badge_text: SECURITY
+category: null
+isBuiltin: true
+createdAt: 2026-08-18T11:00:00.000Z
+updatedAt: 2026-09-15T17:06:48.261Z
+

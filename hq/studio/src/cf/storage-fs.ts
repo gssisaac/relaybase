@@ -35,6 +35,11 @@ export function storageDataRoot(): string {
   return dataRoot;
 }
 
+/** True when Studio runs on Cloudflare Workers with R2-backed virtual fs. */
+export function isR2StorageMode(): boolean {
+  return mode === "r2";
+}
+
 export function useNodeFilesystem(root: string): void {
   mode = "node";
   r2Bucket = null;

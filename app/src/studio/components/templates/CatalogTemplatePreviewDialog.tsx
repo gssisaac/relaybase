@@ -14,6 +14,7 @@ import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { CatalogTemplateUseActions } from "@/studio/components/templates/CatalogTemplateUseActions";
 import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
+import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
 import { useCatalogTemplateRenderedPreview } from "@/studio/lib/templates/use-catalog-template-rendered-preview";
 
 export function CatalogTemplatePreviewDialog({
@@ -111,7 +112,7 @@ export function CatalogTemplatePreviewDialog({
             fromEmail="you@example.com"
             toEmail={PREVIEW_RECIPIENT.email}
             bodyHtml={renderedPreview}
-            bodyPlainText={renderedPreview}
+            bodyPlainText={plainEmailBodyFromMarkdown(bodyMarkdown)}
             previewIsPlainText={plainTextTemplate}
             device={device}
           />

@@ -1,0 +1,22 @@
+id: msgtpl_broadcast_failed_smtp
+name: Broken SMTP test
+description: Synthetic send used to validate SMTP error handling
+subject: "[Internal] Deliverability probe — do not forward"
+previewText: Synthetic send used to validate SMTP error handling
+bodyMarkdown: |
+  Hi {{contact.name}},
+
+  This message is part of an **internal deliverability probe**. It intentionally exercises failure paths (invalid routes, key mismatch, or synthetic SMTP errors) so Scale can mark recipients as `failed` without affecting production stats.
+
+  **You can ignore this broadcast** unless you are actively debugging send pipelines.
+
+  If you received this in error, use the unsubscribe link — we will remove probe addresses from the Engineering list.
+
+  — Relaybase QA
+layoutId: tpl-minimal
+templateVariables: {}
+category: null
+isBuiltin: true
+createdAt: 2026-09-10T08:30:00.000Z
+updatedAt: 2026-09-15T03:08:16.042Z
+

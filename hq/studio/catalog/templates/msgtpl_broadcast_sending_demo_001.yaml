@@ -1,0 +1,41 @@
+id: msgtpl_broadcast_sending_demo_001
+name: Weekly Engineering Digest
+description: Worker send API, Scale dispatch, and inbox test accounts
+subject: This week in platform engineering
+previewText: Worker send API, Scale dispatch, and inbox test accounts
+bodyMarkdown: |
+  Hey {{contact.name}},
+
+  Welcome to **Engineering Weekly** — a short note on what the platform team shipped and what is landing next.
+
+  **This week**
+
+  * Wired Scale `sendMail` to your Worker `POST /v1/send` with domain-scoped keys.
+
+  * Registered `@relaybase.email` mailboxes on the shared dev Worker for realistic inbox tests.
+
+  * Reset demo `store.json` fixtures to draft so you can re-run sends without seed noise.
+
+  **Next week**
+
+  * Public `STUDIO_PUBLIC_BASE_URL` for tracking pixels outside localhost.
+
+  * Bounce webhook ingestion from Worker events.
+
+  Questions? Drop a note in `#eng-relaybase` or reply here.
+
+  — Platform engineering
+
+  {{vars.author.name}}
+layoutId: tpl-publication-post
+templateVariables:
+  post.title: Weekly Engineering Digest
+  post.subtitle: Worker send API, Scale dispatch, and inbox test accounts
+  post.date: September 16, 2026
+  author.name: Isaac Lee
+  author.avatar: https://avatars.githubusercontent.com/u/4336264?v=4
+category: null
+isBuiltin: true
+createdAt: 2026-09-15T10:00:00.000Z
+updatedAt: 2026-09-16T16:29:39.402Z
+

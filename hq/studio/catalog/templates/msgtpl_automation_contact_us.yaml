@@ -1,0 +1,27 @@
+id: msgtpl_automation_contact_us
+name: Contact us auto-reply
+description: A person will follow up within one business day
+subject: We received your message
+previewText: A person will follow up within one business day
+bodyMarkdown: |-
+  Hi {{contact.name}},
+
+  Thanks for writing in. We received your note and logged it for the team.
+
+  > {{trigger.message}}
+
+  Someone will follow up at **{{contact.email}}** within one business day. If this is about a live send (bounces, a stuck broadcast, or a domain that will not verify), reply to this email with the domain and we will jump the queue.
+
+  In the meantime:
+
+  - [DNS and domain setup](https://relaybase.com/docs/domains)
+  - [Broadcast troubleshooting](https://relaybase.com/docs/broadcasts)
+
+  — Strum Corp / Relaybase
+layoutId: tpl-card
+templateVariables: {}
+category: null
+isBuiltin: true
+createdAt: 2026-09-05T12:00:00.000Z
+updatedAt: 2026-09-05T12:00:00.000Z
+

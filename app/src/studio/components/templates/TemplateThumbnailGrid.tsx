@@ -2,6 +2,7 @@
 
 import { TemplateThumbnailPreview } from "@/studio/components/templates/TemplateThumbnailPreview";
 import { studioGalleryGridClassName } from "@/studio/lib/gallery/studio-gallery-grid";
+import { isPresetCatalogTemplate } from "@/studio/lib/messages/message-library";
 import type { StudioLayout, StudioTemplate } from "@/studio/api";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +53,7 @@ export function TemplateThumbnailGrid({
                 templateId={template.id}
                 template={template}
                 layout={layout}
-                isPreset
+                isPreset={isPresetCatalogTemplate(template.id)}
               />
               <div className="space-y-0.5 border-t px-3 py-2.5">
                 <p className="truncate text-sm font-medium">{template.name}</p>

@@ -28,3 +28,4 @@ hq/studio/data/*
 
 # Local dated archives of hq/studio/data (may include auth.json)
 hq/studio/.backup/*.tar.gz
+backup/

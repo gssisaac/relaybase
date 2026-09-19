@@ -1,9 +1,13 @@
 import { STUDIO_PUBLIC_BASE_URL } from "../shared/studio-url";
+import {
+  DEFAULT_BRAND_LOGO_FILENAME,
+  DEFAULT_BRAND_LOGO_PATH,
+} from "./brand-logo-path";
 
-export const DEFAULT_BRAND_LOGO_FILENAME = "relaybase-icon.png";
+export { DEFAULT_BRAND_LOGO_FILENAME, DEFAULT_BRAND_LOGO_PATH };
 
 export function defaultBrandLogoUrl(studioBaseUrl: string = STUDIO_PUBLIC_BASE_URL): string {
-  return `${studioBaseUrl.replace(/\/$/, "")}/studio/brand/${DEFAULT_BRAND_LOGO_FILENAME}`;
+  return `${studioBaseUrl.replace(/\/$/, "")}${DEFAULT_BRAND_LOGO_PATH}`;
 }
 
 /** Small logo for template footers (and compact header slots). */
